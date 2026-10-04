@@ -97,6 +97,11 @@ def _hour(local: datetime) -> str:
     return f"{local.hour % 12 or 12}:{local.minute:02d} {'am' if local.hour < 12 else 'pm'}"
 
 
+def hora(moment_utc: datetime, tz_name: str) -> str:
+    """La hora local con am/pm: "9:00 am"."""
+    return _hour(to_local(moment_utc, tz_name))
+
+
 def etiqueta_hora(day: str, moment_utc: datetime, tz_name: str) -> str:
     """Etiqueta de botón con día y hora, siempre am/pm como el resto: "Mañana 9:00 am"."""
     return f"{day} {_hour(to_local(moment_utc, tz_name))}"
@@ -173,3 +178,92 @@ def aviso(text: str) -> Html:
 STALE_CHOICE = aviso("Esa opción ya no está disponible.")
 UNKNOWN_COMMAND = aviso("No conozco ese comando. Escribe /ayuda para ver los disponibles.")
 REMINDER_NOT_ACTIVE = aviso("Este recordatorio ya no está activo.")
+
+
+# --- Tarjetas: el mensaje único que evoluciona -----------------------------------------------
+
+
+def detail(label_text: str, value: str) -> Html:
+    """Una línea con etiqueta: "Área: universidad"."""
+    return Html(f"{esc(label_text)}: {_safe(value)}")
+
+
+def card(
+    title: str,
+    content: str | None = None,
+    details: Iterable[str] = (),
+    note: str | None = None,
+) -> Html:
+    """Una tarjeta: título en negrita; el contenido del usuario en su párrafo; los detalles con
+    etiqueta juntos; una nota al final. Los bloques van separados por una línea en blanco."""
+    blocks: list[str] = [bold(title)]
+    if content:
+        blocks.append(content)
+    lines = list(details)
+    if lines:
+        blocks.append(block(*lines))
+    if note:
+        blocks.append(note)
+    return paragraphs(*blocks)
+
+
+def tail_layout(count: int, tail: int = 2) -> tuple[int, ...]:
+    """Filas de 2; los últimos `tail` botones (Cancelar y, si hay, el que lo acompaña) van juntos
+    en la fila final. Con `tail=2`: acción principal primero y [Otra fecha] [Cancelar] abajo."""
+    if count <= 0:
+        return ()
+    tail = min(tail, count)
+    return (*rows_layout(count - tail), tail)
+
+
+# Títulos de las preguntas y de los estados finales (los textos de la conversación viven aquí).
+Q_KIND = "¿Qué es?"
+Q_AREA = "¿En qué área va?"
+Q_WHEN = "¿Cuándo?"
+Q_SAVE_REMINDER = "¿Guardo este recordatorio?"
+Q_SAVE_SERIES = "¿Guardo esta repetición?"
+Q_DEADLINE = "¿Es la fecha límite?"
+DONE_TASK = "Tarea guardada"
+DONE_NOTE = "Nota guardada"
+DONE_REMINDER = "Recordatorio guardado"
+DONE_AREA = "Área guardada"
+CANCELLED = "Cancelado"
+ABANDONED = "Sin terminar"
+UNDONE = "Deshecho"
+NOTE_IN_INBOX = "Sigue en tu bandeja como tarea."
+NOTE_NO_AREA = "No se creó el área."
+NOTE_NO_DESCRIPTION = "Sin descripción."
+NOTE_AREA_DESCRIPTION = "Escribe una descripción corta u omítela."
+HINT_WHEN = 'Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".'
+HINT_WRITE_WHEN = "Escribe la fecha y la hora, por ejemplo «mañana 8 pm»."
+HINT_PAST = "Esa hora ya pasó."
+NOT_UNDOABLE = aviso("Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente.")
+
+# Etiquetas de botón (como máximo MAX_LABEL caracteres).
+BTN_CANCEL = "Cancelar"
+BTN_OTHER_DATE = "Otra fecha"
+BTN_SAVE = "Guardar"
+BTN_CHANGE = "Cambiar"
+BTN_UNDO = "Deshacer"
+BTN_YES = "Sí"
+BTN_NO = "No"
+BTN_AS_TASK = "Mejor como tarea"
+BTN_NO_AREA = "Sin área"
+BTN_SKIP = "Omitir"
+
+# Preguntas del parser de fechas (docs/PLAN_FASE1.md). Con candidatos, cada uno es un botón.
+PARSER_QUESTIONS = {
+    "time_or_verse": "¿Eso es una hora o una cita bíblica?",
+    "name_or_day": "¿«Domingo» es una persona o el día de la semana?",
+    "dotted_time": "¿Es una hora? Escríbela con dos puntos (por ejemplo 7:30).",
+    "number_after_day": "¿Ese número es la hora o forma parte del texto? Escribe la hora completa.",
+    "unsupported_date": "No entiendo esa fecha. ¿Qué día quieres?",
+    "unrecognized_recurrence": (
+        "Esa repetición no está entre las que sé hacer (todos los días, cada lunes, "
+        "de lunes a viernes)."
+    ),
+    "ambiguous_time": "¿Medianoche de qué día?",
+    "today_or_tomorrow": "Ya pasó la medianoche: ¿«mañana» es hoy o mañana?",
+    "same_weekday": "Hoy es ese día: ¿hoy o en 7 días?",
+}
+PARSER_QUESTION_GENERIC = "No pude entender la fecha o la hora; escríbela de otra forma."

@@ -39,9 +39,10 @@ class ConsoleChannel:
         self._output = output_fn
         self._pending: list[Choice] = []
 
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None:
         prefix = "" if kind == "reply" else f"[{kind}] "
         self._output(f"{prefix}{plain(text)}")
+        return None  # la consola no tiene referencias de mensaje
 
     async def send_choices(
         self,
@@ -50,15 +51,29 @@ class ConsoleChannel:
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
+    ) -> str | None:
         await self.send_text(to, text, kind)
+        self._show_options(choices)
+        return None
+
+    def _show_options(self, choices: list[Choice]) -> None:
         self._pending = list(choices)
         for number, choice in enumerate(choices, start=1):
             self._output(f"  {number}) {choice.label}")
 
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,
+        layout: Sequence[int] | None = None,
+    ) -> bool:
         """La consola no puede reescribir lo ya impreso: muestra el texto nuevo marcado."""
         self._output(f"[editado] {plain(text)}")
+        if choices:
+            self._show_options(choices)
+        return True
 
     def _parse(self, line: str) -> IncomingMessage | IncomingChoice:
         """Un número válido con opciones pendientes es una elección; lo demás, un mensaje."""

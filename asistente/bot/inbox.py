@@ -1,11 +1,13 @@
-"""Bandeja de mensajes libres: guardar primero, preguntar después.
+"""Bandeja de mensajes libres: guardar primero, preguntar después, todo en UNA tarjeta.
 
 Un mensaje que no es un comando se guarda AL INSTANTE como tarea sin área (bandeja); nada se
-pierde aunque el usuario no conteste. Luego se le pregunta qué es (tarea, recordatorio o nota),
-en qué área va y, si es un recordatorio, cuándo (con las preguntas del parser como botones).
+pierde aunque el usuario no conteste. El bot abre UN mensaje (la "tarjeta") con la primera
+pregunta y lo va EDITANDO en su lugar: tipo, área, fecha y, al final, la confirmación. Si el canal
+no puede editar (consola, o Telegram falla), se manda un mensaje nuevo y se sigue en ese.
 Convertir en recordatorio o nota cierra la tarea de bandeja con `close_as_converted`.
 
-El texto del usuario NUNCA va al log: solo ids.
+Los textos y la distribución de botones salen de `formato.py`. El texto del usuario NUNCA va al
+log: solo ids.
 """
 
 from __future__ import annotations
@@ -33,13 +35,7 @@ from asistente.channels.base import Channel, Choice, IncomingChoice
 from asistente.choices import encode_choice_id
 from asistente.core import areas, notes, reminders, tasks
 from asistente.core.settings import get_meridiem_ask_range, get_time_setting
-from asistente.parsing.dates import (
-    WEEKDAY_NAMES_ES,
-    fold,
-    format_when,
-    parse_when,
-    strip_reminder_verb,
-)
+from asistente.parsing.dates import WEEKDAY_NAMES_ES, fold, parse_when, strip_reminder_verb
 from asistente.parsing.recurrence import ScheduleResult, parse_schedule
 from asistente.timeutil import Clock, local_to_utc, to_local
 
@@ -53,40 +49,12 @@ KIND_ACTION = "k"  # acción del botón de tipo; su argumento es uno de los KIND
 KIND_TASK, KIND_REMINDER, KIND_NOTE = "t", "r", "n"
 KIND_LABELS = {KIND_TASK: "Tarea", KIND_REMINDER: "Recordatorio", KIND_NOTE: "Nota"}
 REMINDER_VERBS = frozenset({"recordar", "recordarme", "recuerdame", "recuerdenme"})
-EVENING = time(18, 0)  # la opción "Hoy 18:00" de la pregunta ¿cuándo?
+EVENING = time(18, 0)  # la opción "Hoy 6:00 pm" de la pregunta ¿cuándo?
 
-ABANDONED_TEXT = "Dejé sin terminar lo anterior; sigue en tu bandeja como tarea."
-ABANDONED_AREA_TEXT = "Dejé sin terminar la creación del área."
-CANCELLED_TEXT = "Cancelado. «{text}» sigue en tu bandeja como tarea."
-CANCELLED_AREA_TEXT = "Cancelado. No se creó el área."
-AREA_DESCRIPTION_PROMPT = "¿Qué cubre «{name}»? Escribe una descripción corta u omítela."
-WHEN_PROMPT = (
-    '¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".'
-)
-WRITE_WHEN_PROMPT = "Escribe la fecha y la hora, por ejemplo «mañana 8 pm»."
-PAST_PROMPT = f"Esa hora ya pasó. {WHEN_PROMPT}"
-NOT_UNDOABLE_TEXT = "Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente."
-
-CANCEL = ("x", None, "Cancelar")
-AS_TASK = ("t", None, "Mejor como tarea")
+CANCEL = ("x", None, fmt.BTN_CANCEL)
+AS_TASK = ("t", None, fmt.BTN_AS_TASK)
 Button = tuple[str, object | None, str]  # (acción, argumento, texto del botón)
 
-# Preguntas del parser (docs/PLAN_FASE1.md). Con candidatos, cada uno es un botón.
-QUESTION_TEXT = {
-    "time_or_verse": "¿Eso es una hora o una cita bíblica?",
-    "name_or_day": "¿«Domingo» es una persona o el día de la semana?",
-    "dotted_time": "¿Es una hora? Escríbela con dos puntos (por ejemplo 7:30).",
-    "number_after_day": "¿Ese número es la hora o forma parte del texto? Escribe la hora completa.",
-    "unsupported_date": "No entiendo esa fecha. ¿Qué día quieres?",
-    "unrecognized_recurrence": (
-        "Esa repetición no está entre las que sé hacer (todos los días, cada lunes, "
-        "de lunes a viernes)."
-    ),
-    "ambiguous_time": "¿Medianoche de qué día?",
-    "today_or_tomorrow": "Ya pasó la medianoche: ¿«mañana» es hoy o mañana?",
-    "same_weekday": "Hoy es ese día: ¿hoy o en 7 días?",
-}
-GENERIC_QUESTION_TEXT = "No pude entender la fecha o la hora; escríbela de otra forma."
 # Respuestas del parser que no son sobre la fecha sino sobre el texto: no cuentan como respuesta.
 NOT_A_DATE_ANSWER = frozenset({"name_or_day", "time_or_verse"})
 NO_DATE_BUTTONS = {
@@ -129,33 +97,62 @@ def describe_rrule(rrule: str) -> str:
     return "Se repite"
 
 
-def _clock_text(moment: datetime, ctx: Ctx) -> str:
-    """ "8:00 pm" (la hora de format_when, sin el día)."""
-    return format_when(moment, ctx.tz_name, ctx.now).rpartition(", ")[2]
-
-
 def _area_name(ctx: Ctx, area_id: int | None) -> str | None:
     area = areas.get_area(ctx.conn, area_id) if area_id is not None else None
     return area.name if area is not None else None
 
 
-async def _say(ctx: Ctx, choice: IncomingChoice | None, text: str) -> None:
-    """Edita el mensaje del botón; si no hubo botón (el usuario escribió), manda uno nuevo."""
-    if choice is None:
-        await ctx.channel.send_text(ctx.user_ref, text)
+def _content(flow: Flow) -> str:
+    """Lo que escribió el usuario (o el título ya limpio), para repetirlo en la tarjeta."""
+    return shown(flow.title or flow.text)
+
+
+def _details(ctx: Ctx, flow: Flow) -> list[fmt.Html]:
+    """Los datos ya elegidos, con etiqueta: Tipo y Área."""
+    lines: list[fmt.Html] = []
+    if flow.kind:
+        lines.append(fmt.detail("Tipo", KIND_LABELS[flow.kind]))
+    area = _area_name(ctx, flow.area_id)
+    if area:
+        lines.append(fmt.detail("Área", area))
+    return lines
+
+
+def _area_line(ctx: Ctx, area_id: int | None) -> list[fmt.Html]:
+    area = _area_name(ctx, area_id)
+    return [fmt.detail("Área", area)] if area else []
+
+
+def _when_line(ctx: Ctx, when_utc: datetime, has_time: bool, label: str = "Cuándo") -> fmt.Html:
+    when = fmt.fecha_larga(when_utc, ctx.tz_name, ctx.now)
+    return fmt.detail(label, when + ("" if has_time else " (hora por defecto)"))
+
+
+async def _present(
+    ctx: Ctx,
+    flow: Flow,
+    text: str,
+    choices: list[Choice] | None = None,
+    layout: tuple[int, ...] | None = None,
+) -> None:
+    """Muestra `text` en la tarjeta del flujo: la edita; si no hay tarjeta o no se pudo editar,
+    manda un mensaje nuevo y esa pasa a ser la tarjeta."""
+    ref = flow.message_ref
+    if ref is not None and await ctx.channel.edit_text(ctx.user_ref, ref, text, choices, layout):
+        return
+    if choices:
+        flow.message_ref = await ctx.channel.send_choices(
+            ctx.user_ref, text, choices, layout=layout
+        )
     else:
-        await show(ctx.channel, choice, text)
+        flow.message_ref = await ctx.channel.send_text(ctx.user_ref, text)
 
 
-async def _ack(ctx: Ctx, choice: IncomingChoice | None, text: str) -> None:
-    """Deja constancia de la respuesta en el mensaje de la pregunta (solo si fue un botón)."""
-    if choice is not None:
-        await show(ctx.channel, choice, text)
-
-
-async def _send_question(ctx: Ctx, flow: Flow, step: str, text: str, buttons: list[Button]) -> None:
-    """Hace una pregunta NUEVA. Renueva el id del flujo: los botones de la pregunta anterior
-    (que puede seguir en pantalla) quedan viejos y ya no hacen nada."""
+async def _ask(
+    ctx: Ctx, flow: Flow, step: str, text: str, buttons: list[Button], tail: int = 2
+) -> None:
+    """Hace una pregunta en la tarjeta. Renueva el id del flujo: los botones de la pregunta
+    anterior (que pueden seguir en pantalla) quedan viejos y ya no hacen nada."""
     flow.step = step
     ctx.conversation.renew(flow, ctx.now)
     choices = [
@@ -165,7 +162,28 @@ async def _send_question(ctx: Ctx, flow: Flow, step: str, text: str, buttons: li
         )
         for action, arg, label in buttons
     ]
-    await ctx.channel.send_choices(ctx.user_ref, text, choices)
+    await _present(ctx, flow, text, choices, fmt.tail_layout(len(choices), tail))
+
+
+async def _finish(
+    ctx: Ctx,
+    flow: Flow,
+    text: str,
+    choices: list[Choice] | None = None,
+    layout: tuple[int, ...] | None = None,
+) -> None:
+    """El flujo terminó: la tarjeta queda como constancia (con sus botones finales, si hay)."""
+    ctx.conversation.clear()
+    await _present(ctx, flow, text, choices, layout)
+
+
+async def _stale(ctx: Ctx, choice: IncomingChoice) -> None:
+    """Botón viejo. Si está en la tarjeta VIVA se ignora en silencio (la pregunta vigente no se
+    toca); si está en una tarjeta muerta, esa tarjeta se marca como no disponible."""
+    flow = ctx.conversation.current(ctx.now)
+    if flow is not None and flow.message_ref is not None and flow.message_ref == choice.message_ref:
+        return
+    await show(ctx.channel, choice, STALE_CHOICE_TEXT)
 
 
 def _parse(ctx: Ctx, text: str) -> ScheduleResult:
@@ -195,12 +213,12 @@ async def capture(ctx: Ctx, text: str) -> None:
         return
     flow = ctx.conversation.current(ctx.now)
     if flow is not None and flow.step == STEP_AREA_DESC:  # todo lo que no es comando
-        await _finish_area(ctx, flow, text, None)
+        await _finish_area(ctx, flow, text)
         return
     if flow is not None and flow.step == STEP_WHEN:
         result = _parse(ctx, text)
         if _is_date_answer(result):
-            await _apply_schedule(ctx, flow, result, None)
+            await _apply_schedule(ctx, flow, result)
             return
     await _start_capture(ctx, text, None, False)
 
@@ -218,69 +236,71 @@ async def capture_as(
 
 
 async def _drop_current_flow(ctx: Ctx) -> None:
-    """Suelta lo que hubiera a medias, avisando (la tarea ya está guardada en la bandeja)."""
+    """Suelta lo que hubiera a medias: la tarjeta vieja se EDITA ("Sin terminar") y la tarea ya
+    guardada sigue en la bandeja. Solo si no se puede editar se manda un aviso aparte."""
     flow = ctx.conversation.current(ctx.now)
-    if flow is not None:
-        ctx.conversation.clear()
-        notice = ABANDONED_AREA_TEXT if flow.step == STEP_AREA_DESC else ABANDONED_TEXT
-        await ctx.channel.send_text(ctx.user_ref, notice)
+    if flow is None:
+        return
+    ctx.conversation.clear()
+    note = fmt.NOTE_NO_AREA if flow.step == STEP_AREA_DESC else fmt.NOTE_IN_INBOX
+    text = fmt.card(fmt.ABANDONED, shown(flow.text), note=note)
+    ref = flow.message_ref
+    if ref is None or not await ctx.channel.edit_text(ctx.user_ref, ref, text):
+        await ctx.channel.send_text(ctx.user_ref, text)
 
 
 async def _start_capture(
     ctx: Ctx, text: str, kind: str | None, preview: bool, ask_deadline: bool = False
 ) -> None:
-    """Guarda el texto en la bandeja y pregunta lo que falte. `kind` None = preguntar el tipo."""
+    """Guarda el texto en la bandeja y abre la tarjeta. `kind` None = preguntar el tipo."""
     await _drop_current_flow(ctx)
     task = tasks.create_task(ctx.conn, text, ctx.now, source_text=text)
     logger.info("Bandeja: tarea guardada id=%s", task.id)
     flow = ctx.conversation.start(task.id, text, ctx.now)
-    header = f"Guardado en tu bandeja: «{shown(text)}»\n"
     if kind is None and starts_with_reminder_verb(text):  # ya dijo qué es: no se pregunta
         kind = KIND_REMINDER
     if kind is not None:
         flow.kind, flow.preview = kind, preview
         if ask_deadline:
             flow.deadline = _detect_deadline(ctx, text)
-        await _ask_area(ctx, flow, None, header)
+        await _ask_area(ctx, flow)
         return
     buttons: list[Button] = [(KIND_ACTION, kind, label) for kind, label in KIND_LABELS.items()]
-    await _send_question(ctx, flow, STEP_KIND, header + "¿Qué es?", [*buttons, CANCEL])
+    await _ask(ctx, flow, STEP_KIND, fmt.card(fmt.Q_KIND, _content(flow)), [*buttons, CANCEL])
 
 
 # --- Área ------------------------------------------------------------------------------------
 
 
-async def _ask_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, header: str = "") -> None:
+async def _ask_area(ctx: Ctx, flow: Flow) -> None:
     available = areas.list_areas(ctx.conn)
     if not available:  # sin áreas que ofrecer no hay nada que preguntar
         flow.area_id = None
-        await _after_area(ctx, flow, choice, KIND_LABELS[flow.kind or KIND_TASK])
+        await _after_area(ctx, flow)
         return
     buttons: list[Button] = [("a", area.id, fmt.label(area.name)) for area in available]
-    buttons += [("a", 0, "Sin área"), CANCEL]
-    await _send_question(ctx, flow, STEP_AREA, header + "¿En qué área va?", buttons)
+    buttons += [("a", 0, fmt.BTN_NO_AREA), CANCEL]
+    text = fmt.card(fmt.Q_AREA, _content(flow), _details(ctx, flow))
+    await _ask(ctx, flow, STEP_AREA, text, buttons)
 
 
-async def _after_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: str) -> None:
+async def _after_area(ctx: Ctx, flow: Flow) -> None:
     """Ya se sabe tipo y área: se termina (tarea, nota) o se sigue con la fecha (recordatorio)."""
-    area = _area_name(ctx, flow.area_id)
-    suffix = f" en {area}" if area else ""
     if flow.kind == KIND_TASK and flow.deadline is not None:
-        await _ask_deadline(ctx, flow, choice, ack)
+        await _ask_deadline(ctx, flow)
     elif flow.kind == KIND_TASK:
         tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
-        ctx.conversation.clear()
-        await _say(ctx, choice, f"Tarea guardada{suffix}: «{shown(flow.text)}»")
+        done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
+        await _finish(ctx, flow, done)
     elif flow.kind == KIND_NOTE:
         notes.create_note(ctx.conn, flow.text, ctx.now, area_id=flow.area_id)
         tasks.close_as_converted(ctx.conn, flow.task_id, "converted_to_note", ctx.now)
-        ctx.conversation.clear()
-        await _say(ctx, choice, f"Nota guardada{suffix}: «{shown(flow.text)}»")
+        done = fmt.card(fmt.DONE_NOTE, shown(flow.text), _area_line(ctx, flow.area_id))
+        await _finish(ctx, flow, done)
     else:
-        await _ack(ctx, choice, ack)
         result = _parse(ctx, flow.text)
         flow.title = strip_reminder_verb(result.title).strip() or flow.text
-        await _apply_schedule(ctx, flow, result, None)
+        await _apply_schedule(ctx, flow, result)
 
 
 # --- Fecha límite de una tarea (/tarea) ------------------------------------------------------
@@ -301,44 +321,45 @@ def _detect_deadline(ctx: Ctx, text: str) -> Deadline | None:
     return Deadline(result.when_utc, result.has_time, title)
 
 
-async def _ask_deadline(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: str) -> None:
+async def _ask_deadline(ctx: Ctx, flow: Flow) -> None:
     deadline = flow.deadline
     assert deadline is not None
-    await _ack(ctx, choice, ack)
-    when = format_when(deadline.when_utc, ctx.tz_name, ctx.now)
-    default = "" if deadline.has_time else " (hora por defecto)"
-    text = f"¿Es la fecha límite de «{shown(deadline.title)}»?\nFecha: {when}{default}"
-    buttons: list[Button] = [("ly", None, "Sí"), ("ln", None, "No"), CANCEL]
-    await _send_question(ctx, flow, STEP_DEADLINE, text, buttons)
+    details = [
+        *_details(ctx, flow),
+        _when_line(ctx, deadline.when_utc, deadline.has_time, "Fecha"),
+    ]
+    text = fmt.card(fmt.Q_DEADLINE, shown(deadline.title), details)
+    buttons: list[Button] = [("ly", None, fmt.BTN_YES), ("ln", None, fmt.BTN_NO), CANCEL]
+    await _ask(ctx, flow, STEP_DEADLINE, text, buttons, tail=1)
 
 
-async def _finish_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, with_deadline: bool) -> None:
+async def _finish_task(ctx: Ctx, flow: Flow, with_deadline: bool) -> None:
     tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
-    area = _area_name(ctx, flow.area_id)
-    suffix = f" en {area}" if area else ""
     deadline = flow.deadline
-    ctx.conversation.clear()
     if with_deadline and deadline is not None:
         tasks.set_title(ctx.conn, flow.task_id, deadline.title, ctx.now)
         tasks.set_due(ctx.conn, flow.task_id, deadline.when_utc, ctx.now)
-        when = format_when(deadline.when_utc, ctx.tz_name, ctx.now)
-        text = f"Tarea guardada{suffix}: «{shown(deadline.title)}» (vence: {when})"
+        details = [
+            *_area_line(ctx, flow.area_id),
+            _when_line(ctx, deadline.when_utc, deadline.has_time, "Vence"),
+        ]
+        done = fmt.card(fmt.DONE_TASK, shown(deadline.title), details)
     else:
-        text = f"Tarea guardada{suffix}: «{shown(flow.text)}»"
-    await show(ctx.channel, choice, text)
+        done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
+    await _finish(ctx, flow, done)
 
 
 async def _on_deadline_yes(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    await _finish_task(ctx, flow, choice, True)
+    await _finish_task(ctx, flow, True)
     return True
 
 
 async def _on_deadline_no(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    await _finish_task(ctx, flow, choice, False)
+    await _finish_task(ctx, flow, False)
     return True
 
 
@@ -363,30 +384,32 @@ def _quick_targets(ctx: Ctx) -> dict[str, tuple[datetime, str]]:
     return targets
 
 
-async def _ask_when(ctx: Ctx, flow: Flow, text: str, extra: list[Button] | None = None) -> None:
+async def _ask_when(ctx: Ctx, flow: Flow, note: str = fmt.HINT_WHEN) -> None:
     flow.candidates = ()
     quick: list[Button] = [(key, None, label) for key, (_, label) in _quick_targets(ctx).items()]
-    await _send_question(ctx, flow, STEP_WHEN, text, [*(extra or []), *quick, AS_TASK, CANCEL])
+    text = fmt.card(fmt.Q_WHEN, _content(flow), _details(ctx, flow), note=note)
+    await _ask(ctx, flow, STEP_WHEN, text, [*quick, AS_TASK, CANCEL])
 
 
-def _question_text(ctx: Ctx, reason: str | None, candidates: tuple[datetime, ...]) -> str:
+def _question_title(ctx: Ctx, reason: str | None, candidates: tuple[datetime, ...]) -> str:
     if reason == "ambiguous_meridiem" and candidates:
         if len(candidates) == 1:
-            return f"¿A las {_clock_text(candidates[0], ctx)}?"
-        hour = _clock_text(candidates[0], ctx).split(":")[0]
+            return f"¿A las {fmt.hora(candidates[0], ctx.tz_name)}?"
+        hour = fmt.hora(candidates[0], ctx.tz_name).split(":")[0]
         return f"¿A las {hour} am o pm?"
     if reason == "past":
         if candidates:
-            when = format_when(candidates[0], ctx.tz_name, ctx.now)
+            when = fmt.fecha_larga(candidates[0], ctx.tz_name, ctx.now)
             return f"Esa fecha ya pasó. ¿La dejo para {when}?"
         return "Esa fecha ya pasó. Escribe otra."
-    return QUESTION_TEXT.get(reason or "", GENERIC_QUESTION_TEXT)
+    return fmt.PARSER_QUESTIONS.get(reason or "", fmt.PARSER_QUESTION_GENERIC)
 
 
 async def _ask_when_question(ctx: Ctx, flow: Flow, result: ScheduleResult) -> None:
-    """La pregunta del parser como botones: un botón por candidato más escribir otra/cancelar."""
+    """Pregunta del parser en la tarjeta: candidatos de 2 por fila; abajo, Otra fecha y Cancelar."""
     candidates = result.when.candidates if result.when is not None else ()
-    text = _question_text(ctx, result.reason, candidates)
+    flow.candidates = candidates
+    title = _question_title(ctx, result.reason, candidates)
     buttons: list[Button] = [
         ("w", index, fmt.fecha_corta(moment, ctx.tz_name, ctx.now))
         for index, moment in enumerate(candidates)
@@ -395,65 +418,59 @@ async def _ask_when_question(ctx: Ctx, flow: Flow, result: ScheduleResult) -> No
         buttons.append(("n", None, NO_DATE_BUTTONS[result.reason]))
     if result.reason == "unsupported_date" and not candidates:
         buttons += [(key, None, label) for key, (_, label) in _quick_targets(ctx).items()]
-    buttons += [("o", None, "Escribir otra fecha"), CANCEL]
-    await _send_question(ctx, flow, STEP_WHEN, text, buttons)
-    flow.candidates = candidates  # después de renovar el id; los botones llevan solo el índice
+    buttons += [("o", None, fmt.BTN_OTHER_DATE), CANCEL]
+    text = fmt.card(title, _content(flow), _details(ctx, flow))
+    await _ask(ctx, flow, STEP_WHEN, text, buttons)
 
 
-async def _apply_schedule(
-    ctx: Ctx, flow: Flow, result: ScheduleResult, choice: IncomingChoice | None
-) -> None:
+async def _apply_schedule(ctx: Ctx, flow: Flow, result: ScheduleResult) -> None:
     """Qué hacer con lo que entendió el parser: guardar, previsualizar, preguntar o pedir fecha."""
     if result.kind == "once" and result.when is not None and result.when.when_utc is not None:
-        await _propose(ctx, flow, choice, result.when.when_utc, None, result.when.has_time)
+        await _propose(ctx, flow, result.when.when_utc, None, result.when.has_time)
     elif result.kind == "series" and result.series is not None:
         series = result.series
         assert series.first_at_utc is not None and series.rrule is not None
-        await _propose(ctx, flow, choice, series.first_at_utc, series.rrule, series.has_time)
+        await _propose(ctx, flow, series.first_at_utc, series.rrule, series.has_time)
     elif result.kind == "ask":
         await _ask_when_question(ctx, flow, result)
     else:
-        await _ask_when(ctx, flow, WHEN_PROMPT)
+        await _ask_when(ctx, flow)
 
 
 async def _propose(
-    ctx: Ctx,
-    flow: Flow,
-    choice: IncomingChoice | None,
-    when_utc: datetime,
-    rrule: str | None,
-    has_time: bool,
+    ctx: Ctx, flow: Flow, when_utc: datetime, rrule: str | None, has_time: bool
 ) -> None:
     """Una fecha ya resuelta: se guarda y se confirma (con Cambiar/Deshacer), salvo una repetición
     o un /recordar, que muestran primero la interpretación y esperan «Guardar»."""
     if rrule is None and not flow.preview:
-        await _create(ctx, flow, choice, when_utc, rrule, has_time)
+        await _create(ctx, flow, when_utc, rrule, has_time)
         return
     flow.pending = Pending(when_utc, rrule, has_time)
-    when = format_when(when_utc, ctx.tz_name, ctx.now)
-    await _ack(ctx, choice, f"Elegido: {when}")
     if rrule is not None:
-        text = (
-            f"Repetición: {describe_rrule(rrule)}: «{shown(flow.title)}»\n"
-            f"Próxima: {when}\n¿La guardo?"
-        )
+        details = _schedule_details(ctx, flow.area_id, when_utc, rrule, has_time)
+        text = fmt.card(fmt.Q_SAVE_SERIES, shown(flow.title), details)
     else:
-        lines = [f"Recordatorio: «{shown(flow.title)}»"]
-        lines.append(f"Cuándo: {when}{'' if has_time else ' (hora por defecto)'}")
-        area = _area_name(ctx, flow.area_id)
-        if area:
-            lines.append(f"Área: {area}")
-        text = "\n".join([*lines, "¿Lo guardo?"])
-    await _send_question(ctx, flow, STEP_SERIES, text, [("s", None, "Guardar"), CANCEL])
+        details = [_when_line(ctx, when_utc, has_time), *_area_line(ctx, flow.area_id)]
+        text = fmt.card(fmt.Q_SAVE_REMINDER, shown(flow.title), details)
+    await _ask(ctx, flow, STEP_SERIES, text, [("s", None, fmt.BTN_SAVE), CANCEL])
+
+
+def _schedule_details(
+    ctx: Ctx, area_id: int | None, when_utc: datetime, rrule: str | None, has_time: bool
+) -> list[fmt.Html]:
+    """Los datos de un recordatorio ya interpretado: Cuándo (o Repetición y Próxima) y Área."""
+    if rrule is None:
+        lines = [_when_line(ctx, when_utc, has_time)]
+    else:
+        lines = [
+            fmt.detail("Repetición", describe_rrule(rrule)),
+            _when_line(ctx, when_utc, has_time, "Próxima"),
+        ]
+    return [*lines, *_area_line(ctx, area_id)]
 
 
 async def _create(
-    ctx: Ctx,
-    flow: Flow,
-    choice: IncomingChoice | None,
-    when_utc: datetime,
-    rrule: str | None,
-    has_time: bool,
+    ctx: Ctx, flow: Flow, when_utc: datetime, rrule: str | None, has_time: bool
 ) -> None:
     """Crea el recordatorio (cierra la tarea de bandeja en la misma transacción) y confirma."""
     try:
@@ -461,35 +478,20 @@ async def _create(
             ctx.conn, flow.task_id, flow.title, when_utc, ctx.now, area_id=flow.area_id, rrule=rrule
         )
     except reminders.PastReminderError:  # la opción tardó tanto que ya pasó: jamás en el pasado
-        await _ack(ctx, choice, "Esa hora ya pasó.")
-        await _ask_when(ctx, flow, PAST_PROMPT)
+        await _ask_when(ctx, flow, f"{fmt.HINT_PAST} {fmt.HINT_WHEN}")
         return
     if reminder is None:  # la tarea ya no está abierta: no hay nada que convertir
-        ctx.conversation.clear()
-        await _say(ctx, choice, STALE_CHOICE_TEXT)
+        await _finish(ctx, flow, STALE_CHOICE_TEXT)
         return
-    ctx.conversation.clear()
     logger.info("Bandeja: tarea %s convertida en el recordatorio %s", flow.task_id, reminder.id)
-    when = format_when(when_utc, ctx.tz_name, ctx.now)
-    await _ack(ctx, choice, f"Listo: {when}")
-    lines = [f"Listo: «{shown(reminder.text)}»"]
-    if rrule is not None:
-        lines.append(f"Repetición: {describe_rrule(rrule)}")
-    lines.append(
-        f"{'Próxima' if rrule else 'Cuándo'}: {when}{'' if has_time else ' (hora por defecto)'}"
-    )
-    area = _area_name(ctx, reminder.area_id)
-    if area:
-        lines.append(f"Área: {area}")
+    details = _schedule_details(ctx, reminder.area_id, when_utc, rrule, has_time)
+    done = fmt.card(fmt.DONE_REMINDER, shown(reminder.text), details)
     ids = (reminder.id, flow.task_id)
-    await ctx.channel.send_choices(
-        ctx.user_ref,
-        "\n".join(lines),
-        [
-            Choice(encode_choice_id(ACTION_CHANGE, *ids), "Cambiar"),
-            Choice(encode_choice_id(ACTION_UNDO, *ids), "Deshacer"),
-        ],
-    )
+    buttons = [
+        Choice(encode_choice_id(ACTION_CHANGE, *ids), fmt.BTN_CHANGE),
+        Choice(encode_choice_id(ACTION_UNDO, *ids), fmt.BTN_UNDO),
+    ]
+    await _finish(ctx, flow, done, buttons, (2,))
 
 
 # --- Área nueva (/nuevaarea) -------------------------------------------------------------------
@@ -499,22 +501,19 @@ async def start_new_area(ctx: Ctx, name: str) -> None:
     """El nombre ya está validado: se pregunta la descripción (se puede omitir)."""
     await _drop_current_flow(ctx)
     flow = ctx.conversation.start(0, name, ctx.now, STEP_AREA_DESC)
-    text = AREA_DESCRIPTION_PROMPT.format(name=shown(name))
-    await _send_question(ctx, flow, STEP_AREA_DESC, text, [("d", None, "Omitir"), CANCEL])
+    text = fmt.card(f"¿Qué cubre «{shown(name)}»?", note=fmt.NOTE_AREA_DESCRIPTION)
+    await _ask(ctx, flow, STEP_AREA_DESC, text, [("d", None, fmt.BTN_SKIP), CANCEL])
 
 
-async def _finish_area(
-    ctx: Ctx, flow: Flow, description: str, choice: IncomingChoice | None
-) -> None:
-    ctx.conversation.clear()
+async def _finish_area(ctx: Ctx, flow: Flow, description: str) -> None:
     try:
         area = areas.create_area(ctx.conn, flow.text, description, ctx.now)
     except areas.AreaError as error:  # p. ej. alguien creó el mismo nombre mientras tanto
-        await _say(ctx, choice, str(error))
+        await _finish(ctx, flow, fmt.aviso(str(error)))
         return
     logger.info("Área creada id=%s", area.id)
-    note = "" if area.description else " (sin descripción)"
-    await _say(ctx, choice, f"Área creada: {area.name}{note}")
+    done = fmt.card(fmt.DONE_AREA, area.name, note=area.description or fmt.NOTE_NO_DESCRIPTION)
+    await _finish(ctx, flow, done)
 
 
 # --- Botones del flujo -----------------------------------------------------------------------
@@ -524,8 +523,7 @@ async def _on_kind(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
     if len(args) != 1 or args[0] not in KIND_LABELS:
         return False
     flow.kind = args[0]
-    await _ack(ctx, choice, KIND_LABELS[args[0]])
-    await _ask_area(ctx, flow, choice)
+    await _ask_area(ctx, flow)
     return True
 
 
@@ -537,14 +535,14 @@ async def _on_area(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
     if area_id and (area is None or area.archived):
         return False
     flow.area_id = area_id or None
-    await _after_area(ctx, flow, choice, f"Área: {area.name}" if area else "Área: ninguna")
+    await _after_area(ctx, flow)
     return True
 
 
 async def _on_candidate(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if len(args) != 1 or not _is_id(args[0]) or int(args[0]) >= len(flow.candidates):
         return False
-    await _propose(ctx, flow, choice, flow.candidates[int(args[0])], None, True)
+    await _propose(ctx, flow, flow.candidates[int(args[0])], None, True)
     return True
 
 
@@ -554,28 +552,25 @@ async def _on_quick(
     if args:
         return False
     target = _quick_targets(ctx).get(key)
-    if target is None:  # "Hoy 18:00" que se pulsó cuando ya había pasado
-        await _ack(ctx, choice, "Esa hora ya pasó.")
-        await _ask_when(ctx, flow, PAST_PROMPT)
+    if target is None:  # "Hoy 6:00 pm" que se pulsó cuando ya había pasado
+        await _ask_when(ctx, flow, f"{fmt.HINT_PAST} {fmt.HINT_WHEN}")
         return True
-    await _propose(ctx, flow, choice, target[0], None, True)
+    await _propose(ctx, flow, target[0], None, True)
     return True
 
 
 async def _on_write_other(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    await _ack(ctx, choice, "Otra fecha")
-    await _ask_when(ctx, flow, WRITE_WHEN_PROMPT)
+    await _ask_when(ctx, flow, fmt.HINT_WRITE_WHEN)
     return True
 
 
 async def _on_no_date(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    await _ack(ctx, choice, "Sin fecha en el texto")
     flow.title = flow.text
-    await _ask_when(ctx, flow, WHEN_PROMPT)
+    await _ask_when(ctx, flow)
     return True
 
 
@@ -583,7 +578,7 @@ async def _on_save(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
     pending = flow.pending
     if args or pending is None:
         return False
-    await _create(ctx, flow, choice, pending.when_utc, pending.rrule, pending.has_time)
+    await _create(ctx, flow, pending.when_utc, pending.rrule, pending.has_time)
     return True
 
 
@@ -592,7 +587,7 @@ async def _on_skip_description(
 ) -> bool:
     if args:
         return False
-    await _finish_area(ctx, flow, "", choice)
+    await _finish_area(ctx, flow, "")
     return True
 
 
@@ -601,19 +596,16 @@ async def _on_better_as_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, args:
     if args:
         return False
     tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
-    ctx.conversation.clear()
-    area = _area_name(ctx, flow.area_id)
-    suffix = f" en {area}" if area else ""
-    await show(ctx.channel, choice, f"Tarea guardada{suffix}: «{shown(flow.text)}»")
+    done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
+    await _finish(ctx, flow, done)
     return True
 
 
 async def _on_cancel(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    ctx.conversation.clear()
-    text = CANCELLED_AREA_TEXT if flow.step == STEP_AREA_DESC else CANCELLED_TEXT
-    await show(ctx.channel, choice, text.format(text=shown(flow.text)))
+    note = fmt.NOTE_NO_AREA if flow.step == STEP_AREA_DESC else fmt.NOTE_IN_INBOX
+    await _finish(ctx, flow, fmt.card(fmt.CANCELLED, shown(flow.text), note=note))
     return True
 
 
@@ -644,6 +636,8 @@ async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str])
         flow = ctx.conversation.get(int(parts[0]), ctx.now)
         action, args = parts[1], parts[2:]
         if flow is not None:
+            if choice.message_ref is not None:
+                flow.message_ref = choice.message_ref  # la tarjeta es el mensaje del botón
             if action in ("h", "m") and flow.step == STEP_WHEN:
                 handled = await _on_quick(ctx, flow, choice, args, action)
             elif action in _FLOW_ACTIONS:
@@ -651,7 +645,7 @@ async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str])
                 if step is None or flow.step == step:
                     handled = await handler(ctx, flow, choice, args)
     if not handled:
-        await show(ctx.channel, choice, STALE_CHOICE_TEXT)
+        await _stale(ctx, choice)
 
 
 # --- Deshacer y Cambiar ----------------------------------------------------------------------
@@ -662,26 +656,27 @@ async def handle_conversion_choice(
 ) -> None:
     """`un:RECORDATORIO:TAREA` / `ch:RECORDATORIO:TAREA`. Viven en la base, no en la memoria."""
     if len(parts) != 2 or not all(_is_id(part) for part in parts):
-        await show(ctx.channel, choice, STALE_CHOICE_TEXT)
+        await _stale(ctx, choice)
         return
     reminder_id, task_id = int(parts[0]), int(parts[1])
     reminder = reminders.get_reminder(ctx.conn, reminder_id)
     task = tasks.get_task(ctx.conn, task_id)
     if reminder is None or task is None:
-        await show(ctx.channel, choice, STALE_CHOICE_TEXT)
+        await _stale(ctx, choice)
         return
     if not tasks.undo_reminder_conversion(ctx.conn, task_id, reminder_id, ctx.now):
-        await show(ctx.channel, choice, NOT_UNDOABLE_TEXT)
+        flow = ctx.conversation.current(ctx.now)
+        live = flow is not None and flow.message_ref == choice.message_ref
+        if not live:  # sobre la tarjeta viva (un segundo toque) no se pisa la pregunta vigente
+            await show(ctx.channel, choice, fmt.NOT_UNDOABLE)
         return
     logger.info("Bandeja: recordatorio %s deshecho (tarea %s)", reminder_id, task_id)
     if action == ACTION_UNDO:
-        await show(
-            ctx.channel,
-            choice,
-            f"Deshecho. «{shown(reminder.text)}» vuelve a tu bandeja como tarea.",
-        )
+        text = fmt.state_line(fmt.UNDONE, shown(reminder.text), "vuelve a tu bandeja como tarea")
+        await show(ctx.channel, choice, text)
         return
-    await show(ctx.channel, choice, f"Cambiando «{shown(reminder.text)}»")
+    await _drop_current_flow(ctx)
     flow = ctx.conversation.start(task_id, task.source_text or task.title, ctx.now, STEP_WHEN)
     flow.kind, flow.area_id, flow.title = KIND_REMINDER, reminder.area_id, reminder.text
-    await _ask_when(ctx, flow, WHEN_PROMPT)
+    flow.message_ref = choice.message_ref  # sigue en el mismo mensaje
+    await _ask_when(ctx, flow)

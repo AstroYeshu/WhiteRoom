@@ -56,6 +56,7 @@ class Flow:
     preview: bool = False  # /recordar: SIEMPRE se muestra la interpretación antes de guardar
     pending: Pending | None = None
     deadline: Deadline | None = None
+    message_ref: str | None = None  # la tarjeta: el único mensaje del bot en esta captura
 
 
 class Conversation:

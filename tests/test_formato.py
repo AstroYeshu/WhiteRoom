@@ -219,7 +219,7 @@ def test_el_punto_medio_y_la_raya_son_puntuacion_normal():
     assert find_pictograms("· — – … « »") == []
 
 
-# --- Etiquetas de botón con hora: siempre am/pm ---------------------------------------------------
+# --- Etiquetas de botón con hora: siempre am/pm --------------------------------------------------
 
 
 @pytest.mark.parametrize(

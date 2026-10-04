@@ -15,9 +15,18 @@ class FakeChannel:
     choices: list[tuple[str, str, list[Choice], str]] = field(default_factory=list)
     edits: list[tuple[str, str, str]] = field(default_factory=list)  # (to, message_ref, text)
     layouts: list[Sequence[int] | None] = field(default_factory=list)  # uno por send_choices
+    edit_keyboards: list[tuple[list[Choice] | None, Sequence[int] | None]] = field(
+        default_factory=list
+    )  # (botones, distribución) de cada edición
+    _sent: int = 0
 
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
+    def _ref(self) -> str:
+        self._sent += 1
+        return f"f{self._sent}"
+
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None:
         self.texts.append((to, text, kind))
+        return self._ref()
 
     async def send_choices(
         self,
@@ -26,12 +35,22 @@ class FakeChannel:
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
+    ) -> str | None:
         self.choices.append((to, text, choices, kind))
         self.layouts.append(layout)
+        return self._ref()
 
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,
+        layout: Sequence[int] | None = None,
+    ) -> bool:
         self.edits.append((to, message_ref, text))
+        self.edit_keyboards.append((choices, layout))
+        return True
 
     @property
     def sent_anything(self) -> bool:
@@ -68,14 +87,14 @@ class ScriptedChannel(FakeChannel):
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
+    ) -> str | None:
         self.attempts.append(text)
         if self.during_send is not None:
             self.during_send()
         error = self.fail_if(text)
         if error is not None:
             raise error
-        await super().send_choices(to, text, choices, kind, layout)
+        return await super().send_choices(to, text, choices, kind, layout)
 
     def always_fail_with(self, error: Exception | None) -> None:
         self.fail_if = lambda text: error

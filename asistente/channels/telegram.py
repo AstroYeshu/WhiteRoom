@@ -137,8 +137,8 @@ class TelegramChannel:
 
     # --- Salida (interfaz Channel) -------------------------------------------------
 
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
-        await self._send(chat_id=int(to), text=text)
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None:
+        return await self._send(chat_id=int(to), text=text)
 
     async def send_choices(
         self,
@@ -147,32 +147,44 @@ class TelegramChannel:
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
-        await self._send(chat_id=int(to), text=text, reply_markup=build_keyboard(choices, layout))
+    ) -> str | None:
+        keyboard = build_keyboard(choices, layout)
+        return await self._send(chat_id=int(to), text=text, reply_markup=keyboard)
 
-    async def _send(self, text: str, **kwargs: object) -> None:
+    async def _send(self, text: str, **kwargs: object) -> str | None:
         """Envía en HTML; si Telegram no puede leer el formato, UNA vez más en texto plano.
 
         Un aviso no puede perderse por un problema de formato. Solo `cant_parse_entities` reintenta;
         si el texto plano también falla, el error es permanente como cualquier otro BadRequest.
         """
         try:
-            await _translated(
+            sent = await _translated(
                 self._application.bot.send_message(text=to_html(text), parse_mode="HTML", **kwargs)
             )
         except PermanentChannelError as error:
             if error.reason != CANT_PARSE_REASON:
                 raise
             logger.warning("Telegram no leyó el formato: se reenvía en texto plano")
-            await _translated(self._application.bot.send_message(text=plain(text), **kwargs))
+            sent = await _translated(self._application.bot.send_message(text=plain(text), **kwargs))
+        message_id = getattr(sent, "message_id", None)
+        return None if message_id is None else str(message_id)
 
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
-        """Edita el mensaje y le quita el teclado (sin `reply_markup`, Telegram lo quita).
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,
+        layout: Sequence[int] | None = None,
+    ) -> bool:
+        """Edita el mensaje: con `choices` le pone ese teclado; sin ellos Telegram quita el viejo.
 
-        Es cosmético: "message is not modified" (mismo texto) no es un error y cualquier otro
-        fallo se registra por tipo, nunca con el texto, sin propagarse.
+        Es cosmético: "message is not modified" (mismo texto) cuenta como éxito y cualquier otro
+        fallo se registra por tipo, nunca con el texto, sin propagarse (devuelve False).
         """
-        ids = {"chat_id": int(to), "message_id": int(message_ref)}
+        ids: dict[str, object] = {"chat_id": int(to), "message_id": int(message_ref)}
+        if choices:
+            ids["reply_markup"] = build_keyboard(choices, layout)
         try:
             try:
                 await self._application.bot.edit_message_text(
@@ -185,10 +197,13 @@ class TelegramChannel:
                 await self._application.bot.edit_message_text(text=plain(text), **ids)
         except tg_error.BadRequest as error:
             if "message is not modified" in str(error).lower():
-                return
+                return True
             logger.warning("No se pudo editar el mensaje: %s", type(error).__name__)
+            return False
         except tg_error.TelegramError as error:
             logger.warning("No se pudo editar el mensaje: %s", type(error).__name__)
+            return False
+        return True
 
     # --- Entrada -------------------------------------------------------------------
 

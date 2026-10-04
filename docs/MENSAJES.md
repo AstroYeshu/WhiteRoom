@@ -5,8 +5,8 @@ y un reloj fijo: **sábado 3 de octubre de 2026, 3:30 pm** (México). Las áreas
 (universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:
 HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones
 va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.
-«(reemplaza el mensaje del botón)» es una edición: el texto sustituye al mensaje que llevaba
-los botones, sin teclado.
+«(edita el mismo mensaje)» es una edición: la captura es UN solo mensaje (la tarjeta) que cambia
+de texto y de botones en cada paso; una edición sin botones lo deja como constancia final.
 No incluye la salida de `scripts/dev_remind_me.py` ni los errores de configuración del arranque.
 
 ## Bandeja (mensaje libre)
@@ -16,216 +16,244 @@ Cualquier texto que no es un comando se guarda al instante como tarea sin área 
 _Mensaje libre: pregunta de tipo._
 
 ```text
-Guardado en tu bandeja: «comprar leche»
-¿Qué es?
-[Tarea]
-[Recordatorio]
-[Nota]
-[Cancelar]
+<b>¿Qué es?</b>
+
+comprar leche
+[Tarea][Recordatorio]
+[Nota][Cancelar]
 ```
 
-_Se elige Tarea: la elección queda en el mensaje y llega la pregunta de área._
+_Se elige Tarea: la tarjeta se edita y pasa a la pregunta de área, con el tipo ya elegido._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea
----
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿En qué área va?</b>
+
+comprar leche
+
+Tipo: Tarea
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```
 
-_Se elige un área: la tarea queda guardada._
+_Se elige un área: la misma tarjeta queda como constancia._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea guardada en personal: «comprar leche»
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+comprar leche
+
+Área: personal
 ```
 
 _Cancelar en cualquier pregunta: la tarea sigue en la bandeja._
 
 ```text
-(reemplaza el mensaje del botón)
-Cancelado. «comprar leche» sigue en tu bandeja como tarea.
+(edita el mismo mensaje)
+<b>Cancelado</b>
+
+comprar leche
+
+Sigue en tu bandeja como tarea.
 ```
 
 _Nota guardada con su área._
 
 ```text
-(reemplaza el mensaje del botón)
-Nota guardada en universidad: «la clave del wifi es larga»
+(edita el mismo mensaje)
+<b>Nota guardada</b>
+
+la clave del wifi es larga
+
+Área: universidad
 ```
 
 _Sin áreas disponibles no se pregunta el área._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea
----
-(reemplaza el mensaje del botón)
-Tarea guardada: «comprar leche»
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+comprar leche
 ```
 
 _Recordatorio con fecha clara: edición del área y confirmación con Cambiar/Deshacer._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: universidad
----
-Listo: «llevar tarea»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+llevar tarea
+
 Cuándo: domingo 4 de octubre, 8:00 am
 Área: universidad
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Deshacer: el recordatorio se cancela y la tarea vuelve a la bandeja._
 
 ```text
-(reemplaza el mensaje del botón)
-Deshecho. «llevar tarea» vuelve a tu bandeja como tarea.
+(edita el mismo mensaje)
+<b>Deshecho</b> · llevar tarea · vuelve a tu bandeja como tarea
 ```
 
 _Cambiar: se deshace y se vuelve a preguntar la fecha._
 
 ```text
-(reemplaza el mensaje del botón)
-Cambiando «llevar tarea»
----
-¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
-[Hoy 6:00 pm]
-[Mañana 9:00 am]
-[Mejor como tarea]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿Cuándo?</b>
+
+llevar tarea
+
+Tipo: Recordatorio
+Área: universidad
+
+Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
+[Hoy 6:00 pm][Mañana 9:00 am]
+[Mejor como tarea][Cancelar]
 ```
 
 _Se responde la fecha escribiéndola._
 
 ```text
-Listo: «llevar tarea»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+llevar tarea
+
 Cuándo: lunes 5 de octubre, 10:00 am
 Área: universidad
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Fecha sin hora: la confirmación avisa de la hora por defecto._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Listo: «llevar tarea»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+llevar tarea
+
 Cuándo: domingo 4 de octubre, 9:00 am (hora por defecto)
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Repetición: vista previa con la próxima fecha, sin guardar todavía._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Repetición: Cada lunes: «regar plantas»
+(edita el mismo mensaje)
+<b>¿Guardo esta repetición?</b>
+
+regar plantas
+
+Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
-¿La guardo?
-[Guardar]
-[Cancelar]
+[Guardar][Cancelar]
 ```
 
 _Guardar la repetición: confirmación._
 
 ```text
-(reemplaza el mensaje del botón)
-Listo: lunes 5 de octubre, 7:00 pm
----
-Listo: «regar plantas»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+regar plantas
+
 Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Un texto que empieza por «recordar/recuérdame» salta la pregunta de tipo._
 
 ```text
-Guardado en tu bandeja: «recuérdame llamar a mamá»
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+<b>¿En qué área va?</b>
+
+recuérdame llamar a mamá
+
+Tipo: Recordatorio
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```
 
 _Sin fecha: pregunta ¿cuándo? con opciones rápidas y «Mejor como tarea»._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
-[Hoy 6:00 pm]
-[Mañana 9:00 am]
-[Mejor como tarea]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿Cuándo?</b>
+
+llamar a mamá
+
+Tipo: Recordatorio
+
+Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
+[Hoy 6:00 pm][Mañana 9:00 am]
+[Mejor como tarea][Cancelar]
 ```
 
 _Se elige una opción rápida: confirmación._
 
 ```text
-(reemplaza el mensaje del botón)
-Listo: domingo 4 de octubre, 9:00 am
----
-Listo: «llamar a mamá»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+llamar a mamá
+
 Cuándo: domingo 4 de octubre, 9:00 am
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Mejor como tarea: queda como tarea con el área ya elegida, sin recordatorio._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea guardada en iglesia: «llamar al dentista»
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+llamar al dentista
+
+Área: iglesia
 ```
 
-_En ¿cuándo?, «Escribir otra»/texto: si lo escrito no es una fecha, es una captura nueva y se avisa._
+_En ¿cuándo?, un texto que no es fecha es una captura nueva: la tarjeta vieja queda «Sin terminar» y se abre otra._
 
 ```text
-Dejé sin terminar lo anterior; sigue en tu bandeja como tarea.
+(edita el mismo mensaje)
+<b>Sin terminar</b>
+
+llamar al dentista
+
+Sigue en tu bandeja como tarea.
 ---
-Guardado en tu bandeja: «comprar leche»
-¿Qué es?
-[Tarea]
-[Recordatorio]
-[Nota]
-[Cancelar]
+<b>¿Qué es?</b>
+
+comprar leche
+[Tarea][Recordatorio]
+[Nota][Cancelar]
 ```
 
 _Botón de una pregunta vieja: se ignora._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _La opción «Hoy 6:00 pm» se pulsó cuando ya había pasado._
 
 ```text
-(reemplaza el mensaje del botón)
-Esa hora ya pasó.
----
-Esa hora ya pasó. ¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
+(edita el mismo mensaje)
+<b>¿Cuándo?</b>
+
+llamar al dentista
+
+Tipo: Recordatorio
+
+Esa hora ya pasó. Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
 [Mañana 9:00 am]
-[Mejor como tarea]
-[Cancelar]
+[Mejor como tarea][Cancelar]
 ```
 
 
@@ -236,158 +264,167 @@ Se llega con «Recordatorio» y un área; aquí se muestra solo la pregunta que 
 _Hora o cita bíblica (time_or_verse)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿Eso es una hora o una cita bíblica?
+(edita el mismo mensaje)
+<b>¿Eso es una hora o una cita bíblica?</b>
+
+llamar a Juan 3:30
+
+Tipo: Recordatorio
 [Es una cita]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Persona o día (name_or_day)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿«Domingo» es una persona o el día de la semana?
+(edita el mismo mensaje)
+<b>¿«Domingo» es una persona o el día de la semana?</b>
+
+llamar a Domingo
+
+Tipo: Recordatorio
 [Es un nombre]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Hora con punto (dotted_time)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿Es una hora? Escríbela con dos puntos (por ejemplo 7:30).
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿Es una hora? Escríbela con dos puntos (por ejemplo 7:30).</b>
+
+7.30 dentista
+
+Tipo: Recordatorio
+[Otra fecha][Cancelar]
 ```
 
 _Número pegado al día (number_after_day)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿Ese número es la hora o forma parte del texto? Escribe la hora completa.
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿Ese número es la hora o forma parte del texto? Escribe la hora completa.</b>
+
+7 dentista
+
+Tipo: Recordatorio
+[Otra fecha][Cancelar]
 ```
 
 _Fecha que no entiende (unsupported_date): opciones rápidas._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-No entiendo esa fecha. ¿Qué día quieres?
-[Hoy 6:00 pm]
-[Mañana 9:00 am]
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>No entiendo esa fecha. ¿Qué día quieres?</b>
+
+pagar renta
+
+Tipo: Recordatorio
+[Hoy 6:00 pm][Mañana 9:00 am]
+[Otra fecha][Cancelar]
 ```
 
 _Repetición que no sabe hacer (unrecognized_recurrence)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Esa repetición no está entre las que sé hacer (todos los días, cada lunes, de lunes a viernes).
+(edita el mismo mensaje)
+<b>Esa repetición no está entre las que sé hacer (todos los días, cada lunes, de lunes a viernes).</b>
+
+cada mes pagar renta
+
+Tipo: Recordatorio
 [Solo una vez…]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Medianoche dudosa (ambiguous_time)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿Medianoche de qué día?
-[mañana, 12:00 am]
-[lun 5 oct, 12:00 am]
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿Medianoche de qué día?</b>
+
+cena
+
+Tipo: Recordatorio
+[mañana, 12:00 am][lun 5 oct, 12:00 am]
+[Otra fecha][Cancelar]
 ```
 
 _Hora dudosa, dos lecturas (ambiguous_meridiem)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿A las 9 am o pm?
-[mañana, 9:00 am]
-[mañana, 9:00 pm]
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>¿A las 9 am o pm?</b>
+
+llevar tarea
+
+Tipo: Recordatorio
+[mañana, 9:00 am][mañana, 9:00 pm]
+[Otra fecha][Cancelar]
 ```
 
 _Hora dudosa, un solo candidato futuro (ambiguous_meridiem)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-¿A las 8:00 pm?
+(edita el mismo mensaje)
+<b>¿A las 8:00 pm?</b>
+
+llevar tarea
+
+Tipo: Recordatorio
 [hoy, 8:00 pm]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Hora que ya pasó, con alternativa (past)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Esa fecha ya pasó. ¿La dejo para domingo 4 de octubre, 10:00 am?
+(edita el mismo mensaje)
+<b>Esa fecha ya pasó. ¿La dejo para domingo 4 de octubre, 10:00 am?</b>
+
+llevar tarea
+
+Tipo: Recordatorio
 [mañana, 10:00 am]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Día igual al de hoy (same_weekday)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Hoy es ese día: ¿hoy o en 7 días?
+(edita el mismo mensaje)
+<b>Hoy es ese día: ¿hoy o en 7 días?</b>
+
+llamar
+
+Tipo: Recordatorio
 [sáb 10 oct, 9:00 am]
-[Escribir otra fecha]
-[Cancelar]
+[Otra fecha][Cancelar]
 ```
 
 _Pasada la medianoche, «mañana» dudoso (today_or_tomorrow)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Ya pasó la medianoche: ¿«mañana» es hoy o mañana?
-[hoy, 8:00 am]
-[mañana, 8:00 am]
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>Ya pasó la medianoche: ¿«mañana» es hoy o mañana?</b>
+
+llevar tarea
+
+Tipo: Recordatorio
+[hoy, 8:00 am][mañana, 8:00 am]
+[Otra fecha][Cancelar]
 ```
 
 _Cualquier otra duda (texto genérico)._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-No pude entender la fecha o la hora; escríbela de otra forma.
-[Escribir otra fecha]
-[Cancelar]
+(edita el mismo mensaje)
+<b>No pude entender la fecha o la hora; escríbela de otra forma.</b>
+
+por la mañana llevar tarea
+
+Tipo: Recordatorio
+[Otra fecha][Cancelar]
 ```
 
 
@@ -408,35 +445,35 @@ Recordatorio · universidad
 _Hecho._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Hecho</b> · llevar tarea
 ```
 
 _+10 min: se reprograma para hoy._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Pospuesto</b> · llamar a mamá · hoy, 3:41 pm
 ```
 
 _Mañana 9:00 am: se reprograma para el día siguiente (día completo en la confirmación)._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Pospuesto</b> · llamar a mamá · domingo 4 de octubre, 9:00 am
 ```
 
 _Pulsar otra vez un botón de un aviso que ya no está activo._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Hecho</b> · llamar a mamá
 ```
 
 _Botón de un recordatorio que no existe._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Aviso</b> · Este recordatorio ya no está activo.
 ```
 
@@ -552,21 +589,21 @@ comprar pan
 _Hecha._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 Hecha: regar plantas
 ```
 
 _Descartar._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 Descartada: comprar pan
 ```
 
 _Pulsar otra vez sobre una tarea ya cerrada._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 Esta tarea ya no está abierta: regar plantas
 ```
 
@@ -685,67 +722,65 @@ Escribe /recordar seguido de qué y cuándo, por ejemplo: /recordar mañana 8 am
 _Con texto: se guarda en la bandeja y pregunta el área._
 
 ```text
-Guardado en tu bandeja: «mañana 8am llevar tarea»
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+<b>¿En qué área va?</b>
+
+mañana 8am llevar tarea
+
+Tipo: Recordatorio
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```
 
 _Vista previa antes de guardar._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: universidad
----
-Recordatorio: «llevar tarea»
+(edita el mismo mensaje)
+<b>¿Guardo este recordatorio?</b>
+
+llevar tarea
+
 Cuándo: domingo 4 de octubre, 8:00 am
 Área: universidad
-¿Lo guardo?
-[Guardar]
-[Cancelar]
+[Guardar][Cancelar]
 ```
 
 _Guardar: confirmación._
 
 ```text
-(reemplaza el mensaje del botón)
-Listo: domingo 4 de octubre, 8:00 am
----
-Listo: «llevar tarea»
+(edita el mismo mensaje)
+<b>Recordatorio guardado</b>
+
+llevar tarea
+
 Cuándo: domingo 4 de octubre, 8:00 am
 Área: universidad
-[Cambiar]
-[Deshacer]
+[Cambiar][Deshacer]
 ```
 
 _Con repetición: vista previa con la próxima fecha._
 
 ```text
-(reemplaza el mensaje del botón)
-Área: ninguna
----
-Repetición: Cada lunes: «regar plantas»
+(edita el mismo mensaje)
+<b>¿Guardo esta repetición?</b>
+
+regar plantas
+
+Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
-¿La guardo?
-[Guardar]
-[Cancelar]
+[Guardar][Cancelar]
 ```
 
 _Con una duda del parser: se elige el candidato y luego se muestra la vista previa._
 
 ```text
-(reemplaza el mensaje del botón)
-Elegido: domingo 4 de octubre, 9:00 pm
----
-Recordatorio: «llevar tarea»
+(edita el mismo mensaje)
+<b>¿Guardo este recordatorio?</b>
+
+llevar tarea
+
 Cuándo: domingo 4 de octubre, 9:00 pm
-¿Lo guardo?
-[Guardar]
-[Cancelar]
+[Guardar][Cancelar]
 ```
 
 
@@ -760,48 +795,63 @@ Escribe /tarea seguido de la tarea, por ejemplo: /tarea comprar pan
 _Con texto: pregunta solo el área._
 
 ```text
-Guardado en tu bandeja: «comprar pan»
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+<b>¿En qué área va?</b>
+
+comprar pan
+
+Tipo: Tarea
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```
 
 _Área elegida._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea guardada en personal: «comprar pan»
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+comprar pan
+
+Área: personal
 ```
 
 _Con una fecha clara en el texto: pregunta si es la fecha límite._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
+<b>¿Es la fecha límite?</b>
+
+entregar informe
+
+Tipo: Tarea
 Área: universidad
----
-¿Es la fecha límite de «entregar informe»?
 Fecha: viernes 9 de octubre, 9:00 am (hora por defecto)
-[Sí]
-[No]
+[Sí][No]
 [Cancelar]
 ```
 
 _Sí: título sin la fecha, con fecha de vencimiento._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea guardada en universidad: «entregar informe» (vence: viernes 9 de octubre, 9:00 am)
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+entregar informe
+
+Área: universidad
+Vence: viernes 9 de octubre, 9:00 am (hora por defecto)
 ```
 
 _No: queda con el texto completo y sin fecha._
 
 ```text
-(reemplaza el mensaje del botón)
-Tarea guardada en universidad: «entregar informe el viernes»
+(edita el mismo mensaje)
+<b>Tarea guardada</b>
+
+entregar informe el viernes
+
+Área: universidad
 ```
 
 
@@ -816,21 +866,25 @@ Escribe /nota seguido de la nota, por ejemplo: /nota la clave del wifi está en 
 _Con texto: pregunta solo el área._
 
 ```text
-Guardado en tu bandeja: «la clave del wifi»
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+<b>¿En qué área va?</b>
+
+la clave del wifi
+
+Tipo: Nota
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```
 
 _Área elegida._
 
 ```text
-(reemplaza el mensaje del botón)
-Nota guardada en personal: «la clave del wifi»
+(edita el mismo mensaje)
+<b>Nota guardada</b>
+
+la clave del wifi
+
+Área: personal
 ```
 
 
@@ -872,29 +926,43 @@ Escribe /nuevaarea seguido del nombre, por ejemplo: /nuevaarea Salud
 _Con nombre: pregunta la descripción._
 
 ```text
-¿Qué cubre «Salud»? Escribe una descripción corta u omítela.
-[Omitir]
-[Cancelar]
+<b>¿Qué cubre «Salud»?</b>
+
+Escribe una descripción corta u omítela.
+[Omitir][Cancelar]
 ```
 
 _Se escribe la descripción._
 
 ```text
-Área creada: Salud
+(edita el mismo mensaje)
+<b>Área guardada</b>
+
+Salud
+
+Ejercicio y citas médicas
 ```
 
 _Omitir: el área queda sin descripción._
 
 ```text
-(reemplaza el mensaje del botón)
-Área creada: Deportes (sin descripción)
+(edita el mismo mensaje)
+<b>Área guardada</b>
+
+Deportes
+
+Sin descripción.
 ```
 
 _Cancelar._
 
 ```text
-(reemplaza el mensaje del botón)
-Cancelado. No se creó el área.
+(edita el mismo mensaje)
+<b>Cancelado</b>
+
+Viajes
+
+No se creó el área.
 ```
 
 _Nombre repetido (sin distinguir mayúsculas ni acentos)._
@@ -954,35 +1022,40 @@ _Botón desconocido o mal formado._
 _Botón de la bandeja de un flujo que ya no existe._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _Botón de tarea que no existe._
 
 ```text
-(reemplaza el mensaje del botón)
+(edita el mismo mensaje)
 <b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _Deshacer/Cambiar cuando el recordatorio ya no está pendiente._
 
 ```text
-(reemplaza el mensaje del botón)
-Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente.
+(edita el mismo mensaje)
+<b>Aviso</b> · Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente.
 ```
 
 _Un comando a mitad de otra pregunta no la descarta; otro flujo nuevo sí, y avisa._
 
 ```text
-Dejé sin terminar la creación del área.
+(edita el mismo mensaje)
+<b>Sin terminar</b>
+
+Deportes
+
+No se creó el área.
 ---
-Guardado en tu bandeja: «sacar copias»
-¿En qué área va?
-[universidad]
-[proyectos]
-[iglesia]
-[personal]
-[Sin área]
-[Cancelar]
+<b>¿En qué área va?</b>
+
+sacar copias
+
+Tipo: Tarea
+[universidad][proyectos]
+[iglesia][personal]
+[Sin área][Cancelar]
 ```

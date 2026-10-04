@@ -63,9 +63,25 @@ class Recorder:
     ("texto"|"botones"|"edicion", texto, filas de etiquetas)."""
 
     log: list[tuple[str, str, list[list[str]]]] = field(default_factory=list)
+    count: int = 0
 
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
+    def _ref(self) -> str:
+        self.count += 1
+        return f"m{self.count}"
+
+    @staticmethod
+    def _rows(choices: list[Choice], layout: Sequence[int] | None) -> list[list[str]]:
+        sizes = tuple(layout) if layout is not None else (1,) * len(choices)
+        labels = [choice.label for choice in choices]
+        rows, start = [], 0
+        for size in sizes:
+            rows.append(labels[start : start + size])
+            start += size
+        return rows
+
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None:
         self.log.append(("texto", to_html(text), []))
+        return self._ref()
 
     async def send_choices(
         self,
@@ -74,17 +90,21 @@ class Recorder:
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
-        sizes = tuple(layout) if layout is not None else (1,) * len(choices)
-        labels = [choice.label for choice in choices]
-        rows, start = [], 0
-        for size in sizes:
-            rows.append(labels[start : start + size])
-            start += size
-        self.log.append(("botones", to_html(text), rows))
+    ) -> str | None:
+        self.log.append(("botones", to_html(text), self._rows(choices, layout)))
+        return self._ref()
 
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
-        self.log.append(("edicion", to_html(text), []))
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,
+        layout: Sequence[int] | None = None,
+    ) -> bool:
+        rows = self._rows(choices, layout) if choices else []
+        self.log.append(("edicion", to_html(text), rows))
+        return True
 
 
 class Session:
@@ -96,6 +116,7 @@ class Session:
         self.channel = Recorder()
         self.conversation = Conversation()
         self._choices: list[tuple[str, list[Choice]]] = []
+        self._id_refs: dict[str, str] = {}
         self.engine = ReminderEngine(self.conn, self._wrap(), str(OWNER), TZ, self.clock)
 
     # El canal grabador guarda solo etiquetas; los ids se piden al fabricar los botones.
@@ -118,7 +139,7 @@ class Session:
         )
 
     def press(self, choice_id: str) -> None:
-        event = IncomingChoice("catalogo", str(OWNER), choice_id, REF)
+        event = IncomingChoice("catalogo", str(OWNER), choice_id, self._id_refs.get(choice_id, REF))
         run(
             handlers.handle_choice(
                 event, self._wrap(), OWNER, self.conn, self.clock, TZ, self.conversation
@@ -138,24 +159,35 @@ class Session:
         run(self.engine.tick())
 
     def _wrap(self):
-        return _Tee(self.channel, self._choices)
+        return _Tee(self.channel, self._choices, self._id_refs)
 
 
 class _Tee:
     """Reparte lo enviado al grabador y recuerda los botones completos (con sus ids)."""
 
-    def __init__(self, recorder: Recorder, choices: list[tuple[str, list[Choice]]]) -> None:
-        self._recorder, self._choices = recorder, choices
+    def __init__(
+        self,
+        recorder: Recorder,
+        choices: list[tuple[str, list[Choice]]],
+        id_refs: dict[str, str],
+    ) -> None:
+        self._recorder, self._choices, self._id_refs = recorder, choices, id_refs
 
     async def send_text(self, to, text, kind="reply"):
-        await self._recorder.send_text(to, text, kind)
+        return await self._recorder.send_text(to, text, kind)
 
     async def send_choices(self, to, text, choices, kind="reply", layout=None):
+        ref = await self._recorder.send_choices(to, text, choices, kind, layout)
         self._choices.append((text, list(choices)))
-        await self._recorder.send_choices(to, text, choices, kind, layout)
+        self._id_refs.update({choice.id: ref for choice in choices})
+        return ref
 
-    async def edit_text(self, to, message_ref, text):
-        await self._recorder.edit_text(to, message_ref, text)
+    async def edit_text(self, to, message_ref, text, choices=None, layout=None):
+        ok = await self._recorder.edit_text(to, message_ref, text, choices, layout)
+        if choices:
+            self._choices.append((text, list(choices)))
+            self._id_refs.update({choice.id: message_ref for choice in choices})
+        return ok
 
 
 # --- Documento ---------------------------------------------------------------------------------
@@ -182,7 +214,7 @@ class Catalog:
     def render(self, comment: str, entries: list[tuple[str, str, list[list[str]]]]) -> None:
         blocks = []
         for kind, text, rows in entries:
-            parts = ["(reemplaza el mensaje del botón)"] if kind == "edicion" else []
+            parts = ["(edita el mismo mensaje)"] if kind == "edicion" else []
             parts.append(text)
             parts += ["".join(f"[{label}]" for label in row) for row in rows]
             blocks.append("\n".join(parts))
@@ -200,8 +232,8 @@ def build() -> Catalog:
         "(universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:",
         "HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones",
         "va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.",
-        "«(reemplaza el mensaje del botón)» es una edición: el texto sustituye al mensaje que llevaba",
-        "los botones, sin teclado.",
+        "«(edita el mismo mensaje)» es una edición: la captura es UN solo mensaje (la tarjeta) que cambia",
+        "de texto y de botones en cada paso; una edición sin botones lo deja como constancia final.",
         "No incluye la salida de `scripts/dev_remind_me.py` ni los errores de configuración del arranque.",
     ]
     bandeja(cat)
@@ -231,10 +263,12 @@ def bandeja(cat: Catalog) -> None:
     cat.snap(s, "Mensaje libre: pregunta de tipo.", lambda: s.say("comprar leche"))
     cat.snap(
         s,
-        "Se elige Tarea: la elección queda en el mensaje y llega la pregunta de área.",
+        "Se elige Tarea: la tarjeta se edita y pasa a la pregunta de área, con el tipo ya elegido.",
         lambda: s.tap("Tarea"),
     )
-    cat.snap(s, "Se elige un área: la tarea queda guardada.", lambda: s.tap("personal"))
+    cat.snap(
+        s, "Se elige un área: la misma tarjeta queda como constancia.", lambda: s.tap("personal")
+    )
 
     s = Session()
     s.say("comprar leche")
@@ -324,7 +358,7 @@ def bandeja(cat: Catalog) -> None:
     s.tap("Sin área")
     cat.snap(
         s,
-        "En ¿cuándo?, «Escribir otra»/texto: si lo escrito no es una fecha, es una captura nueva y se avisa.",
+        "En ¿cuándo?, un texto que no es fecha es una captura nueva: la tarjeta vieja queda «Sin terminar» y se abre otra.",
         lambda: s.say("comprar leche"),
     )
 

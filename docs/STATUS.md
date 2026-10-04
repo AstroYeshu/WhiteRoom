@@ -20,8 +20,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `undo_reminder_conversion`, `reopen_converted`). Ver DECISIONS.md.
 
 - Rediseño de mensajes (en pausa el 7c): corte 1 HECHO (`formato.py`, HTML con reintento en texto plano, aviso de
-  recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Siguen el corte 2 (captura en un solo mensaje que
-  evoluciona; `edit_text` con botones) y el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
+  recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Corte 2 HECHO (captura en una tarjeta: un solo mensaje que
+  evoluciona; `edit_text` con botones y distribución). Falta el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
 
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,

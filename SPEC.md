@@ -42,7 +42,7 @@ class Choice:
 
 
 class Channel(Protocol):
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None: ...
     async def send_choices(
         self,
         to: str,
@@ -51,8 +51,17 @@ class Channel(Protocol):
         kind: str = "reply",
         layout: Sequence[int]
         | None = None,  # botones por fila, p. ej. (2, 2, 1); sin él, uno por fila
-    ) -> None: ...
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None: ...  # sin botones
+    ) -> (
+        str | None
+    ): ...  # ambos send_* devuelven la referencia del mensaje (None si el canal no tiene)
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,  # con botones los pone; sin ellos quita los que había
+        layout: Sequence[int] | None = None,
+    ) -> bool: ...  # False = no se pudo editar: quien llama manda un mensaje nuevo
 ```
 
 - `kind` es `reply`, `reminder` o `briefing`: deja que cada canal decida CÓMO enviar (WhatsApp necesitará
@@ -63,6 +72,12 @@ class Channel(Protocol):
   `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
   que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
   EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
+- **La captura es un solo mensaje que evoluciona (la "tarjeta").** Un mensaje libre abre UN mensaje del bot
+  con la primera pregunta y cada paso (tipo, área, fecha, confirmación) lo EDITA en su lugar con texto y botones
+  nuevos (`edit_text(..., choices, layout)`); si el canal no puede editar (consola, `False`), se manda un mensaje
+  nuevo y se sigue en ese. Cada pregunta renueva el id del flujo: un botón viejo sobre la tarjeta viva se ignora en
+  silencio, y sobre una tarjeta muerta la marca como no disponible. La tarjeta lleva el título en negrita, el
+  contenido del usuario en su párrafo y los datos ya elegidos como "Tipo: ...", "Área: ...".
 - **Formato de los textos.** Un solo módulo, `formato.py`, con funciones puras genera los textos y la
   distribución de botones. Marcado mínimo, un subconjunto de HTML: solo `<b>` (contenido principal y estados),
   `<i>` (estados secundarios, p. ej. "(retrasado)") y `<code>`. El texto del usuario SIEMPRE se escapa con `esc()`

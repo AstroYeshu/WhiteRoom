@@ -5,6 +5,7 @@ válido y lo guardado debe ser EXACTAMENTE lo que escribió el usuario.
 
 import asyncio
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,7 +33,11 @@ def teardown_module(module):
 
 
 class TgBot:
-    """Maneja los manejadores reales con `TelegramChannel`; solo la red es falsa."""
+    """Maneja los manejadores reales con `TelegramChannel`; solo la red es falsa.
+
+    Se comporta como Telegram: cada mensaje tiene un `message_id`, editar cambia texto y teclado, y
+    un botón llega con el `message_id` del mensaje que lo mostraba.
+    """
 
     def __init__(self, conn, clock, monkeypatch) -> None:
         self.conn, self.clock = conn, clock
@@ -40,13 +45,19 @@ class TgBot:
         self.conversation = Conversation()
         self.sent: list[dict] = []
         self.edited: list[dict] = []
+        self.timeline: list[dict] = []  # envíos y ediciones, en orden
+        self._next_id = 100
         bot_type = type(self.channel._application.bot)
 
         async def send_message(bot, **kwargs):
+            self._next_id += 1
             self.sent.append(kwargs)
+            self.timeline.append({**kwargs, "message_id": self._next_id})
+            return SimpleNamespace(message_id=self._next_id)
 
         async def edit_message_text(bot, **kwargs):
             self.edited.append(kwargs)
+            self.timeline.append(kwargs)
 
         monkeypatch.setattr(bot_type, "send_message", send_message)
         monkeypatch.setattr(bot_type, "edit_message_text", edit_message_text)
@@ -61,14 +72,15 @@ class TgBot:
         )
 
     def tap(self, label: str) -> None:
-        for call in reversed(self.sent):
+        for call in reversed(self.timeline):
             markup = call.get("reply_markup")
             if markup is None:
                 continue
             for row in markup.inline_keyboard:
                 for button in row:
                     if button.text == label or label in button.text:
-                        event = IncomingChoice("telegram", str(OWNER), button.callback_data, "77")
+                        ref = str(call["message_id"])
+                        event = IncomingChoice("telegram", str(OWNER), button.callback_data, ref)
                         run(
                             handlers.handle_choice(
                                 event,

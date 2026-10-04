@@ -149,3 +149,19 @@ el HTML por completo (perdería la jerarquía).
 `classify/`, `llm/`, `anthropic` ni `telegram`; lo verifica `tests/test_arquitectura_capas.py` (AST transitivo, también para
 cada archivo de `core/`). El test de `reminders.py` sin LLM sigue igual. Reemplaza lo dicho sobre la importación hacia arriba
 en el corte 1.
+
+## Rediseño de mensajes, corte 2: la captura es una tarjeta (un solo mensaje que evoluciona)
+Un mensaje libre (o `/tarea`, `/nota`, `/recordar`) abre UN mensaje del bot; cada paso lo edita en su lugar: tipo, área, fecha o
+pregunta del parser, vista previa y confirmación final. Interfaz `Channel`: `send_text`/`send_choices` devuelven la referencia del
+mensaje (Telegram: `message_id`; consola: `None`), y `edit_text(to, ref, text, choices=None, layout=None) -> bool` acepta botones y
+distribución y devuelve `False` si no pudo editar; entonces el flujo manda un mensaje nuevo y esa pasa a ser la tarjeta (consola, o
+Telegram con un mensaje muy viejo). La consola imprime "[editado]" con las opciones y las numera. Botones viejos: la tarjeta viva
+guarda su `message_ref`; un botón de un flujo ya renovado que cae en ESA tarjeta se ignora en silencio (si se contestara, pisaría la
+pregunta vigente), uno que cae en una tarjeta muerta (otra captura, reinicio, caducidad) la edita a «Aviso · Esa opción ya no está
+disponible.». Lo mismo con un segundo toque en Deshacer/Cambiar. Un mensaje nuevo a mitad de una tarjeta la EDITA a «Sin terminar» (la
+tarea sigue en la bandeja) en vez de mandar un aviso aparte. Cambiar continúa en el mismo mensaje. Preguntas del parser: título en
+negrita, candidatos de 2 por fila con `fecha_corta` y, abajo, [Otra fecha] [Cancelar]. Distribución como dato: `tail_layout` (filas de 2,
+los últimos botones juntos en la fila final). Vocabulario: «… guardado/guardada» («Tarea guardada», «Nota guardada», «Recordatorio
+guardado», «Área guardada»); «Escribir otra fecha» pasó a «Otra fecha». `/nuevaarea` usa la misma tarjeta (la descripción es el texto
+siguiente). Descartado: mantener el mensaje nuevo por paso (deja un rastro de fragmentos) y contestar a los botones viejos de la
+tarjeta viva (borraría la pregunta en curso).

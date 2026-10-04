@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from asistente import formato as fmt
 from asistente.bot import commands, handlers
 from asistente.core import areas, notes, reminders, tasks
 from asistente.timeutil import local_to_utc, to_utc_iso
@@ -304,11 +305,9 @@ def test_recordar_muestra_la_interpretacion_antes_de_guardar(bot, conn, clock):
     assert "¿En qué área" in bot.question[0]  # ya es recordatorio: no pregunta el tipo
     bot.tap("universidad")
     text, _ = bot.question
-    assert text == (
-        "Recordatorio: «llevar tarea»\n"
-        "Cuándo: domingo 4 de octubre, 8:00 am\n"
-        "Área: universidad\n"
-        "¿Lo guardo?"
+    assert fmt.plain(text) == (
+        "¿Guardo este recordatorio?\n\nllevar tarea\n\n"
+        "Cuándo: domingo 4 de octubre, 8:00 am\nÁrea: universidad"
     )
     assert bot.labels() == ["Guardar", "Cancelar"]
     assert reminders.list_pending(conn) == []  # todavía no se guardó
@@ -343,7 +342,7 @@ def test_recordar_sin_fecha_pregunta_cuando(bot, conn):
     assert "¿Cuándo?" in bot.question[0]
     bot.tap("Mañana 9:00 am")
     assert reminders.list_pending(conn) == []  # /recordar siempre muestra antes de guardar
-    assert "¿Lo guardo?" in bot.question[0]
+    assert "¿Guardo este recordatorio?" in bot.question[0]
     bot.tap("Guardar")
     assert reminders.list_pending(conn)[0].text == "llamar al dentista"
 
@@ -353,7 +352,7 @@ def test_recordar_con_una_pregunta_del_parser_pide_pulsar_el_candidato(bot, conn
     bot.tap("Sin área")
     assert reminders.list_pending(conn) == []
     bot.tap("9:00 pm")
-    assert "¿Lo guardo?" in bot.question[0]
+    assert "¿Guardo este recordatorio?" in bot.question[0]
     bot.tap("Guardar")
     assert reminders.list_pending(conn)[0].text == "llevar tarea"
 
@@ -391,7 +390,7 @@ def test_tarea_solo_pregunta_el_area(bot, conn):
         "open",
         area_id(conn, "personal"),
     )
-    assert "Tarea guardada en personal" in bot.last[1]
+    assert fmt.plain(bot.last[1]) == "Tarea guardada\n\ncomprar pan\n\nÁrea: personal"
 
 
 def test_tarea_con_texto_de_recordatorio_no_se_convierte_en_recordatorio(bot, conn):
@@ -414,7 +413,8 @@ def test_nota_solo_pregunta_el_area(bot, conn):
 def test_tarea_a_mitad_de_otra_pregunta_descarta_la_anterior_y_avisa(bot, conn):
     bot.say("comprar leche")
     bot.say("/tarea sacar copias")
-    assert any("sin terminar" in message for message in bot.messages())
+    first = fmt.plain(bot.text_of(bot.channel.refs[0]))  # la tarjeta vieja se editó
+    assert first.startswith("Sin terminar\n\ncomprar leche")
     bot.tap("Sin área")
     titles = [r["title"] for r in conn.execute("SELECT title FROM tasks ORDER BY id")]
     assert titles == ["comprar leche", "sacar copias"]
@@ -445,13 +445,13 @@ def test_nuevaarea_sin_nombre_explica_como_usarla(bot):
 def test_nuevaarea_pregunta_la_descripcion_con_omitir(bot, conn):
     bot.say("/nuevaarea Salud")
     text, _ = bot.question
-    assert text == "¿Qué cubre «Salud»? Escribe una descripción corta u omítela."
+    assert fmt.plain(text) == "¿Qué cubre «Salud»?\n\nEscribe una descripción corta u omítela."
     assert bot.labels() == ["Omitir", "Cancelar"]
     assert areas.find_area_by_name(conn, "Salud") is None  # aún no existe
     bot.say("Ejercicio y citas médicas")
     created = areas.find_area_by_name(conn, "Salud")
     assert created is not None and created.description == "Ejercicio y citas médicas"
-    assert bot.last[1] == "Área creada: Salud"
+    assert fmt.plain(bot.last[1]) == "Área guardada\n\nSalud\n\nEjercicio y citas médicas"
 
 
 def test_nuevaarea_omitir_la_crea_sin_descripcion(bot, conn):
@@ -459,14 +459,14 @@ def test_nuevaarea_omitir_la_crea_sin_descripcion(bot, conn):
     bot.tap("Omitir")
     created = areas.find_area_by_name(conn, "Salud")
     assert created is not None and created.description == ""
-    assert bot.edits()[-1] == "Área creada: Salud (sin descripción)"
+    assert fmt.plain(bot.edits()[-1]) == "Área guardada\n\nSalud\n\nSin descripción."
 
 
 def test_nuevaarea_cancelar_no_crea_nada(bot, conn):
     bot.say("/nuevaarea Salud")
     bot.tap("Cancelar")
     assert areas.find_area_by_name(conn, "Salud") is None
-    assert bot.edits()[-1] == "Cancelado. No se creó el área."
+    assert fmt.plain(bot.edits()[-1]) == "Cancelado\n\nSalud\n\nNo se creó el área."
 
 
 @pytest.mark.parametrize("name", ["universidad", "UNIVERSIDAD", "Universidád"])
@@ -488,7 +488,7 @@ def test_nuevaarea_si_el_nombre_se_ocupa_mientras_tanto_avisa(bot, conn, clock):
         conn, "salud", "otra", clock
     )  # alguien la creó entre la pregunta y la respuesta
     bot.say("Ejercicio")
-    assert bot.last[1] == "Ya existe un área llamada «salud»."
+    assert fmt.plain(bot.last[1]) == "Aviso · Ya existe un área llamada «salud»."
 
 
 def test_un_comando_a_mitad_de_nuevaarea_no_se_toma_como_descripcion(bot, conn):
@@ -600,9 +600,9 @@ def test_tarea_con_fecha_pregunta_si_es_la_fecha_limite_despues_del_area(bot, co
     assert "¿En qué área" in bot.question[0]
     bot.tap("universidad")
     text, _ = bot.question
-    assert text == (
-        "¿Es la fecha límite de «entregar informe»?\n"
-        "Fecha: viernes 9 de octubre, 9:00 am (hora por defecto)"
+    assert fmt.plain(text) == (
+        "¿Es la fecha límite?\n\nentregar informe\n\n"
+        "Tipo: Tarea\nÁrea: universidad\nFecha: viernes 9 de octubre, 9:00 am (hora por defecto)"
     )
     assert bot.labels() == ["Sí", "No", "Cancelar"]
     task = only_task(conn)
@@ -619,8 +619,9 @@ def test_si_pone_la_fecha_limite_limpia_el_titulo_y_crea_los_avisos_de_preparaci
     assert (task.status, task.area_id) == ("open", area_id(conn, "universidad"))
     assert task.source_text == "entregar informe el viernes"  # lo original se conserva
     assert len(reminders.list_pending(conn)) == 2  # 1 día y 1 hora antes
-    assert bot.edits()[-1] == (
-        "Tarea guardada en universidad: «entregar informe» (vence: viernes 9 de octubre, 9:00 am)"
+    assert fmt.plain(bot.edits()[-1]) == (
+        "Tarea guardada\n\nentregar informe\n\n"
+        "Área: universidad\nVence: viernes 9 de octubre, 9:00 am (hora por defecto)"
     )
 
 
@@ -630,7 +631,7 @@ def test_no_deja_la_tarea_con_el_texto_completo_y_sin_fecha(bot, conn):
     task = only_task(conn)
     assert task.title == "entregar informe el viernes" and task.due_at_utc is None
     assert reminders.list_pending(conn) == []
-    assert bot.edits()[-1] == "Tarea guardada: «entregar informe el viernes»"
+    assert fmt.plain(bot.edits()[-1]) == "Tarea guardada\n\nentregar informe el viernes"
 
 
 def test_cancelar_la_pregunta_deja_la_tarea_en_la_bandeja(bot, conn):

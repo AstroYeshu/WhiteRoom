@@ -9,6 +9,7 @@ from datetime import timedelta
 
 import pytest
 
+from asistente import formato as fmt
 from asistente.bot import handlers
 from asistente.bot.conversation import FLOW_TTL
 from asistente.core import areas, notes, reminders, tasks
@@ -212,7 +213,7 @@ def test_escribir_otra_fecha_pide_el_texto(bot, conn):
     bot.tap("Sin área")
     bot.say("mañana por la mañana")  # no se entiende: pregunta, no guarda
     assert pending(conn) == []
-    bot.tap("Escribir otra")
+    bot.tap("Otra fecha")
     assert "Escribe" in bot.last[1]
     bot.say("mañana 10 am")
     assert local_hhmm(pending(conn)[0]) == "2026-10-04 10:00"
@@ -369,16 +370,15 @@ def test_un_mensaje_nuevo_a_mitad_de_pregunta_descarta_el_flujo_anterior_y_avisa
     bot.say("comprar leche")
     old_button = bot.choice_id("Tarea")
     bot.say("sacar copias")
-    notice = [text for kind, text, _ in bot.channel.log if kind == "text"]
-    assert any("sin terminar" in text for text in notice)
+    first = fmt.plain(bot.text_of(bot.channel.refs[0]))  # la tarjeta vieja se editó
+    assert first.startswith("Sin terminar\n\ncomprar leche")
     titles = [t.title for t in all_tasks(conn)]
     assert titles == ["comprar leche", "sacar copias"]
     assert all(t.status == "open" and t.area_id is None for t in all_tasks(conn))
     bot.press(old_button)  # botón viejo con un flujo nuevo: no toca nada
     assert handlers.STALE_CHOICE_TEXT in bot.last[1]
-    assert bot.question[0].startswith(
-        "Guardado en tu bandeja"
-    )  # la pregunta vigente sigue siendo la nueva
+    # la pregunta vigente sigue siendo la nueva
+    assert fmt.plain(bot.question[0]).startswith("¿Qué es?\n\nsacar copias")
     bot.tap("Nota")
     assert [n.text for n in notes.list_notes(conn)] == []  # aún falta el área
 
@@ -456,9 +456,10 @@ def test_pulsar_dos_veces_el_mismo_boton_no_da_error_ni_duplica(bot, conn):
     bot.say("comprar leche")
     button = bot.choice_id("Nota")
     bot.press(button)
-    bot.press(button)
-    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
-    assert sum(1 for kind, text, _ in bot.channel.log if "área" in text) == 1
+    before = len(bot.channel.log)
+    bot.press(button)  # la segunda pulsación cae en la tarjeta viva: se ignora en silencio
+    assert len(bot.channel.log) == before
+    assert "¿En qué área va?" in bot.question[0] and bot.sent_count() == 1
 
 
 @pytest.mark.parametrize(
@@ -517,7 +518,8 @@ def waiting_for_when(bot) -> int:
 def test_un_texto_sin_fecha_es_captura_nueva_y_avisa_que_se_descarto_la_pregunta(bot, conn):
     first_id = waiting_for_when(bot)
     bot.say("comprar leche")
-    assert handlers.inbox.ABANDONED_TEXT in [t for k, t, _ in bot.channel.log if k == "text"]
+    first = fmt.plain(bot.text_of(bot.channel.refs[0]))
+    assert first.startswith("Sin terminar\n\nllamar al dentista")  # se avisa en la tarjeta vieja
     assert [t.title for t in all_tasks(conn)] == ["llamar al dentista", "comprar leche"]
     assert tasks.get_task(conn, first_id).status == "open"  # la primera sigue en la bandeja
     assert pending(conn) == []
@@ -529,7 +531,7 @@ def test_hora_dudosa_en_cuando_cuenta_como_respuesta_no_como_captura(bot, conn):
     bot.say("mañana a las 9")  # ambiguous_meridiem: 9 am o 9 pm
     assert len(all_tasks(conn)) == 1
     assert "9:00 am" in " ".join(bot.labels()) and "9:00 pm" in " ".join(bot.labels())
-    assert handlers.inbox.ABANDONED_TEXT not in [t for k, t, _ in bot.channel.log if k == "text"]
+    assert not any(fmt.plain(text).startswith("Sin terminar") for text in bot.edits())
     bot.tap("9:00 am")
     [reminder] = pending(conn)
     assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-04 09:00"
@@ -551,7 +553,7 @@ def test_candidato_unico_en_cuando_cuenta_como_respuesta_y_se_confirma(bot, conn
 def test_cuando_invita_a_escribir_la_hora_con_ejemplos(bot):
     waiting_for_when(bot)
     text = bot.question[0]
-    assert text.startswith("¿Cuándo?")
+    assert fmt.plain(text).startswith("¿Cuándo?")
     assert "o escribe cuándo" in text
     assert '"en 2 horas"' in text and '"el viernes a las 5"' in text
 
@@ -564,7 +566,7 @@ def test_el_aviso_de_hora_pasada_tambien_invita_a_escribir(bot, clock):
     hoy = bot.choice_id("Hoy 6:00 pm")
     clock.advance(minutes=6)
     bot.press(hoy)
-    assert "Esa hora ya pasó. ¿Cuándo?" in bot.question[0]
+    assert "Esa hora ya pasó." in bot.question[0]
     assert "o escribe cuándo" in bot.question[0]
     assert "Mejor como tarea" in bot.labels()
 
@@ -576,7 +578,7 @@ def test_mejor_como_tarea_conserva_el_area_y_no_crea_recordatorio(bot, conn):
     task = tasks.get_task(conn, first_id)
     assert (task.status, task.closed_reason) == ("open", None)
     assert task.area_id == areas.find_area_by_name(conn, "iglesia").id
-    assert "Tarea guardada en iglesia" in bot.last[1]
+    assert fmt.plain(bot.last[1]) == "Tarea guardada\n\nllamar al dentista\n\nÁrea: iglesia"
     assert bot.conversation.current(bot.clock) is None
 
 
@@ -633,8 +635,9 @@ def test_los_botones_de_la_pregunta_anterior_no_valen_para_la_siguiente_en_el_mi
     bot.say("mañana a las 9")  # pregunta 1: [9:00 am] [9:00 pm]
     old_nine_am = bot.choice_id("9:00 am")
     bot.say("hoy a las 8")  # pregunta 2: un solo candidato, el índice 0 es otra fecha (8 pm hoy)
+    before = len(bot.channel.log)
     bot.press(old_nine_am)
     assert pending(conn) == []  # el botón viejo NO creó el recordatorio de las 8 pm
-    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    assert len(bot.channel.log) == before  # ni siquiera pisó la pregunta vigente
     bot.tap("8:00 pm")  # el botón vigente sí
     assert local_hhmm(pending(conn)[0]) == "2026-10-03 20:00"

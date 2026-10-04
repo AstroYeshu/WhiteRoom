@@ -80,7 +80,10 @@ class Channel(Protocol):
     `kind` es `reply`, `reminder` o `briefing`: deja que cada canal decida CÓMO enviar.
     """
 
-    async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> str | None:
+        """Envía un texto. Devuelve la referencia del mensaje (para editarlo después) o None si el
+        canal no tiene referencias (consola)."""
+        ...
 
     async def send_choices(
         self,
@@ -89,14 +92,24 @@ class Channel(Protocol):
         choices: list[Choice],
         kind: str = "reply",
         layout: Sequence[int] | None = None,
-    ) -> None:
+    ) -> str | None:
         """`layout` = cuántos botones lleva cada fila (p. ej. `(2, 2, 1)`); debe sumar
-        `len(choices)`. Sin `layout`, un botón por fila. Un canal sin filas (consola) lo ignora."""
+        `len(choices)`. Sin `layout`, un botón por fila. Un canal sin filas (consola) lo ignora.
+        Devuelve la referencia del mensaje, o None."""
         ...
 
-    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
-        """Cambia el texto de un mensaje ya enviado y le quita los botones. Es cosmético:
-        no debe lanzar errores (la acción del usuario ya se hizo)."""
+    async def edit_text(
+        self,
+        to: str,
+        message_ref: str,
+        text: str,
+        choices: list[Choice] | None = None,
+        layout: Sequence[int] | None = None,
+    ) -> bool:
+        """Cambia el texto de un mensaje ya enviado. Con `choices` le pone esos botones (con su
+        `layout`); sin ellos le quita los que tuviera. Devuelve True si el mensaje quedó como se
+        pidió (también si ya estaba así) y False si no se pudo editar: quien llama manda entonces
+        un mensaje nuevo. Nunca lanza por un fallo de la plataforma (es cosmético)."""
         ...
 
 
