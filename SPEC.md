@@ -174,6 +174,7 @@ CLAUDE_MODEL_FAST=claude-haiku-4-5-20251001
 TYPESAFE_API_KEY=                 # opcional; si falta se usa Haiku
 TYPESAFE_BASE_URL=https://api.typesafe.ai
 CLASSIFIER=rules+jev              # rules+jev | rules+haiku
+BOT_ENV=dev                       # dev | prod (dos bots, dos bases); se muestra en /estado
 TZ_NAME=                          # zona IANA, p. ej. America/Mexico_City
 CURRENCY_CODE=                    # p. ej. MXN, USD
 DB_PATH=data/asistente.db
@@ -498,7 +499,7 @@ A `briefing_time`:
 
 ## 9. Comandos (no usan LLM salvo indicación)
 
-`/start` · `/ayuda` · `/hoy [área]` · `/pendientes [área]` · `/recordatorios` · `/tarea <texto>` ·
+`/start` · `/ayuda` · `/estado` (salud del bot, sin textos del usuario) · `/hoy [área]` · `/pendientes [área]` · `/recordatorios` · `/tarea <texto>` ·
 `/nota <texto>` · `/recordar <texto>` · `/areas` · `/nuevaarea` · `/papelera` · `/saldo` ·
 `/deshacer` · `/ajuste` · `/costos` · `/contexto <área>` (Fase 5) · `/chat <área>` (Fase 5, usa LLM)
 

@@ -34,6 +34,7 @@ from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Channel, Choice, IncomingChoice
 from asistente.choices import encode_choice_id
 from asistente.core import areas, notes, reminders, tasks
+from asistente.core.runtime import RuntimeStatus
 from asistente.core.settings import get_meridiem_ask_range, get_time_setting
 from asistente.parsing.dates import WEEKDAY_NAMES_ES, fold, parse_when, strip_reminder_verb
 from asistente.parsing.recurrence import ScheduleResult, parse_schedule
@@ -74,6 +75,7 @@ class Ctx:
     tz_name: str
     conversation: Conversation
     user_ref: str
+    runtime: RuntimeStatus | None = None  # lo que solo sabe el proceso en marcha (/estado)
 
 
 # --- Utilidades ------------------------------------------------------------------------------

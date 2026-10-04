@@ -298,3 +298,12 @@ def test_el_script_no_usa_red():
     text = SCRIPT.read_text(encoding="utf-8")
     for forbidden in ("socket", "urllib", "httpx", "requests", "ntplib"):
         assert f"import {forbidden}" not in text
+
+
+def test_bot_env_invalido_falla_nombrando_la_variable_sin_su_valor(script, env, tmp_path, capsys):
+    env["BOT_ENV"] = "produccion-secreta"
+    code = run_main(script, env, tmp_path, ntp_synced=True)
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "BOT_ENV" in out
+    assert "produccion-secreta" not in out

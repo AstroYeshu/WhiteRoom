@@ -17,6 +17,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from dateutil.rrule import rrulestr
 
@@ -31,6 +32,9 @@ from asistente.choices import encode_choice_id
 from asistente.core.settings import get_time_setting
 from asistente.formato import REMINDER_LAYOUT, etiqueta_hora, reminder_notice
 from asistente.parsing.recurrence import next_occurrence
+
+if TYPE_CHECKING:  # solo para el tipo: runtime.py no importa este módulo, pero así no hay ciclo
+    from asistente.core.runtime import RuntimeStatus
 from asistente.timeutil import (
     Clock,
     from_utc_iso,
@@ -396,12 +400,14 @@ class ReminderEngine:
         user_ref: str,
         tz_name: str,
         now: Clock,
+        runtime: RuntimeStatus | None = None,
     ) -> None:
         self._conn = conn
         self._channel = channel
         self._user_ref = user_ref
         self._tz_name = tz_name
         self._now = now
+        self._runtime = runtime  # solo para anotar la hora del último tick, en memoria
         self._lock = asyncio.Lock()
         # Backoff a nivel de CANAL (un canal caído lo está para todos). Vive en memoria a propósito:
         # si el proceso se reinicia, se reintenta enseguida (mejor repetir que perder). Lo que NO se
@@ -423,6 +429,8 @@ class ReminderEngine:
 
     async def _run_tick(self) -> int:
         moment = self._now()
+        if self._runtime is not None:
+            self._runtime.last_tick_at = moment  # SOLO en memoria: la tarjeta SD no se desgasta
         if self._channel_retry_at is not None and moment < self._channel_retry_at:
             return 0  # el canal sigue en espera tras un fallo pasajero
         sent = 0

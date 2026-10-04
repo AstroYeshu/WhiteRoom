@@ -375,12 +375,51 @@ HELP = screen(
         f"/areas{SEP}ver las áreas",
         f"/nuevaarea nombre{SEP}crear un área",
     ),
-    _help_group("Otros", f"/start{SEP}saludo", f"/ayuda{SEP}esta lista"),
+    _help_group(
+        "Otros",
+        f"/estado{SEP}estado del bot",
+        f"/start{SEP}saludo",
+        f"/ayuda{SEP}esta lista",
+    ),
 )
 START = card(
     "Hola, soy tu asistente personal",
     note="Escribe lo que quieras anotar y te pregunto qué es. /ayuda muestra los comandos.",
 )
+
+
+# --- /estado -----------------------------------------------------------------------------------
+
+
+def duration_text(seconds: float) -> str:
+    """Una duración corta: "45 s", "5 min", "2 h 5 min", "1 d 3 h". Lo negativo cuenta como 0."""
+    total = max(int(seconds), 0)
+    days, rest = divmod(total, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    if days:
+        return f"{days} d" + (f" {hours} h" if hours else "")
+    if hours:
+        return f"{hours} h" + (f" {minutes} min" if minutes else "")
+    if minutes:
+        return f"{minutes} min"
+    return f"{secs} s"
+
+
+def size_text(size_bytes: int) -> str:
+    """Un tamaño de archivo: "512 B", "1.5 KB", "2.5 MB"."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024**2:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes / 1024**2:.1f} MB"
+
+
+STATUS_UNAVAILABLE = aviso("El estado del bot no está disponible aquí.")
+
+
+def counted(number: int, singular: str, plural: str) -> str:
+    return f"{number} {singular if number == 1 else plural}"
 
 
 def dia_largo(moment_utc: datetime, tz_name: str, now: Clock) -> str:

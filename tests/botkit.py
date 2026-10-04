@@ -97,8 +97,9 @@ class LoggingChannel(FakeChannel):
 
 
 class Bot:
-    def __init__(self, conn, clock, editable: bool = True) -> None:
+    def __init__(self, conn, clock, editable: bool = True, runtime=None) -> None:
         self.conn, self.clock = conn, clock
+        self.runtime = runtime  # el estado de ejecución de /estado (None: no disponible)
         self.channel = LoggingChannel(editable=editable)
         self.conversation = Conversation()
         self.toasts: list[str | None] = []  # un aviso breve (o None) por cada pulsación
@@ -107,7 +108,14 @@ class Bot:
         event = IncomingMessage("fake", str(user), text)
         run(
             handlers.handle_message(
-                event, self.channel, OWNER, self.conn, self.clock, TZ, self.conversation
+                event,
+                self.channel,
+                OWNER,
+                self.conn,
+                self.clock,
+                TZ,
+                self.conversation,
+                runtime=self.runtime,
             )
         )
 

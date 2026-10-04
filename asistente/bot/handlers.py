@@ -20,6 +20,7 @@ from asistente.bot.ui import STALE_CHOICE_TEXT, show
 from asistente.channels.base import Channel, IncomingChoice, IncomingMessage
 from asistente.choices import decode_choice_id
 from asistente.core import reminders
+from asistente.core.runtime import RuntimeStatus
 from asistente.timeutil import Clock, to_local
 
 logger = logging.getLogger(__name__)
@@ -58,12 +59,13 @@ async def handle_message(
     now: Clock,
     tz_name: str,
     conversation: Conversation,
+    runtime: RuntimeStatus | None = None,
 ) -> None:
     if not is_allowed(msg.user_ref, allowed_user_id):
         _reject(msg.user_ref)
         return
 
-    ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, msg.user_ref)
+    ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, msg.user_ref, runtime)
     command = _command_name(msg.text)
     if command is None:  # un mensaje libre: va a la bandeja
         await inbox.capture(ctx, msg.text)

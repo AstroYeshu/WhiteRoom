@@ -16,7 +16,7 @@ from asistente.bot.inbox import Ctx
 from asistente.bot.ui import show
 from asistente.channels.base import Choice, IncomingChoice
 from asistente.choices import encode_choice_id
-from asistente.core import areas, reminders, tasks
+from asistente.core import areas, reminders, runtime, tasks
 from asistente.timeutil import from_utc_iso, local_to_utc, to_local
 
 logger = logging.getLogger(__name__)
@@ -322,6 +322,43 @@ async def new_area(ctx: Ctx, args: str) -> None:
     await inbox.start_new_area(ctx, name)
 
 
+# --- /estado: salud del bot, sin textos del usuario ----------------------------------------------
+
+
+async def status(ctx: Ctx, args: str) -> None:
+    if ctx.runtime is None:
+        await ctx.channel.send_text(ctx.user_ref, fmt.STATUS_UNAVAILABLE)
+        return
+    report = runtime.collect(ctx.conn, ctx.runtime, ctx.now())
+
+    def when(moment: datetime | None, none_text: str) -> str:
+        return fmt.fecha_corta(moment, ctx.tz_name, ctx.now) if moment else none_text
+
+    ticked = (
+        "todavía ninguno"
+        if report.last_tick_at is None
+        else "hace " + fmt.duration_text((ctx.now() - report.last_tick_at).total_seconds())
+    )
+    size = "no disponible" if report.db_size_bytes is None else fmt.size_text(report.db_size_bytes)
+    reminder_counts = fmt.SEP.join(
+        (
+            fmt.counted(report.pending, "pendiente", "pendientes"),
+            fmt.counted(report.stopped, "detenido", "detenidos"),
+        )
+    )
+    lines = [
+        fmt.detail("Entorno", report.bot_env),
+        fmt.detail("Arrancó", when(report.started_at, "")),
+        fmt.detail("Encendido", fmt.duration_text(report.uptime_seconds)),
+        fmt.detail("Último ciclo", ticked),
+        fmt.detail("Último aviso enviado", when(report.last_fired_at, "ninguno todavía")),
+        fmt.detail("Recordatorios", reminder_counts),
+        fmt.detail("Esquema", f"versión {report.schema_version}"),
+        fmt.detail("Base de datos", size),
+    ]
+    await ctx.channel.send_text(ctx.user_ref, fmt.screen("Estado", fmt.block(*lines)))
+
+
 COMMANDS = {
     "hoy": today,
     "pendientes": pending,
@@ -331,4 +368,5 @@ COMMANDS = {
     "nota": new_note,
     "areas": areas_list,
     "nuevaarea": new_area,
+    "estado": status,
 }

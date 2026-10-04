@@ -1067,8 +1067,44 @@ Escribe cualquier mensaje: lo guardo en tu bandeja y te pregunto qué es.
 /nuevaarea nombre · crear un área
 
 <b>Otros</b>
+/estado · estado del bot
 /start · saludo
 /ayuda · esta lista
+```
+
+
+## /estado
+
+Solo el dueño. Sin textos del usuario; el último ciclo vive en memoria.
+
+_Recién arrancado, sin ciclos ni avisos._
+
+```text
+<b>Estado</b>
+
+Entorno: dev
+Arrancó: hoy, 1:25 pm
+Encendido: 2 h 5 min
+Último ciclo: todavía ninguno
+Último aviso enviado: ninguno todavía
+Recordatorios: 0 pendientes · 0 detenidos
+Esquema: versión 4
+Base de datos: no disponible
+```
+
+_Con un aviso ya enviado, un ciclo reciente y un recordatorio pendiente._
+
+```text
+<b>Estado</b>
+
+Entorno: dev
+Arrancó: hoy, 1:25 pm
+Encendido: 2 h 7 min
+Último ciclo: hace 12 s
+Último aviso enviado: hoy, 3:32 pm
+Recordatorios: 1 pendiente · 0 detenidos
+Esquema: versión 4
+Base de datos: no disponible
 ```
 
 

@@ -26,6 +26,7 @@ from asistente.bot.conversation import Conversation  # noqa: E402
 from asistente.channels.base import Choice, IncomingChoice, IncomingMessage  # noqa: E402
 from asistente.core import areas, reminders, tasks  # noqa: E402
 from asistente.core.reminders import ReminderEngine  # noqa: E402
+from asistente.core.runtime import RuntimeStatus  # noqa: E402
 from asistente.formato import to_html  # noqa: E402
 from asistente.timeutil import local_to_utc  # noqa: E402
 
@@ -118,7 +119,11 @@ class Session:
         self._choices: list[tuple[str, list[Choice]]] = []
         self._id_refs: dict[str, str] = {}
         self.last_toast: str | None = None
-        self.engine = ReminderEngine(self.conn, self._wrap(), str(OWNER), TZ, self.clock)
+        # Arrancó hace 2 h 5 min; el motor anota cada tick en `runtime` (como en producción).
+        self.runtime = RuntimeStatus("dev", Path(":memory:"), start - timedelta(hours=2, minutes=5))
+        self.engine = ReminderEngine(
+            self.conn, self._wrap(), str(OWNER), TZ, self.clock, self.runtime
+        )
 
     # El canal grabador guarda solo etiquetas; los ids se piden al fabricar los botones.
     def _last_choices(self, text_part: str | None) -> list[Choice]:
@@ -135,7 +140,14 @@ class Session:
         event = IncomingMessage("catalogo", str(OWNER), text)
         run(
             handlers.handle_message(
-                event, self._wrap(), OWNER, self.conn, self.clock, TZ, self.conversation
+                event,
+                self._wrap(),
+                OWNER,
+                self.conn,
+                self.clock,
+                TZ,
+                self.conversation,
+                runtime=self.runtime,
             )
         )
 
@@ -255,6 +267,7 @@ def build() -> Catalog:
     nota(cat)
     areas_y_nuevaarea(cat)
     ayuda(cat)
+    estado(cat)
     errores(cat)
     return cat
 
@@ -697,6 +710,25 @@ def ayuda(cat: Catalog) -> None:
     s = Session()
     cat.snap(s, "/start.", lambda: s.say("/start"))
     cat.snap(s, "/ayuda.", lambda: s.say("/ayuda"))
+
+
+def estado(cat: Catalog) -> None:
+    cat.section(
+        "/estado", "Solo el dueño. Sin textos del usuario; el último ciclo vive en memoria."
+    )
+    s = Session()
+    cat.snap(s, "Recién arrancado, sin ciclos ni avisos.", lambda: s.say("/estado"))
+    s = Session()
+    reminders.create_reminder(s.conn, "x", local("2026-10-03 15:31"), s.clock)
+    s.clock.advance(minutes=2)
+    s.tick()
+    reminders.create_reminder(s.conn, "y", local("2026-10-04 08:00"), s.clock)
+    s.clock.advance(seconds=12)
+    cat.snap(
+        s,
+        "Con un aviso ya enviado, un ciclo reciente y un recordatorio pendiente.",
+        lambda: s.say("/estado"),
+    )
 
 
 def errores(cat: Catalog) -> None:

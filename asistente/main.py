@@ -24,6 +24,7 @@ from asistente.bot.handlers import handle_choice, handle_message
 from asistente.channels.base import Channel
 from asistente.config import ConfigError, Settings, load_settings
 from asistente.core.reminders import ReminderEngine
+from asistente.core.runtime import RuntimeStatus
 from asistente.db import open_db
 from asistente.timeutil import now
 
@@ -62,12 +63,29 @@ def build_settings(dry_run_flag: bool) -> Settings:
     return settings
 
 
-def build_engine(settings: Settings, conn: sqlite3.Connection, channel: Channel) -> ReminderEngine:
+def build_runtime(settings: Settings) -> RuntimeStatus:
+    """El estado de ejecución (solo memoria) de /estado: entorno, base y hora de arranque."""
+    return RuntimeStatus(settings.bot_env, settings.db_path, now())
+
+
+def build_engine(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    channel: Channel,
+    runtime: RuntimeStatus | None = None,
+) -> ReminderEngine:
     """El motor de recordatorios, conectado al canal y al reloj real."""
-    return ReminderEngine(conn, channel, str(settings.allowed_user_id), settings.tz_name, now)
+    return ReminderEngine(
+        conn, channel, str(settings.allowed_user_id), settings.tz_name, now, runtime
+    )
 
 
-def _handlers(settings: Settings, conn: sqlite3.Connection, channel: Channel):
+def _handlers(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    channel: Channel,
+    runtime: RuntimeStatus | None = None,
+):
     """`handle_message` y `handle_choice` con la base, el reloj real, la zona del dueño y UNA
     misma conversación (el estado a medias vive en memoria y lo comparten mensajes y botones)."""
     wiring = {
@@ -77,6 +95,7 @@ def _handlers(settings: Settings, conn: sqlite3.Connection, channel: Channel):
         "now": now,
         "tz_name": settings.tz_name,
         "conversation": Conversation(),
+        "runtime": runtime,
     }
     return partial(handle_message, **wiring), partial(handle_choice, **wiring)
 
@@ -88,8 +107,9 @@ def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     channel = ConsoleChannel(user_ref=str(settings.allowed_user_id))
-    engine = build_engine(settings, conn, channel)
-    on_message, on_choice = _handlers(settings, conn, channel)
+    runtime = build_runtime(settings)
+    engine = build_engine(settings, conn, channel, runtime)
+    on_message, on_choice = _handlers(settings, conn, channel, runtime)
     asyncio.run(channel.serve(on_message, on_choice, engine.tick, settings.tick_seconds))
 
 
@@ -98,8 +118,9 @@ def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
     from asistente.channels.telegram import TelegramChannel
 
     channel = TelegramChannel(settings.telegram_bot_token, settings.allowed_user_id)
-    engine = build_engine(settings, conn, channel)
-    on_message, on_choice = _handlers(settings, conn, channel)
+    runtime = build_runtime(settings)
+    engine = build_engine(settings, conn, channel, runtime)
+    on_message, on_choice = _handlers(settings, conn, channel, runtime)
     # El tick de Telegram corre cada TICK_SECONDS y una vez al arrancar (first=0)
     channel.run_polling(on_message, on_choice, engine.tick, settings.tick_seconds)
 

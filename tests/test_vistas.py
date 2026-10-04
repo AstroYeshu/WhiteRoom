@@ -480,6 +480,7 @@ def test_ayuda_esta_agrupada_por_tipo_de_comando(bot):
         "/areas · ver las áreas\n"
         "/nuevaarea nombre · crear un área\n\n"
         "Otros\n"
+        "/estado · estado del bot\n"
         "/start · saludo\n"
         "/ayuda · esta lista"
     )

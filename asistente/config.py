@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 VALID_CLASSIFIERS = ("rules+jev", "rules+haiku")
 VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+VALID_BOT_ENVS = ("dev", "prod")  # dos bots, dos bases: el entorno solo se muestra en /estado
 
 # Cada cuánto revisa el motor lo vencido. Un aviso llega entre 0 y TICK_SECONDS s tarde.
 DEFAULT_TICK_SECONDS = 30
@@ -47,6 +48,7 @@ class Settings:
     dry_run: bool
     log_level: str
     tick_seconds: int = DEFAULT_TICK_SECONDS
+    bot_env: str = "dev"
 
 
 def _is_true(value: str) -> bool:
@@ -111,6 +113,10 @@ def load_settings(env: Mapping[str, str], dry_run: bool = False) -> Settings:
     if log_level not in VALID_LOG_LEVELS:
         raise ConfigError("LOG_LEVEL debe ser uno de: " + ", ".join(VALID_LOG_LEVELS))
 
+    bot_env = get("BOT_ENV", "dev").lower()
+    if bot_env not in VALID_BOT_ENVS:
+        raise ConfigError("BOT_ENV debe ser uno de: " + ", ".join(VALID_BOT_ENVS))
+
     return Settings(
         telegram_bot_token=get("TELEGRAM_BOT_TOKEN"),
         allowed_user_id=allowed_user_id,
@@ -126,4 +132,5 @@ def load_settings(env: Mapping[str, str], dry_run: bool = False) -> Settings:
         dry_run=dry_run,
         log_level=log_level,
         tick_seconds=_tick_seconds(get("TICK_SECONDS", str(DEFAULT_TICK_SECONDS))),
+        bot_env=bot_env,
     )
