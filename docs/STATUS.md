@@ -3,7 +3,7 @@
 **Norte:** un recordatorio creado desde Telegram suena a su hora en la Raspberry Pi.
 
 ## Fase y bloque
-Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; en curso: ninguno (siguiente: bloque 7).
+Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; bloque 7 en curso: 7a (bandeja) HECHO, siguen 7b (comandos) y 7c (am/pm y aviso de recuperación).
 Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas aparcadas: `docs/BACKLOG.md`.
 
 ## Hecho
@@ -15,9 +15,13 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   recuperación tras caída y caída de red.
 - Estado de pruebas al cerrar el bloque 6: `pytest -q` 1017 passed, 2 xfailed; `ruff check .` limpio.
 
+- Bloque 7a TERMINADO: bandeja de mensajes libres con estado en memoria (`bot/conversation.py`, `bot/inbox.py`,
+  `bot/ui.py`), preguntas del parser como botones, Deshacer/Cambiar (`tasks.convert_to_reminder`,
+  `undo_reminder_conversion`, `reopen_converted`). Ver DECISIONS.md.
+
 ## Siguiente (3 pasos)
-1. Bloque 7: bandeja con [Tarea][Recordatorio][Nota] + área, `/hoy`, `/pendientes` (Hecha/Descartar), `/recordatorios`.
-2. Bloque 7 (misma entrega): preguntas del parser como botones (tabla en `PLAN_FASE1.md`) y aviso de recuperación.
+1. Bloque 7b: `/hoy`, `/pendientes` (Hecha/Descartar), `/recordatorios`, `/recordar`, `/tarea`, `/nota`, `/areas`, `/nuevaarea`.
+2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 005 `stop_notified_at`).
 3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
 
 ## Decisiones recientes que afectan al siguiente paso

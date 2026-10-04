@@ -21,3 +21,12 @@ Sin compromiso ni fecha. Nada de aquí se implementa sin que el dueño lo pida. 
 
 ## Operación
 - Bajar el ruido de logs del scheduler (hoy, dos líneas cada 30 s).
+
+## Preguntas del parser (surgido en el bloque 7a)
+- Las preguntas sin candidatos que dependen de reinterpretar el texto (`time_or_verse` «Es una hora», `name_or_day` «El
+  domingo (fecha)», `dotted_time`, `number_after_day`, `unrecognized_recurrence` «Todos los días / Cada {día}») se
+  muestran hoy con texto + [Escribir otra fecha] [Cancelar] (y [sin fecha] donde aplica); los botones que re-interpretan
+  necesitan que el parser devuelva candidatos.
+- `today_or_tomorrow` sin candidatos: hoy se pide escribir el día con la hora; el plan quería armar los dos días y luego
+  preguntar la hora.
+

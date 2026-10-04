@@ -55,3 +55,28 @@ detiene; si ninguno sale, es pasajero. Tres fallos seguidos cortan el tick. Desc
 Un aviso llega entre 0 y 30 s después de su hora. Simple, sin puertos ni temporizadores por fila, y la recuperación
 tras caída es la misma ruta. Descartado: un temporizador por recordatorio (se pierde al reiniciar) y ticks más cortos
 (más carga y más ruido en el log para la Raspberry sin ganancia real).
+
+## Bandeja (bloque 7a): guardar primero, preguntar después
+Un mensaje libre se guarda al instante como tarea sin área; luego se pregunta tipo, área y (recordatorio) fecha. El estado
+a medias vive en MEMORIA (`bot/conversation.py`, un solo flujo): caduca a los 10 min SIN actividad y se pierde al
+reiniciar, sin consecuencias porque la tarea ya está guardada. Cada pregunta nueva RENUEVA el id del flujo (los botones
+llevan `in:FLUJO:ACCION[:ARG]`): los botones de una pregunta ya contestada, de un flujo descartado o tras un reinicio
+quedan inertes («Esa opción ya no está disponible»). Un texto cuenta como respuesta a «¿cuándo?» solo si el parser lo
+entiende como fecha (`once`, `series` o `ask` salvo `name_or_day`/`time_or_verse`); si no, es una captura nueva y el
+flujo anterior se suelta avisando (su tarea sigue en la bandeja). Orden: tipo -> área -> fecha, para crear el
+recordatorio una sola vez con su área. Un texto que empieza por recordar/recordarme/recuérdame/recuérdenme salta la
+pregunta de tipo. Descartado: guardar el recordatorio antes de preguntar el área (obligaría a editarlo después).
+
+## Convertir y deshacer en UNA transacción
+`tasks.convert_to_reminder` cierra la tarea de bandeja (`close_as_converted`) y crea el recordatorio (sin `task_id`) en la
+misma transacción; con fecha pasada no queda nada hecho. `tasks.undo_reminder_conversion` cancela el recordatorio (solo si
+sigue `pending`) y reabre la tarea (`reopen_converted`, limpia `closed_reason` y `closed_at`) en una transacción; si el
+recordatorio ya no está pendiente, «ya no se puede deshacer». Los botones Deshacer/Cambiar (`un:`/`ch:RECORDATORIO:TAREA`)
+viven en la base, no en la memoria: funcionan tras un reinicio. Cambiar = Deshacer + «¿cuándo?» conservando área y texto.
+La nota se crea y LUEGO se cierra la tarea (dos pasos): el peor caso es una nota duplicada, nunca una pérdida.
+
+## Un candidato único nunca se guarda en silencio
+`ok` se guarda y confirma con día de la semana y [Cambiar][Deshacer]; `ask` (incluso con un solo candidato) pide pulsar el
+candidato. La opción se revisa al PULSAR: si ya pasó, no se crea y se vuelve a preguntar. Una repetición se previsualiza
+con [Guardar][Cancelar] antes de guardar. «¿Cuándo?» ofrece [Hoy 18:00 (solo si es futuro)] [Mañana 9:00] [Cancelar].
+
