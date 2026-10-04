@@ -197,7 +197,9 @@ CREATE INDEX idx_reminders_due ON reminders(status, fire_at_utc);
 --   reminders.stopped_at       cuándo se detuvo el envío. NO NULO significa "ya se generó la siguiente
 --                              ocurrencia de la serie" (se crea en la misma transacción que la
 --                              parada); se CONSERVA al reactivar, para no generar otra.
---   reminders.stop_reason      código estable: 'permanent:<motivo>', 'horizon:<motivo>' o 'legacy'.
+--   reminders.stop_reason      código estable: 'permanent:<motivo>', 'horizon:<motivo>' o 'legacy'
+--                              (motivos: bot_blocked, chat_not_found, message_too_long, bad_request:<tipo>,
+--                              telegram_error:<Clase>, unexpected:<Tipo>; nunca texto del usuario).
 --                              NULL = no detenido. Un detenido es el que tiene stop_reason no nulo.
 --   tasks.closed_reason        'discarded' | 'converted_to_reminder' | 'converted_to_note'.
 --                              Las conversiones de bandeja son status='dropped' (no 'done', para no

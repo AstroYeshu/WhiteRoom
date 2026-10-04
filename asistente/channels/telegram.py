@@ -7,8 +7,6 @@ a cualquier usuario que no sea `ALLOWED_USER_ID` (ni siquiera responde al botón
 from __future__ import annotations
 
 import logging
-import re
-import warnings
 from collections.abc import Awaitable
 from datetime import timedelta
 from typing import TypeVar
@@ -33,13 +31,22 @@ from asistente.channels.base import (
     MessageCallback,
     PermanentChannelError,
     TransientChannelError,
+    UnclassifiedChannelError,
 )
 
 logger = logging.getLogger(__name__)
 
 CHANNEL_NAME = "telegram"
 HTTP_TIMEOUT_SECONDS = 10.0
-MAX_REASON_SLUG = 40  # largo máximo del código de un BadRequest desconocido
+
+# Mensajes de BadRequest conocidos -> código estable. Cualquier otro es "bad_request:other": el
+# mensaje de Telegram nunca pasa al código (podría traer texto arbitrario, emojis o URLs).
+KNOWN_BAD_REQUESTS = (
+    ("can't parse entities", "bad_request:cant_parse_entities"),
+    ("message text is empty", "bad_request:empty_text"),
+    ("button_data_invalid", "bad_request:button_data_invalid"),
+)
+OTHER_BAD_REQUEST = "bad_request:other"
 
 T = TypeVar("T")
 
@@ -50,46 +57,47 @@ def build_keyboard(choices: list[Choice]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def _slug(message: str) -> str:
-    """Código corto y estable del mensaje de error de Telegram (nunca del texto del usuario)."""
-    return re.sub(r"[^a-z0-9]+", "_", message.lower()).strip("_")[:MAX_REASON_SLUG].strip("_")
-
-
-def _retry_after_seconds(error: tg_error.RetryAfter) -> float:
-    """La librería devuelve `int` o `timedelta` según su configuración; aquí siempre segundos."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # el acceso como `int` está marcado como obsoleto
-        value = error.retry_after
+def seconds_from(value: int | float | timedelta) -> float:
+    """Espera en segundos: la librería entrega `retry_after` como `int` o como `timedelta`."""
     return value.total_seconds() if isinstance(value, timedelta) else float(value)
 
 
+def _bad_request_reason(error: tg_error.BadRequest) -> str:
+    message = str(error).lower()
+    if "chat not found" in message:
+        return "chat_not_found"
+    if "message is too long" in message:
+        return "message_too_long"
+    for fragment, code in KNOWN_BAD_REQUESTS:
+        if fragment in message:
+            return code
+    return OTHER_BAD_REQUEST
+
+
 def translate_error(error: tg_error.TelegramError) -> Exception:
-    """Traduce un error de Telegram a los dos grupos del motor (el motor no conoce la librería).
+    """Traduce un error de Telegram a las clases del motor (el motor no conoce la librería).
 
     - Salud del canal (red, timeout, límite de envíos, 5xx, token): `TransientChannelError`.
-    - Culpa del mensaje o del chat (bot bloqueado, BadRequest y similares):
-      `PermanentChannelError` solo para ese recordatorio.
+    - Culpa del mensaje o del chat (bot bloqueado, `BadRequest` conocido):
+      `PermanentChannelError`, solo para ese recordatorio.
+    - Cualquier otro error de Telegram (Conflict...): `UnclassifiedChannelError`; el motor decide
+      por evidencia, igual que con una excepción que no es de Telegram.
 
-    Orden importa: `BadRequest` hereda de `NetworkError` y `TimedOut` también.
+    El orden importa: `BadRequest` y `TimedOut` heredan de `NetworkError`.
     """
     if isinstance(error, tg_error.RetryAfter):
-        return TransientChannelError("rate_limited", retry_after=_retry_after_seconds(error))
+        return TransientChannelError("rate_limited", retry_after=seconds_from(error.retry_after))
     if isinstance(error, tg_error.Forbidden):
         return PermanentChannelError("bot_blocked")
     if isinstance(error, tg_error.BadRequest):
-        message = str(error).lower()
-        if "chat not found" in message:
-            return PermanentChannelError("chat_not_found")
-        if "message is too long" in message:
-            return PermanentChannelError("message_too_long")
-        return PermanentChannelError(f"bad_request:{_slug(str(error))}")
+        return PermanentChannelError(_bad_request_reason(error))
     if isinstance(error, tg_error.TimedOut):
         return TransientChannelError("timeout")
     if isinstance(error, tg_error.NetworkError):
         return TransientChannelError("network")
     if isinstance(error, tg_error.InvalidToken):
         return TransientChannelError("invalid_token")  # lo arregla el dueño; nada se pierde
-    return PermanentChannelError(f"bad_request:{_slug(str(error))}")
+    return UnclassifiedChannelError(f"telegram_error:{type(error).__name__}")
 
 
 async def _translated(call: Awaitable[T]) -> T:

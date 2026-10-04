@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import re
 from datetime import timedelta
 
 import pytest
@@ -16,6 +17,7 @@ from asistente.channels.base import (
     Choice,
     PermanentChannelError,
     TransientChannelError,
+    UnclassifiedChannelError,
 )
 
 CHOICES = [Choice("rem_done:1", "Hecho")]
@@ -51,12 +53,11 @@ def send(channel: tg.TelegramChannel, how: str) -> None:
         (tg_error.BadRequest("Message is too long"), "message_too_long"),
         (
             tg_error.BadRequest("Can't parse entities: unexpected end"),
-            "bad_request:can_t_parse_entities_unexpected_end",
+            "bad_request:cant_parse_entities",
         ),
-        (
-            tg_error.Conflict("terminated by other getUpdates request"),
-            "bad_request:terminated_by_other_getupdates_request",
-        ),
+        (tg_error.BadRequest("Message text is empty"), "bad_request:empty_text"),
+        (tg_error.BadRequest("BUTTON_DATA_INVALID"), "bad_request:button_data_invalid"),
+        (tg_error.BadRequest("Wrong file identifier"), "bad_request:other"),
     ],
 )
 def test_culpa_del_mensaje_o_del_chat_es_permanente(channel, monkeypatch, how, error, reason):
@@ -74,11 +75,58 @@ def test_badrequest_se_traduce_antes_que_networkerror(channel, monkeypatch):
         send(channel, "text")
 
 
-def test_la_razon_de_un_badrequest_largo_se_acota(channel, monkeypatch):
-    raising(channel, monkeypatch, tg_error.BadRequest("x" * 500))
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Hola 😀 secreto-médico, ¿qué pasó? https://evil.example/x?token=abc#frag",
+        "x" * 500,
+        "ñandú\nlínea 2\t\x00",
+        "",
+    ],
+)
+def test_el_codigo_de_un_badrequest_desconocido_no_lleva_texto_arbitrario(
+    channel, monkeypatch, message
+):
+    raising(channel, monkeypatch, tg_error.BadRequest(message))
     with pytest.raises(PermanentChannelError) as caught:
         send(channel, "text")
-    assert len(caught.value.reason) <= len("bad_request:") + tg.MAX_REASON_SLUG
+    assert caught.value.reason == "bad_request:other"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        tg_error.BadRequest("Hola 😀 https://evil.example/x?token=abc"),
+        tg_error.BadRequest("Can't parse entities: ñandú 😀"),
+        tg_error.BadRequest("Message is too long"),
+        tg_error.BadRequest("Chat not found"),
+        tg_error.Forbidden("Forbidden: bot was blocked by the user"),
+    ],
+)
+def test_todo_codigo_permanente_es_estable_y_limpio(channel, monkeypatch, error):
+    raising(channel, monkeypatch, error)
+    with pytest.raises(PermanentChannelError) as caught:
+        send(channel, "text")
+    assert re.fullmatch(r"[a-z0-9_]{1,40}(:[a-z0-9_]{1,40})?", caught.value.reason)
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (tg_error.Conflict("terminated by other getUpdates request"), "telegram_error:Conflict"),
+        (tg_error.ChatMigrated(-100123), "telegram_error:ChatMigrated"),
+        (tg_error.TelegramError("algo con 😀 y https://x.y"), "telegram_error:TelegramError"),
+    ],
+)
+def test_error_de_telegram_sin_categoria_lo_decide_el_motor_por_evidencia(
+    channel, monkeypatch, error, reason
+):
+    """Ni permanente ni transitorio: el motor prueba con los demás antes de culpar a la fila."""
+    raising(channel, monkeypatch, error)
+    with pytest.raises(UnclassifiedChannelError) as caught:
+        send(channel, "text")
+    assert not isinstance(caught.value, PermanentChannelError | TransientChannelError)
+    assert caught.value.reason == reason
 
 
 @pytest.mark.parametrize("how", ["text", "choices"])
@@ -126,3 +174,17 @@ def test_el_texto_del_usuario_nunca_va_al_log(channel, monkeypatch, caplog):
     with caplog.at_level(logging.DEBUG), pytest.raises(PermanentChannelError):
         asyncio.run(channel.send_text("1", "secreto-médico"))
     assert "secreto-médico" not in caplog.text
+
+
+def test_el_ayudante_de_espera_acepta_entero_y_timedelta():
+    assert tg.seconds_from(17) == 17
+    assert tg.seconds_from(timedelta(minutes=2)) == 120
+    assert tg.seconds_from(2.5) == 2.5
+
+
+def test_el_traductor_no_silencia_los_avisos_de_la_libreria():
+    """Los avisos de obsolescencia de `retry_after` se ven hasta que se actualice la librería."""
+    import inspect
+
+    assert "catch_warnings" not in inspect.getsource(tg)
+    assert "simplefilter" not in inspect.getsource(tg)

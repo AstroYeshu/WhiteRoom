@@ -26,6 +26,7 @@ from asistente.channels.base import (
     Choice,
     PermanentChannelError,
     TransientChannelError,
+    UnclassifiedChannelError,
 )
 from asistente.core.settings import get_time_setting
 from asistente.parsing.recurrence import next_occurrence
@@ -379,9 +380,10 @@ class ReminderEngine:
         self._channel_failures = 0
         self._channel_retry_at: datetime | None = None
         self._last_failure_reason = "unknown"
-        self._unexpected_reason = (
-            "unknown"  # clase de la última excepción inesperada (solo el tipo)
-        )
+        self._unexpected_code = "unexpected:unknown"  # solo el tipo del último error inesperado
+        # Recordatorios que ya fallaron con un error inesperado (en memoria): van al final del tick
+        # y, si el canal entrega otros, se aíslan. Así unos rotos al frente no bloquean a los demás.
+        self._suspects: set[int] = set()
 
     async def tick(self) -> int:
         """Envía lo vencido. Devuelve cuántos mensajes salieron. Nunca se solapa consigo mismo."""
@@ -395,7 +397,8 @@ class ReminderEngine:
         if self._channel_retry_at is not None and moment < self._channel_retry_at:
             return 0  # el canal sigue en espera tras un fallo pasajero
         sent = 0
-        due = list_due(self._conn, moment)
+        # Los sospechosos van al final (el orden entre los demás se conserva).
+        due = sorted(list_due(self._conn, moment), key=lambda r: r.id in self._suspects)
         # Fallos inesperados a la espera de veredicto: si DESPUÉS sale otro recordatorio, el canal
         # está vivo y la culpa es de esa fila (se aísla); si no, se tratan como pasajeros.
         unexpected: list[tuple[Reminder, str]] = []
@@ -407,8 +410,9 @@ class ReminderEngine:
             result = await self._deliver(reminder)
             if result is Delivery.SENT:
                 sent += 1
-                for culprit, reason in unexpected:
-                    self._stop(culprit, f"permanent:unexpected:{reason}")
+                self._suspects.discard(reminder.id)
+                for culprit, code in unexpected:
+                    self._stop(culprit, f"permanent:{code}")
                 unexpected.clear()
             elif result is Delivery.CHANNEL_DOWN:
                 # Corta-circuito: con el canal caído no se intenta ninguno más en este tick.
@@ -416,7 +420,12 @@ class ReminderEngine:
                 self._flag_blocked(due[index + 1 :])
                 return sent
             elif result is Delivery.UNEXPECTED:
-                unexpected.append((reminder, self._unexpected_reason))
+                if sent and reminder.id in self._suspects:
+                    # Ya había fallado y el canal acaba de entregar otros: es culpa de la fila.
+                    self._stop(reminder, f"permanent:{self._unexpected_code}")
+                    continue
+                self._suspects.add(reminder.id)
+                unexpected.append((reminder, self._unexpected_code))
                 if len(unexpected) >= MAX_UNEXPECTED_IN_A_ROW:
                     self._settle_unexpected(unexpected, channel_counted=False)
                     self._flag_blocked(due[index + 1 :])
@@ -489,8 +498,11 @@ class ReminderEngine:
         except TransientChannelError as error:
             self._fail_transient(reminder, self._now(), error.reason, error.retry_after)
             return Delivery.CHANNEL_DOWN
+        except UnclassifiedChannelError as error:  # p. ej. `telegram_error:Conflict`
+            self._unexpected_code = error.reason
+            return Delivery.UNEXPECTED
         except Exception as error:  # noqa: BLE001 - lo decide el tick (canal caído o fila rota)
-            self._unexpected_reason = type(error).__name__  # solo el tipo: nunca el texto
+            self._unexpected_code = f"unexpected:{type(error).__name__}"  # solo el tipo
             return Delivery.UNEXPECTED
         self._channel_failures = 0  # el canal respondió: se acabó la espera
         self._channel_retry_at = None

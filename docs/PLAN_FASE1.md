@@ -218,9 +218,32 @@ am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de 
   `PermanentChannelError`; `RetryAfter` → `TransientChannelError` con la espera indicada por Telegram.
 - [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar; botones de `ambiguous_meridiem` (dos opciones)
   y "Cambiar a am/pm" cuando `meridiem_inferred` — `Fase 1: bandeja y comandos`
+  **Aviso de recuperación (una sola vez):** si hubo recordatorios detenidos (`stop_reason` no nulo) mientras el dueño
+  no estaba (bot bloqueado, caída de 24 h, errores aislados), el bot avisa UNA vez, con el siguiente mensaje del dueño
+  (no antes: si el canal estaba roto no se puede enviar). La marca de "ya avisado" vive en `settings` (clave nueva,
+  p. ej. `recovery_notice_sent_at`, migración hacia adelante). El aviso trae un botón **Reenviar** que llama a
+  `reminders.reactivate` (sale "(retrasado)"; no crea otra ocurrencia de la serie).
 - [ ] 8. README, verificación final y manual en `--dry-run` — `Fase 1: documentación y verificación`
 
+8. **Errores de Telegram (M1, bloque 6)**. Dos grupos más un tercero "por evidencia":
+   - Salud del canal → `TransientChannelError`: `NetworkError`, `TimedOut`, 5xx (la librería los entrega como
+     `NetworkError`), `InvalidToken` y `RetryAfter` (con `retry_after`: se espera AL MENOS eso, tope de 10 min).
+   - Culpa del mensaje o del chat → `PermanentChannelError` solo para esa fila, sin corta-circuito: `Forbidden`
+     (`bot_blocked`), `chat_not_found`, `message_too_long` y los `BadRequest` conocidos
+     (`bad_request:cant_parse_entities | empty_text | button_data_invalid`; el resto, `bad_request:other`).
+     El código NUNCA contiene el mensaje de Telegram (podría traer texto arbitrario, emojis o URLs).
+   - Sin categoría (`Conflict`, `ChatMigrated`…) y excepciones que no son de Telegram →
+     `UnclassifiedChannelError` / excepción cualquiera: el tick prueba con los demás. Si otro sale DESPUÉS, la
+     culpa es de esa fila y se detiene (`permanent:telegram_error:<Clase>` o `permanent:unexpected:<Tipo>`); si
+     ninguno sale, es pasajero. Tres fallos inesperados seguidos cortan el tick. Los que ya fallaron así (en memoria)
+     van al final del siguiente tick y, si el canal entrega otros antes, se detienen: unos rotos al frente no
+     dejan sin salir a los válidos.
+
 ## Deuda conocida (no se arregla en la Fase 1)
+- **`retry_after` de python-telegram-bot (baja).** En la versión 22.8 `RetryAfter.retry_after` es `int` y emite
+  `PTBDeprecationWarning` (en una versión mayor será `timedelta`). `channels/telegram.py::seconds_from` ya acepta
+  ambos, y NO se silencian los avisos a propósito. Al actualizar la librería: revisar el aviso, quitar la
+  compatibilidad con `int` si procede y comprobar `tests/test_telegram_errors.py`.
 - **Parser y horario de verano (media; baja en zonas sin él).** Una hora que no existe (14 de marzo de 2027 a las 2:30 am en
   Nueva York, salto de 02:00 a 03:00) o que ocurre dos veces (1 de noviembre de 2026 a la 1:30 am) se acepta en silencio; lo
   correcto es preguntar. Dos pruebas `xfail(strict=True)` en `tests/test_dst_known_debt.py` (cuando se arregle fallarán por

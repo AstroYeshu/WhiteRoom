@@ -55,6 +55,15 @@ class TransientChannelError(ChannelError):
         self.retry_after = retry_after
 
 
+class UnclassifiedChannelError(ChannelError):
+    """Error de la plataforma que no es claramente del canal ni del mensaje (p. ej. Conflict).
+
+    Ni transitorio ni permanente: el motor decide por evidencia. Si otros recordatorios sí salen
+    en el mismo tick, la culpa es de esa fila y se detiene; si ninguno sale, se trata como
+    pasajero. `reason` es un código estable con la clase del error (`telegram_error:Conflict`).
+    """
+
+
 class PermanentChannelError(ChannelError):
     """Falla que no se arregla reintentando (bot bloqueado, chat no encontrado)."""
 

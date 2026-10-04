@@ -10,7 +10,11 @@ from datetime import timedelta
 
 import pytest
 
-from asistente.channels.base import PermanentChannelError, TransientChannelError
+from asistente.channels.base import (
+    PermanentChannelError,
+    TransientChannelError,
+    UnclassifiedChannelError,
+)
 from asistente.core import reminders
 from asistente.core.reminders import ReminderEngine
 from tests.fakes import ScriptedChannel
@@ -183,3 +187,68 @@ def test_el_texto_del_usuario_nunca_va_al_log(conn, clock, engine, channel, capl
         tick(engine)
     assert "RuntimeError" in caplog.text
     assert "secreto-médico" not in caplog.text
+
+
+# --- Error de Telegram sin categoría (Conflict y similares) -----------------------------------
+
+
+def test_sin_categoria_con_otro_que_sale_despues_se_detiene_con_su_clase(
+    conn, clock, engine, channel
+):
+    odd, good = make(conn, clock, "raro", "bueno")
+    fail_texts(channel, UnclassifiedChannelError("telegram_error:Conflict"), "raro")
+    assert tick(engine) == 1
+    stopped = row(conn, odd)
+    assert stopped.stopped
+    assert (
+        conn.execute("SELECT stop_reason FROM reminders WHERE id = ?", (odd,)).fetchone()[0]
+        == "permanent:telegram_error:Conflict"
+    )
+    assert row(conn, good).status == "sent"
+
+
+def test_sin_categoria_y_nadie_sale_despues_es_transitorio(conn, clock, engine, channel):
+    (odd,) = make(conn, clock, "raro")
+    channel.always_fail_with(UnclassifiedChannelError("telegram_error:Conflict"))
+    tick(engine)
+    stored = row(conn, odd)
+    assert (stored.status, stored.attempts, stored.stopped) == ("pending", 1, False)
+
+
+# --- Anti-bloqueo: rotos al frente, válidos detrás --------------------------------------------
+
+BROKEN_ERRORS = [
+    RuntimeError("raro"),
+    UnclassifiedChannelError("telegram_error:Conflict"),
+]
+
+
+@pytest.mark.parametrize("error", BROKEN_ERRORS, ids=["inesperado", "sin_categoria"])
+def test_tres_rotos_al_frente_no_dejan_sin_salir_a_los_validos(conn, clock, engine, channel, error):
+    ids = make(conn, clock, "roto-1", "roto-2", "roto-3", "bueno-a", "bueno-b")
+    fail_texts(channel, error, "roto")
+    for _ in range(2):  # como máximo 2 ticks (el segundo, pasada la espera de 30 s)
+        tick(engine)
+        clock.advance(seconds=31)
+    assert [r.status for r in map(lambda i: row(conn, i), ids[3:])] == ["sent", "sent"]
+    assert all(row(conn, i).stopped for i in ids[:3])  # y los rotos quedaron aislados
+
+    attempts = len(channel.attempts)
+    tick(engine)
+    clock.advance(seconds=31)
+    tick(engine)
+    assert len(channel.attempts) == attempts  # los rotos ya no se intentan en cada tick
+
+
+@pytest.mark.parametrize("error", BROKEN_ERRORS, ids=["inesperado", "sin_categoria"])
+def test_rotos_al_frente_no_bloquean_recordatorios_nuevos_en_cada_tick(
+    conn, clock, engine, channel, error
+):
+    """Mientras los rotos siguen vivos (aún sin veredicto), un aviso nuevo y válido sale igual."""
+    make(conn, clock, "roto-1", "roto-2", "roto-3")
+    fail_texts(channel, error, "roto")
+    tick(engine)  # tres fallos seguidos: se corta el tick
+    clock.advance(seconds=31)
+    (new,) = make(conn, clock, "nuevo")
+    tick(engine)
+    assert row(conn, new).status == "sent"
