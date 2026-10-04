@@ -196,3 +196,47 @@ MARKERS_AND_WORDS = [
 )
 def test_marcadores_y_horas_en_palabras(phrase, now_local, expected):
     check(run(phrase, now_local), expected, phrase)
+
+
+# --- Familia 3: "7.30" y números sueltos tras un día (reglas 4 y 6) ------------------------------
+LOOSE_NUMBERS = [
+    ("mañana 7.30 gimnasio", SAT_1530, ("ask", "dotted_time")),
+    ("mañana a las 7.30", SAT_1530, ("ask", "dotted_time")),
+    ("a las 7.30", SAT_1530, ("ask", "dotted_time")),
+    ("el domingo 19.45 cena", SAT_1530, ("ask", "dotted_time")),
+    ("gimnasio 7.30", SAT_1530, ("none",)),  # sin día ni "a las": no parece fecha
+    ("comprar 2.50 de pan", SAT_1530, ("none",)),
+    ("mañana 7 dentista", SAT_1530, ("ask", "number_after_day")),
+    ("mañana 7", SAT_1530, ("ask", "number_after_day")),
+    ("el domingo 11 cumpleaños de mamá", SAT_1530, ("ask", "number_after_day")),
+    ("hoy 5 llamadas", SAT_1530, ("ask", "number_after_day")),
+    ("pasado mañana 3 tareas", SAT_1530, ("ask", "number_after_day")),
+    ("el viernes 2 reuniones", SAT_1530, ("ask", "number_after_day")),
+    ("en 3 días 2 pastillas", SAT_1530, ("ask", "number_after_day")),
+    ("el 12 de octubre 3 tareas", SAT_1530, ("ask", "number_after_day")),
+    # Sí son fecha/hora: el número es parte de la hora, de la fecha, o no va pegado al día
+    ("mañana 8am", SAT_1530, ("ok", "2026-10-04 08:00", True)),
+    ("mañana 7 pm", SAT_1530, ("ok", "2026-10-04 19:00", True)),
+    ("mañana 8:30 pm", SAT_1530, ("ok", "2026-10-04 20:30", True)),
+    ("mañana 15:30", SAT_1530, ("ok", "2026-10-04 15:30", True)),
+    ("tomar 2 pastillas mañana", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+    ("mañana comprar 3 cosas", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+    ("el viernes a las 5 pm 2 cosas", SAT_1530, ("ok", "2026-10-09 17:00", True)),
+]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "now_local", "expected"), LOOSE_NUMBERS, ids=[c[0] for c in LOOSE_NUMBERS]
+)
+def test_numeros_sueltos(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)
+
+
+def test_repeticion_tambien_pregunta_por_7_30_y_numero_suelto():
+    from asistente.parsing.recurrence import parse_recurrence
+
+    def series(text):
+        return parse_recurrence(text, lambda: local(SAT_1530), TZ, DEFAULT_MORNING)
+
+    assert series("todos los días 7.30").reason == "dotted_time"
+    assert series("cada lunes 7 pastillas").reason == "number_after_day"

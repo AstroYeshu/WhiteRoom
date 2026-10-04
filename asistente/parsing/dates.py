@@ -243,7 +243,9 @@ _MINUTE_ALT = r"\d{1,2}|" + "|".join(_MINUTE_WORDS)
 # con "y cuarto / y media / y 15 / y cinco" o "menos cuarto / menos 10". Las palabras ("dos", "una")
 # solo valen tras "a la(s)"; un número sin "a las", sin ":" y sin marcador NO es hora.
 _RE_CLOCK = re.compile(
-    r"(?:\ba\s+las?\s+(?P<hw>\d{1,2}|" + "|".join(_HOUR_WORDS) + r")\b|(?<![\w:])(?P<hd>\d{1,2}))"
+    r"(?:\ba\s+las?\s+(?P<hw>\d{1,2}|"
+    + "|".join(_HOUR_WORDS)
+    + r")\b(?!\.\d)|(?<![\w:.])(?P<hd>\d{1,2}))"
     r"(?::(?P<m>[0-5]\d)(?![\d:]))?"
     r"(?:\s+(?:y\s+(?P<plus>" + _MINUTE_ALT + r")|menos\s+(?P<minus>" + _MINUTE_ALT + r"))\b)?"
     r"(?:\s*(?P<ap>[ap])\s*\.?\s*m\b\.?|\s+(?:de|por|en)\s+la\s+(?P<per>manana|tarde|noche|madrugada)\b)?"
@@ -304,6 +306,32 @@ def _resolve_clock(
     if hour < low:
         return time(hour + 12, minute), True
     return time(hour, minute), True
+
+
+_RE_DOTTED = re.compile(r"(?<![\d.])(?:[01]?\d|2[0-3])\.[0-5]\d(?![\d.])")
+_RE_A_LAS_BEFORE = re.compile(r"\ba\s+las?\s+$")
+_RE_NUMBER_AFTER = re.compile(r"\A\s+\d{1,3}\b(?![.:/]\d)")
+
+
+def has_dotted_time(work: str, has_day: bool) -> bool:
+    """¿Hay un "7.30"? Parece hora (con un día o tras "a las") pero no se entiende: se pregunta."""
+    return any(
+        has_day or _RE_A_LAS_BEFORE.search(work[: m.start()]) for m in _RE_DOTTED.finditer(work)
+    )
+
+
+def number_after_day(folded: str, work: str, ends: list[int]) -> bool:
+    """¿Queda un número suelto pegado tras un día ("mañana 7 dentista")? Puede ser una hora.
+
+    `folded` es el texto sin enmascarar los días/horas; `work`, con lo reconocido en blanco;
+    `ends` son los finales de los días. Pegado = solo espacios entre el día y el número, así
+    "el viernes a las 5 pm 2 cosas" no cuenta (el número va tras la hora, no tras el día).
+    """
+    for end in ends:
+        gap = re.match(r"\s+(?=\d)", folded[end:])
+        if gap and _RE_NUMBER_AFTER.match(work[end:]) and work[end + gap.end()].isdigit():
+            return True
+    return False
 
 
 def _minutes_of(token: str) -> int | None:
@@ -578,14 +606,21 @@ def parse_when(
         verse_doubt = verse_doubt or doubtful
         strong.extend(usable)
     hits = days + strong
+    dotted = has_dotted_time(work, bool(days))
     if not hits:
         if verse_doubt:
             return _ask(clean_title(original, []), "time_or_verse")
+        if dotted:
+            return _ask(clean_title(original, []), "dotted_time")
         return WhenResult("none", clean_title(original, []))
 
     title = strip_reminder_verb(clean_title(original, [(h.start, h.end) for h in hits]))
     if verse_doubt:
         return _ask(title, "time_or_verse")
+    if dotted:
+        return _ask(title, "dotted_time")
+    if number_after_day(folded, work, [h.end for h in days if h.kind == "day"]):
+        return _ask(title, "number_after_day")
     instants = [h for h in days if h.kind == "instant"]
     plain_days = [h for h in days if h.kind == "day"]
     if skipped_name and strong and not days:

@@ -24,7 +24,9 @@ from asistente.parsing.dates import (
     WEEKDAYS,
     clean_title,
     fold,
+    has_dotted_time,
     mask_citations,
+    number_after_day,
     parse_when,
     scan_times,
     split_doubtful_weak,
@@ -100,6 +102,10 @@ def parse_recurrence(
 
     if verse_doubt:
         return ask("time_or_verse")
+    if has_dotted_time(work, True):
+        return ask("dotted_time")
+    if number_after_day(folded, work, [m.end() for m, _ in found]):
+        return ask("number_after_day")
     if len(found) > 1 or len(times) > 1:
         return ask("two_dates")
     if times and isinstance(times[0].value, str):
