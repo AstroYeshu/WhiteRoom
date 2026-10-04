@@ -180,9 +180,10 @@ CREATE TABLE reminders (
   status        TEXT NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending','sent','done','cancelled')),
   snooze_count  INTEGER NOT NULL DEFAULT 0,
-  attempts      INTEGER NOT NULL DEFAULT 0,
+  attempts      INTEGER NOT NULL DEFAULT 0,           -- fallos de envío (ver 8.3)
   created_at    TEXT NOT NULL,
   last_fired_at TEXT
+  -- nag_count INTEGER NOT NULL DEFAULT 0 se añade en la migración 002 (reenvíos de priority=2)
 );
 CREATE INDEX idx_reminders_due ON reminders(status, fire_at_utc);
 
@@ -339,10 +340,20 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 - **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
   el silencio salen en orden, con la etiqueta "(retrasado)".
 - **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
-- **Tras enviar**: marcar `sent` y `last_fired_at`. Si falla el envío, reintentar (campo `attempts`, máx. 5).
+- **Tras enviar**: marcar `sent` y `last_fired_at`.
+- **Fallos de envío**: el canal distingue dos clases de error.
+  - *Transitorios* (red, timeout, Telegram caído): reintento con espera creciente calculada desde `attempts`
+    (`min(30 s · 2^attempts, 15 min)`), sin tocar `fire_at`, sin rendirse durante 24 h. Al volver el canal
+    salen con "(retrasado)" y ninguno se pierde.
+  - *Permanentes* (bot bloqueado, chat no encontrado): se detiene, se registra el tipo de error (nunca el texto)
+    y se marca en `/recordatorios`. Un recordatorio detenido queda `pending` con `attempts` en un valor centinela.
 - **Repetición**: si hay `rrule`, calcular la siguiente ocurrencia **a partir de la hora programada, no de
-  `now()`** (evita deriva) y crear/actualizar el siguiente `fire_at_utc`.
-- **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces, si no se pulsa ✅ Hecho.
+  `now()`** (evita deriva). Marcar `sent` e insertar la siguiente fila es UNA sola transacción. Re-disparar una
+  fila pospuesta o reenviada NO crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa.
+- **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces (`nag_count`), si no se pulsa ✅ Hecho.
+- **Tareas**: hacer, descartar o posponer una tarea cancela sus recordatorios pendientes (también los de preparación).
+- **Fechas pasadas**: nunca se crea un recordatorio en el pasado; se pregunta.
+- **Sin solapamiento**: un tick no empieza si el anterior sigue en curso.
 - **Arranque tras caída**: los vencidos se disparan con "(retrasado)"; no se pierden.
 - **Sin LLM**: este módulo no importa nada de `llm/` ni `classify/`.
 - **Aviso automático de preparación**: toda tarea con `due_at_utc` genera recordatorios 1 día antes
