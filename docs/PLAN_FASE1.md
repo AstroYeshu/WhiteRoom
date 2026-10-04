@@ -27,6 +27,38 @@ Aprobado por el dueño. Marcar cada bloque al completarlo. **Corte principal de 
   siempre se muestra la interpretación y la próxima fecha antes de guardar.
 - Gracia de "(retrasado)": 2 min.
 
+## Decisión: parser de fechas propio (sin `dateparser`)
+`dateparser 1.4.3` devolvía fechas incorrectas SIN avisar en español (p. ej. "mañana 8am" → 15:30, "pasado mañana" → mañana,
+"el viernes a las 5 pm" → viernes pasado, "tomar leche de la mañana" → inventa mañana). Ninguna configuración era fiable;
+5 de 18 frases de prueba no las resolvía ninguna. Ver la tabla de evidencia en la conversación del 2026-10-03.
+
+Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, nunca se adivina):
+1. La confirmación muestra siempre la fecha resuelta con día de la semana y botones [✏ Cambiar] [↩ Deshacer]
+   (`format_when` aquí; los botones en el bloque 7).
+2. "mañana" es el día salvo que vaya precedido de `la / esta / cada / toda` ("de la mañana", "por la mañana").
+   Un periodo sin hora ("mañana por la mañana") → pregunta.
+3. **Hora sin am/pm (REGLA PROPUESTA, pendiente de tu visto bueno)**:
+   - Con `am`/`pm` o `de la mañana/tarde/noche/madrugada`: se respeta (12 am y 12 de la noche → pregunta).
+   - 13–23 y 0 → reloj de 24 h. Con cero inicial (`08:30`, `05:00`) → 24 h literal.
+   - 12 → mediodía. **7–11 → mañana (am). 1–6 → tarde (pm).** Nadie agenda a la 1–6 am; clases a las 7–11 am.
+   - La confirmación siempre muestra "am/pm", así que un error se ve y se corrige con [Cambiar].
+   - `H:MM` suelto sin "a las"/am/pm (p. ej. un versículo "Juan 3:16") solo cuenta como hora si el texto trae también un día.
+   - "a las 8 y media / y cuarto" se entienden; "menos cuarto", "medianoche" → pregunta.
+4. Día de la semana igual al de hoy ("el viernes" siendo viernes) → pregunta (hoy / en 7 días).
+   "próximo viernes" siendo viernes → +7; "este viernes" siendo viernes → hoy.
+5. Fecha/hora ya pasada → pregunta (con la alternativa futura más natural); jamás se crea en el pasado.
+6. Día/mes sin año = siguiente ocurrencia (hoy cuenta). "29 de febrero" → siguiente año bisiesto. Fecha inexistente
+   ("31 de abril") → pregunta. `d/m` suelto solo con "el" delante (evita "1/2 kilo"); con año se acepta sin "el".
+7. Dos fechas, dos horas, hora dudosa o con restos sin entender ("8:30 menos cuarto") → pregunta.
+8. Sin hora → `default_morning_time` (`has_time=False`, para avisar "hora por defecto").
+9. "en N minutos/horas" (instante exacto), "en N días/semanas" (día a `default_morning_time`). "estudiar 2 horas" no es fecha.
+10. Un día de la semana con mayúscula a mitad de frase ("llamar a Domingo") se toma como nombre propio, no como fecha.
+Pruebas: tabla con reloj fijo (sáb 2026-10-03 15:30, México), ≥ 60 frases incluidos falsos positivos.
+
+Recurrencia (`parsing/recurrence.py`, lista cerrada): "todos los días [hora]", "cada <día> [hora]", "de lunes a viernes [hora]".
+Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación y próxima fecha antes de guardar.
+`next_occurrence(rrule, scheduled, after, tz)` calcula desde la hora programada (la usa también el motor, sin deriva, DST-seguro).
+
 ## Plan de pruebas del motor (FakeClock + FakeChannel + SQLite en memoria)
 1. Único: a T−1 s no sale; a T sale una vez (`kind="reminder"`, 4 botones); `sent` + `last_fired_at`; no se repite.
 2. +10 min / +1 h / Mañana (`default_morning_time` local): `pending`, `snooze_count+1`, sale a su hora.
@@ -46,9 +78,9 @@ Aprobado por el dueño. Marcar cada bloque al completarlo. **Corte principal de 
 
 ## Bloques (un commit por bloque)
 - [x] 0. Plan y SPEC (secciones 7 y 8.3) — `Fase 1: plan y actualización del SPEC`
-- [x] 1. Dependencias: `python-telegram-bot[job-queue]==22.8`, `dateparser`, `python-dateutil` — `Fase 1: dependencias`
+- [x] 1. Dependencias: `python-telegram-bot[job-queue]==22.8`, `python-dateutil` (`dateparser` se añadió y luego se retiró en el bloque 3) — `Fase 1: dependencias`
 - [x] 2. `is_quiet_hour` / `next_quiet_end` + pruebas — `Fase 1: horas de silencio`
-- [ ] 3. `parsing/dates.py` (+ parser de repetición) + pruebas — `Fase 1: parseo de fechas`
+- [ ] 3. `parsing/dates.py` y `parsing/recurrence.py` propios (sin dateparser) + pruebas en tabla (≥60 frases) — `Fase 1: parseo de fechas propio`
 - [ ] 4. Migración 002, `core/areas`, `tasks`, `notes` + pruebas — `Fase 1: áreas, tareas y notas`
 - [ ] 5a. Motor base: único, snooze, silencio, reintentos, AST, sin solapamiento — `Fase 1: motor de recordatorios (base)`
 - [ ] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`

@@ -68,7 +68,8 @@ class Channel(Protocol):
 - `sqlite3` de la biblioteca estándar, modo WAL
 - `anthropic` (SDK oficial) para Haiku
 - `httpx` para Jev
-- `dateparser` (+ `python-dateutil` para `rrule`)
+- `python-dateutil` (solo para `rrule`). Las fechas en español las interpreta un parser propio de gramática cerrada
+  (`parsing/dates.py`): se descartó `dateparser` porque devolvía fechas incorrectas sin avisar (ver `docs/PLAN_FASE1.md`).
 - `python-dotenv`, `pytest`, `ruff`
 - Fijar versiones en `requirements.txt` tras instalar. Preguntar antes de añadir otra dependencia.
 
@@ -112,7 +113,8 @@ asistente/
 │  │  └─ decide.py            # regla de decisión por confianza
 │  ├─ llm/claude.py           # cliente Anthropic + registro de uso/costo
 │  └─ parsing/
-│     ├─ dates.py             # envoltura de dateparser (español)
+│     ├─ dates.py             # parser propio de fechas/horas en español (gramática cerrada, sin dateparser)
+│     ├─ recurrence.py        # "todos los días", "cada viernes", "de lunes a viernes" -> rrule
 │     └─ amounts.py           # regex de montos
 ├─ scripts/
 │  ├─ eval_classifier.py
@@ -270,8 +272,9 @@ Todo mensaje que no sea comando entra a este pipeline:
 
 1. Normalizar (minúsculas, sin acentos, espacios). **Guardar siempre primero** el texto original en
    una bandeja de entrada (tarea sin área) para que nada se pierda si algo falla después.
-2. Extraer fecha/hora con `dateparser.search.search_dates` (idioma `es`, preferir fechas futuras, zona
-   `TZ_NAME`). Si hay 0 fechas → sin fecha. Si hay más de una o es ambigua → preguntar con botones.
+2. Extraer fecha/hora con `parsing/dates.py` (gramática cerrada, zona `TZ_NAME`). Si hay 0 fechas → sin fecha.
+   Si hay más de una, la hora es dudosa, la fecha ya pasó o es ambigua ("el viernes" siendo viernes) → preguntar.
+   La confirmación muestra siempre la fecha resuelta con día de la semana y botones [✏ Cambiar] [↩ Deshacer].
 3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
 4. Clasificar (8.2).
 5. Crear la entidad (tarea, recordatorio, nota o gasto) y responder compacto:
@@ -426,7 +429,7 @@ y no requiere ningún secreto).
 - Un test verifica que ningún módulo fuera de `channels/telegram.py` importa la librería de Telegram.
 
 ### Fase 1 — Núcleo determinista (sin ningún LLM)
-Áreas, tareas, notas, recordatorios, `dateparser`, motor de recordatorios, `/hoy`, `/pendientes`.
+Áreas, tareas, notas, recordatorios, parser de fechas propio (sin `dateparser`), motor de recordatorios, `/hoy`, `/pendientes`.
 Mensaje libre → bandeja con botones manuales [Tarea][Recordatorio][Nota] + elegir área.
 - Pruebas con reloj falso: recordatorio único dispara a su hora; +10 min reprograma; semanal con `rrule`
   genera la siguiente sin deriva; silencio retiene y libera; vencidos tras "caída" se disparan.
