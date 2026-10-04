@@ -1,4 +1,4 @@
-"""M5: "Mañana 9:00" antes de las 05:00 locales ofrece HOY a la hora por defecto.
+"""M5: "Mañana 9:00 am" antes de las 05:00 locales ofrece HOY a la hora por defecto.
 
 A las 02:30 "mañana" casi siempre significa "cuando me levante", o sea hoy. Zona: México.
 """

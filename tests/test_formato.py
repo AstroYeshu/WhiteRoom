@@ -217,3 +217,22 @@ def test_aviso_general_tiene_un_solo_formato():
 
 def test_el_punto_medio_y_la_raya_son_puntuacion_normal():
     assert find_pictograms("· — – … « »") == []
+
+
+# --- Etiquetas de botón con hora: siempre am/pm ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("day", "when", "expected"),
+    [
+        ("Hoy", "2026-10-03 18:00", "Hoy 6:00 pm"),
+        ("Mañana", "2026-10-04 09:00", "Mañana 9:00 am"),
+        ("Mañana", "2026-10-04 12:00", "Mañana 12:00 pm"),
+        ("Hoy", "2026-10-04 00:30", "Hoy 12:30 am"),
+        ("Mañana", "2026-10-04 23:59", "Mañana 11:59 pm"),
+    ],
+)
+def test_etiqueta_con_hora_usa_am_pm_y_cabe_en_un_boton(day, when, expected):
+    result = fmt.etiqueta_hora(day, local(when), TZ)
+    assert result == expected
+    assert len(result) <= fmt.MAX_LABEL

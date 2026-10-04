@@ -306,7 +306,7 @@ def bandeja(cat: Catalog) -> None:
         "Sin fecha: pregunta ¿cuándo? con opciones rápidas y «Mejor como tarea».",
         lambda: s.tap("Sin área"),
     )
-    cat.snap(s, "Se elige una opción rápida: confirmación.", lambda: s.tap("Mañana 9:00"))
+    cat.snap(s, "Se elige una opción rápida: confirmación.", lambda: s.tap("Mañana 9:00 am"))
 
     s = Session()
     s.say("llamar al dentista")
@@ -338,10 +338,10 @@ def bandeja(cat: Catalog) -> None:
     s.say("llamar al dentista")
     s.tap("Recordatorio")
     s.tap("Sin área")
-    hoy_button = next(c.id for c in s._last_choices(None) if c.label == "Hoy 18:00")
+    hoy_button = next(c.id for c in s._last_choices(None) if c.label == "Hoy 6:00 pm")
     s.clock.advance(minutes=6)
     cat.snap(
-        s, "La opción «Hoy 18:00» se pulsó cuando ya había pasado.", lambda: s.press(hoy_button)
+        s, "La opción «Hoy 6:00 pm» se pulsó cuando ya había pasado.", lambda: s.press(hoy_button)
     )
 
 
@@ -407,8 +407,8 @@ def avisos(cat: Catalog) -> None:
     s.tick()
     cat.snap(
         s,
-        "Mañana 9:00: se reprograma para el día siguiente (día completo en la confirmación).",
-        lambda: s.tap("Mañana 9:00"),
+        "Mañana 9:00 am: se reprograma para el día siguiente (día completo en la confirmación).",
+        lambda: s.tap("Mañana 9:00 am"),
     )
     ids = [c.id for c in s._last_choices(None)]
     cat.snap(
@@ -431,7 +431,7 @@ def avisos(cat: Catalog) -> None:
     s.clock.advance(minutes=1)
     cat.snap(
         s,
-        "De madrugada (antes de las 5:00) el botón dice «Hoy 9:00» en lugar de «Mañana 9:00».",
+        "De madrugada (antes de las 5:00) el botón dice «Hoy 9:00 am» en lugar de «Mañana 9:00 am».",
         s.tick,
     )
 
@@ -645,7 +645,7 @@ def errores(cat: Catalog) -> None:
     s.say("llamar al dentista")
     s.tap("Recordatorio")
     s.tap("Sin área")
-    s.tap("Mañana 9:00")
+    s.tap("Mañana 9:00 am")
     first = s._last_choices(None)
     s.tap("Deshacer")
     cat.snap(

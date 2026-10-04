@@ -97,6 +97,11 @@ def _hour(local: datetime) -> str:
     return f"{local.hour % 12 or 12}:{local.minute:02d} {'am' if local.hour < 12 else 'pm'}"
 
 
+def etiqueta_hora(day: str, moment_utc: datetime, tz_name: str) -> str:
+    """Etiqueta de botón con día y hora, siempre am/pm como el resto: "Mañana 9:00 am"."""
+    return f"{day} {_hour(to_local(moment_utc, tz_name))}"
+
+
 def fecha_corta(moment_utc: datetime, tz_name: str, now: Clock) -> str:
     """Para botones y listas: "hoy, 6:00 pm", "mañana, 8:00 am", "sáb 3 oct, 6:00 pm".
 

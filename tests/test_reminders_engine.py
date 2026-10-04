@@ -60,7 +60,7 @@ def test_unico_dispara_a_su_hora_una_sola_vez(conn, clock, engine, channel):
     assert tick(engine) == 1
     to, text, choices, kind = channel.choices[0]
     assert (to, text, kind) == (USER, "<b>llevar tarea de cálculo</b>\n\nRecordatorio", "reminder")
-    assert [c.label for c in choices] == ["Hecho", "+10 min", "+1 h", "Mañana 9:00"]
+    assert [c.label for c in choices] == ["Hecho", "+10 min", "+1 h", "Mañana 9:00 am"]
     assert [c.id for c in choices] == [
         f"rem_done:{created.id}",
         f"rem_snooze:{created.id}:10",

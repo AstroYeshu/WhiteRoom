@@ -97,8 +97,8 @@ _Cambiar: se deshace y se vuelve a preguntar la fecha._
 Cambiando «llevar tarea»
 ---
 ¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
-[Hoy 18:00]
-[Mañana 9:00]
+[Hoy 6:00 pm]
+[Mañana 9:00 am]
 [Mejor como tarea]
 [Cancelar]
 ```
@@ -171,8 +171,8 @@ _Sin fecha: pregunta ¿cuándo? con opciones rápidas y «Mejor como tarea»._
 Área: ninguna
 ---
 ¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
-[Hoy 18:00]
-[Mañana 9:00]
+[Hoy 6:00 pm]
+[Mañana 9:00 am]
 [Mejor como tarea]
 [Cancelar]
 ```
@@ -216,14 +216,14 @@ _Botón de una pregunta vieja: se ignora._
 <b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
-_La opción «Hoy 18:00» se pulsó cuando ya había pasado._
+_La opción «Hoy 6:00 pm» se pulsó cuando ya había pasado._
 
 ```text
 (reemplaza el mensaje del botón)
 Esa hora ya pasó.
 ---
 Esa hora ya pasó. ¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
-[Mañana 9:00]
+[Mañana 9:00 am]
 [Mejor como tarea]
 [Cancelar]
 ```
@@ -286,8 +286,8 @@ _Fecha que no entiende (unsupported_date): opciones rápidas._
 Área: ninguna
 ---
 No entiendo esa fecha. ¿Qué día quieres?
-[Hoy 18:00]
-[Mañana 9:00]
+[Hoy 6:00 pm]
+[Mañana 9:00 am]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -402,7 +402,7 @@ _Aviso a su hora, con el área entre corchetes._
 
 Recordatorio · universidad
 [Hecho][+10 min]
-[+1 h][Mañana 9:00]
+[+1 h][Mañana 9:00 am]
 ```
 
 _Hecho._
@@ -419,7 +419,7 @@ _+10 min: se reprograma para hoy._
 <b>Pospuesto</b> · llamar a mamá · hoy, 3:41 pm
 ```
 
-_Mañana 9:00: se reprograma para el día siguiente (día completo en la confirmación)._
+_Mañana 9:00 am: se reprograma para el día siguiente (día completo en la confirmación)._
 
 ```text
 (reemplaza el mensaje del botón)
@@ -447,17 +447,17 @@ _Aviso que salió tarde (caída, silencio o canal caído): «(retrasado)»._
 
 Recordatorio <i>(retrasado)</i>
 [Hecho][+10 min]
-[+1 h][Mañana 9:00]
+[+1 h][Mañana 9:00 am]
 ```
 
-_De madrugada (antes de las 5:00) el botón dice «Hoy 9:00» en lugar de «Mañana 9:00»._
+_De madrugada (antes de las 5:00) el botón dice «Hoy 9:00 am» en lugar de «Mañana 9:00 am»._
 
 ```text
 <b>revisar el horno</b>
 
 Recordatorio
 [Hecho][+10 min]
-[+1 h][Hoy 9:00]
+[+1 h][Hoy 9:00 am]
 ```
 
 _Aviso de preparación, un día antes de la fecha de una tarea._
@@ -467,7 +467,7 @@ _Aviso de preparación, un día antes de la fecha de una tarea._
 
 Recordatorio · universidad
 [Hecho][+10 min]
-[+1 h][Mañana 9:00]
+[+1 h][Mañana 9:00 am]
 ```
 
 _Aviso de preparación, una hora antes._
@@ -477,7 +477,7 @@ _Aviso de preparación, una hora antes._
 
 Recordatorio · universidad
 [Hecho][+10 min]
-[+1 h][Mañana 9:00]
+[+1 h][Mañana 9:00 am]
 ```
 
 

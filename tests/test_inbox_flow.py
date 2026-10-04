@@ -171,8 +171,8 @@ def test_sin_fecha_pregunta_cuando_con_hoy_y_manana(bot, conn):
     bot.tap("Sin área")
     text, _ = bot.question
     assert "¿Cuándo?" in text
-    assert bot.labels() == ["Hoy 18:00", "Mañana 9:00", "Mejor como tarea", "Cancelar"]
-    bot.tap("Mañana 9:00")
+    assert bot.labels() == ["Hoy 6:00 pm", "Mañana 9:00 am", "Mejor como tarea", "Cancelar"]
+    bot.tap("Mañana 9:00 am")
     [reminder] = pending(conn)
     assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-04 09:00"
 
@@ -182,7 +182,7 @@ def test_hoy_18_solo_se_ofrece_si_es_futuro(bot, clock):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    assert bot.labels() == ["Mañana 9:00", "Mejor como tarea", "Cancelar"]
+    assert bot.labels() == ["Mañana 9:00 am", "Mejor como tarea", "Cancelar"]
 
 
 def test_hoy_18_pulsado_cuando_ya_paso_no_crea_nada(bot, conn, clock):
@@ -190,7 +190,7 @@ def test_hoy_18_pulsado_cuando_ya_paso_no_crea_nada(bot, conn, clock):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    hoy = bot.choice_id("Hoy 18:00")
+    hoy = bot.choice_id("Hoy 6:00 pm")
     clock.advance(minutes=6)  # 18:01
     bot.press(hoy)
     assert pending(conn) == []
@@ -250,7 +250,7 @@ def test_fecha_no_soportada_ofrece_hoy_y_manana(bot, conn):
     bot.tap("Sin área")
     assert pending(conn) == []
     assert "No entiendo" in bot.question[0]
-    assert "Mañana 9:00" in bot.labels()
+    assert "Mañana 9:00 am" in bot.labels()
 
 
 def test_cada_pregunta_lleva_cancelar_y_la_tarea_sigue_en_la_bandeja(bot, conn):
@@ -358,7 +358,7 @@ def test_cambiar_conserva_el_area(bot, conn):
     bot.tap("Recordatorio")
     bot.tap("iglesia")
     bot.tap("Cambiar")
-    bot.tap("Mañana 9:00")
+    bot.tap("Mañana 9:00 am")
     assert pending(conn)[0].area_id == areas.find_area_by_name(conn, "iglesia").id
 
 
@@ -493,7 +493,7 @@ def test_hora_de_hoy_a_las_18_se_calcula_en_hora_local(bot, conn):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    bot.tap("Hoy 18:00")
+    bot.tap("Hoy 6:00 pm")
     expected = local_to_utc(__import__("datetime").datetime(2026, 10, 3, 18, 0), TZ)
     assert from_utc_iso(pending(conn)[0].fire_at_utc) == expected
 
@@ -561,7 +561,7 @@ def test_el_aviso_de_hora_pasada_tambien_invita_a_escribir(bot, clock):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    hoy = bot.choice_id("Hoy 18:00")
+    hoy = bot.choice_id("Hoy 6:00 pm")
     clock.advance(minutes=6)
     bot.press(hoy)
     assert "Esa hora ya pasó. ¿Cuándo?" in bot.question[0]

@@ -1,4 +1,4 @@
-"""Bloque 6, punto 3: la etiqueta "Mañana" pasa a "Hoy 9:00" antes de las 05:00 locales.
+"""Bloque 6, punto 3: la etiqueta "Mañana" pasa a "Hoy 9:00 am" antes de las 05:00 locales.
 
 La etiqueta y la acción salen de la MISMA función, así que no pueden discrepar.
 """
@@ -23,12 +23,12 @@ def at(hour: int, minute: int = 0) -> datetime:
 @pytest.mark.parametrize(
     ("hour", "minute", "label"),
     [
-        (0, 0, "Hoy 9:00"),
-        (3, 0, "Hoy 9:00"),
-        (4, 59, "Hoy 9:00"),
-        (5, 0, "Mañana 9:00"),  # 05:00 ya no cuenta como madrugada
-        (15, 30, "Mañana 9:00"),
-        (23, 59, "Mañana 9:00"),
+        (0, 0, "Hoy 9:00 am"),
+        (3, 0, "Hoy 9:00 am"),
+        (4, 59, "Hoy 9:00 am"),
+        (5, 0, "Mañana 9:00 am"),  # 05:00 ya no cuenta como madrugada
+        (15, 30, "Mañana 9:00 am"),
+        (23, 59, "Mañana 9:00 am"),
     ],
 )
 def test_etiqueta_segun_la_hora_local(conn, hour, minute, label):
@@ -38,14 +38,14 @@ def test_etiqueta_segun_la_hora_local(conn, hour, minute, label):
 def test_la_etiqueta_usa_la_hora_por_defecto_de_settings(conn):
     with conn:
         conn.execute("UPDATE settings SET value = '08:30' WHERE key = 'default_morning_time'")
-    assert reminders.tomorrow_label(conn, at(3), TZ) == "Hoy 8:30"
+    assert reminders.tomorrow_label(conn, at(3), TZ) == "Hoy 8:30 am"
 
 
 def test_si_la_hora_por_defecto_de_hoy_ya_paso_la_etiqueta_es_manana(conn):
     with conn:
         conn.execute("UPDATE settings SET value = '04:00' WHERE key = 'default_morning_time'")
-    assert reminders.tomorrow_label(conn, at(3), TZ) == "Hoy 4:00"
-    assert reminders.tomorrow_label(conn, at(4, 30), TZ) == "Mañana 4:00"
+    assert reminders.tomorrow_label(conn, at(3), TZ) == "Hoy 4:00 am"
+    assert reminders.tomorrow_label(conn, at(4, 30), TZ) == "Mañana 4:00 am"
 
 
 @pytest.mark.parametrize("morning", ["09:00", "04:00", "07:45"])
@@ -74,7 +74,7 @@ def test_el_motor_envia_los_botones_con_la_etiqueta_del_momento(conn, clock):
     engine = ReminderEngine(conn, channel, "42", TZ, clock)
     assert asyncio.run(engine.tick()) == 1
     labels = [c.label for c in channel.choices[0][2]]
-    assert labels == ["Hecho", "+10 min", "+1 h", "Hoy 9:00"]
+    assert labels == ["Hecho", "+10 min", "+1 h", "Hoy 9:00 am"]
     assert channel.choices[0][2][3].id.startswith("rem_tomorrow:")
 
 

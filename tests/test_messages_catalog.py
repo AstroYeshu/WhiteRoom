@@ -72,3 +72,19 @@ def test_las_filas_de_botones_no_tienen_mas_de_dos(generated):
         for line in screen.splitlines():
             if line.startswith("["):
                 assert len(re.findall(r"\[[^\[\]]+\]", line)) <= 2, line
+
+
+def button_labels(text: str) -> list[str]:
+    labels = []
+    for screen in screens(text):
+        for line in screen.splitlines():
+            if line.startswith("["):
+                labels += re.findall(r"\[([^\[\]]+)\]", line)
+    return labels
+
+
+def test_las_horas_de_los_botones_llevan_am_pm(generated):
+    """Una etiqueta con "Hoy"/"Mañana" y una hora termina en am o pm (nunca 18:00)."""
+    with_time = [label for label in button_labels(generated) if re.match(r"(Hoy|Mañana) \d", label)]
+    assert with_time, "el catálogo debería tener etiquetas con hora"
+    assert [label for label in with_time if not re.search(r"\d:\d\d (am|pm)$", label)] == []

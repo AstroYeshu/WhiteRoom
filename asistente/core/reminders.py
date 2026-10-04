@@ -29,7 +29,7 @@ from asistente.channels.base import (
 )
 from asistente.choices import encode_choice_id
 from asistente.core.settings import get_time_setting
-from asistente.formato import REMINDER_LAYOUT, reminder_notice
+from asistente.formato import REMINDER_LAYOUT, etiqueta_hora, reminder_notice
 from asistente.parsing.recurrence import next_occurrence
 from asistente.timeutil import (
     Clock,
@@ -349,13 +349,10 @@ def tomorrow_target(conn: sqlite3.Connection, moment: datetime, tz_name: str) ->
 
 
 def tomorrow_label(conn: sqlite3.Connection, moment: datetime, tz_name: str) -> str:
-    """ "Mañana 9:00", o "Hoy 9:00" cuando la hora local es anterior a las 05:00."""
-    target = to_local(tomorrow_target(conn, moment, tz_name), tz_name)
-    if target.date() == to_local(moment, tz_name).date():
-        day = LABEL_TOMORROW_TODAY
-    else:
-        day = LABEL_TOMORROW
-    return f"{day} {target.hour}:{target.minute:02d}"
+    """ "Mañana 9:00 am", o "Hoy 9:00 am" cuando la hora local es anterior a las 05:00."""
+    target = tomorrow_target(conn, moment, tz_name)
+    same_day = to_local(target, tz_name).date() == to_local(moment, tz_name).date()
+    return etiqueta_hora(LABEL_TOMORROW_TODAY if same_day else LABEL_TOMORROW, target, tz_name)
 
 
 def _snooze_to(conn: sqlite3.Connection, reminder_id: int, target: datetime) -> datetime | None:

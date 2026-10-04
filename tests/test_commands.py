@@ -341,7 +341,7 @@ def test_recordar_sin_fecha_pregunta_cuando(bot, conn):
     bot.say("/recordar llamar al dentista")
     bot.tap("Sin área")
     assert "¿Cuándo?" in bot.question[0]
-    bot.tap("Mañana 9:00")
+    bot.tap("Mañana 9:00 am")
     assert reminders.list_pending(conn) == []  # /recordar siempre muestra antes de guardar
     assert "¿Lo guardo?" in bot.question[0]
     bot.tap("Guardar")

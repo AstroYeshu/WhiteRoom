@@ -353,11 +353,13 @@ def _quick_targets(ctx: Ctx) -> dict[str, tuple[datetime, str]]:
         datetime.combine(to_local(moment, ctx.tz_name).date(), EVENING), ctx.tz_name
     )
     if evening > moment:
-        targets["h"] = (evening, f"Hoy {EVENING.hour}:{EVENING.minute:02d}")
+        targets["h"] = (evening, fmt.etiqueta_hora("Hoy", evening, ctx.tz_name))
     tomorrow = reminders.tomorrow_target(ctx.conn, moment, ctx.tz_name)
-    local = to_local(tomorrow, ctx.tz_name)
-    day = "Hoy" if local.date() == to_local(moment, ctx.tz_name).date() else "Mañana"
-    targets["m"] = (tomorrow, f"{day} {local.hour}:{local.minute:02d}")
+    same_day = to_local(tomorrow, ctx.tz_name).date() == to_local(moment, ctx.tz_name).date()
+    targets["m"] = (
+        tomorrow,
+        fmt.etiqueta_hora("Hoy" if same_day else "Mañana", tomorrow, ctx.tz_name),
+    )
     return targets
 
 
