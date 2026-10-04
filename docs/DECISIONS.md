@@ -173,3 +173,17 @@ entre paréntesis. Reglas: un botón de un paso viejo sobre la tarjeta VIVA resp
 mensajes; el MISMO botón que se acaba de atender (`Conversation.last_press_id`, doble pulsación, también en Guardar y Deshacer) no
 responde nada; un botón en una tarjeta muerta (otra captura, reinicio, caducidad) edita esa tarjeta a «Aviso · Esa opción ya no está
 disponible.». Un doble toque en Guardar ya no pisa la confirmación con sus botones Cambiar/Deshacer.
+
+## Rediseño de mensajes, corte 3: vistas de consulta
+Todas con `formato.py` (`screen`, `section`, `bullet`, `numbered`, `pending_list`, `HELP`), sin armar strings en los manejadores; los usos
+incorrectos y los errores de los comandos salen como «Aviso · …». `/pendientes` es UN mensaje: «Pendientes (N)» en negrita, lista numerada
+(máx. 10; «y N más: filtra por área (/pendientes nombre)») con título · área · `fecha_corta`, y un botón por número (los números van de
+a 5 por fila: excepción a la regla de 2, la prueba del catálogo la admite solo para dígitos). Pulsar un número muestra la tarea en el MISMO
+mensaje con [Hecha] [Descartar] / [Volver]; tras Hecha o Descartar vuelve a la lista ya actualizada con una línea de estado
+(«Hecha · título»). Los ids no guardan estado en memoria (`pd:VERBO:ÁREA[:TAREA]`: abrir, hecha, descartar, volver), así que sobreviven a un
+reinicio y conservan el filtro de área. Una tarea que ya no está abierta (cerrada desde otro lado, doble Hecha) responde con el aviso breve
+«Esa opción ya no aplica» Y refresca la lista para que desaparezca; un id mal formado solo responde el aviso. `/hoy`: «Hoy · sábado 3 de
+octubre» (+ área), secciones en negrita «Tareas» y «Recordatorios» con `fecha_corta` (las vencidas con «vencida»), estado vacío cuidado y la
+línea «N en bandeja sin área» solo sin filtro. `/recordatorios`: «Pendientes (n)» y, aparte, «Detenidos (m)» con «Motivo: …» en lenguaje
+claro; un código desconocido sale como «motivo desconocido» y el crudo solo al log. `/areas` marca «sin descripción»; `/ayuda` está agrupada
+(Anotar, Consultar, Áreas, Otros). Se quitaron `tk_done`/`tk_drop` (un mensaje por tarea).

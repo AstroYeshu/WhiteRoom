@@ -530,31 +530,53 @@ def seeded() -> Session:
 def hoy(cat: Catalog) -> None:
     cat.section("/hoy [área]")
     s = Session()
-    cat.snap(s, "Sin nada para hoy.", lambda: s.say("/hoy"))
+    cat.snap(s, "Sin nada para hoy: estado vacío.", lambda: s.say("/hoy"))
+    s = Session()
+    tasks.create_task(s.conn, "suelta", s.clock)
+    cat.snap(s, "Sin nada para hoy, pero con tareas en la bandeja.", lambda: s.say("/hoy"))
     s = seeded()
     cat.snap(
-        s, "Con tareas vencidas, de hoy, recordatorios de hoy y la bandeja.", lambda: s.say("/hoy")
+        s,
+        "Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de bandeja.",
+        lambda: s.say("/hoy"),
     )
     cat.snap(s, "Filtrado por área (sin la línea de bandeja).", lambda: s.say("/hoy universidad"))
     cat.snap(s, "Área que no existe.", lambda: s.say("/hoy inventada"))
 
 
 def pendientes(cat: Catalog) -> None:
-    cat.section("/pendientes [área]", "Un mensaje por tarea, cada uno con sus botones.")
+    cat.section(
+        "/pendientes [área]",
+        "Un solo mensaje: lista numerada y un botón por número; el mismo mensaje muestra la tarea "
+        "elegida y vuelve a la lista.",
+    )
     s = Session()
     cat.snap(s, "Sin tareas.", lambda: s.say("/pendientes"))
     s = seeded()
-    cat.snap(s, "Lista: encabezado y una tarea por mensaje.", lambda: s.say("/pendientes"))
-    cat.snap(s, "Hecha.", lambda: s.tap("Hecha", "regar plantas"))
-    cat.snap(s, "Descartar.", lambda: s.tap("Descartar", "comprar pan"))
+    cat.snap(s, "Lista numerada con un botón por número.", lambda: s.say("/pendientes"))
+    cat.snap(s, "Se pulsa un número: la tarea en el mismo mensaje.", lambda: s.tap("1"))
+    cat.snap(s, "Hecha: vuelve a la lista actualizada.", lambda: s.tap("Hecha"))
+    cat.snap(s, "Otra tarea, Descartar.", lambda: s.tap("2"))
+    cat.snap(s, "Descartar: vuelve a la lista actualizada.", lambda: s.tap("Descartar"))
+    cat.snap(s, "Volver sin hacer nada.", lambda: (s.tap("1"), s.tap("Volver")))
+    gone = next(c.id for c in s._last_choices(None) if c.label == "1")
+    with s.conn:
+        s.conn.execute("UPDATE tasks SET status = 'done' WHERE status = 'open'")
     cat.snap(
-        s, "Pulsar otra vez sobre una tarea ya cerrada.", lambda: s.tap("Hecha", "regar plantas")
+        s,
+        "Botón de una tarea que ya no está abierta: aviso breve y la lista se actualiza.",
+        lambda: s.press(gone),
     )
+    s = seeded()
     cat.snap(s, "Filtrado por área.", lambda: s.say("/pendientes universidad"))
     s = Session()
     for number in range(13):
         tasks.create_task(s.conn, f"tarea {number + 1}", s.clock)
-    cat.snap(s, "Más de 10 tareas: se muestran 10 y se avisa.", lambda: s.say("/pendientes"))
+    cat.snap(
+        s,
+        "Más de 10 tareas: se muestran 10 y se dice cuántas faltan.",
+        lambda: s.say("/pendientes"),
+    )
 
 
 def recordatorios(cat: Catalog) -> None:
@@ -683,7 +705,7 @@ def errores(cat: Catalog) -> None:
     cat.snap(s, "Comando desconocido.", lambda: s.say("/inventado"))
     cat.snap(s, "Botón desconocido o mal formado.", lambda: s.press("zzz:1"))
     cat.snap(s, "Botón de la bandeja de un flujo que ya no existe.", lambda: s.press("in:1:k:t"))
-    cat.snap(s, "Botón de tarea que no existe.", lambda: s.press("tk_done:9999"))
+    cat.snap(s, "Botón de /pendientes con una tarea que no existe.", lambda: s.press("pd:o:0:9999"))
     s.say("llamar al dentista")
     s.tap("Recordatorio")
     s.tap("Sin área")

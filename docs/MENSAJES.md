@@ -520,149 +520,191 @@ Recordatorio · universidad
 
 ## /hoy [área]
 
-_Sin nada para hoy._
+_Sin nada para hoy: estado vacío._
 
 ```text
-Hoy, sábado 3 de octubre
-No tienes nada para hoy.
+<b>Hoy · sábado 3 de octubre</b>
+
+Nada para hoy: no hay tareas que venzan ni recordatorios.
 ```
 
-_Con tareas vencidas, de hoy, recordatorios de hoy y la bandeja._
+_Sin nada para hoy, pero con tareas en la bandeja._
 
 ```text
-Hoy, sábado 3 de octubre
-Tareas:
-- pagar luz (vencida: viernes 2 de octubre, 5:00 pm)
-- entregar informe (hoy, 5:00 pm) [universidad]
-Recordatorios:
-- 6:00 pm: llamar a mamá
+<b>Hoy · sábado 3 de octubre</b>
+
+Nada para hoy: no hay tareas que venzan ni recordatorios.
+
+1 en bandeja sin área
+```
+
+_Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de bandeja._
+
+```text
+<b>Hoy · sábado 3 de octubre</b>
+
+<b>Tareas</b>
+- pagar luz · vencida vie 2 oct, 5:00 pm
+- entregar informe · hoy, 5:00 pm · universidad
+
+<b>Recordatorios</b>
+- hoy, 6:00 pm · llamar a mamá
+
 2 en bandeja sin área
 ```
 
 _Filtrado por área (sin la línea de bandeja)._
 
 ```text
-Hoy, sábado 3 de octubre
-Tareas:
-- entregar informe (hoy, 5:00 pm) [universidad]
+<b>Hoy · sábado 3 de octubre · universidad</b>
+
+<b>Tareas</b>
+- entregar informe · hoy, 5:00 pm
 ```
 
 _Área que no existe._
 
 ```text
-No encuentro el área «inventada». Escribe /areas para ver las que hay.
+<b>Aviso</b> · No encuentro el área «inventada». Escribe /areas para ver las que hay.
 ```
 
 
 ## /pendientes [área]
 
-Un mensaje por tarea, cada uno con sus botones.
+Un solo mensaje: lista numerada y un botón por número; el mismo mensaje muestra la tarea elegida y vuelve a la lista.
 
 _Sin tareas._
 
 ```text
-No tienes tareas pendientes.
+<b>Pendientes (0)</b>
+
+No tienes tareas pendientes. Todo al día.
 ```
 
-_Lista: encabezado y una tarea por mensaje._
+_Lista numerada con un botón por número._
 
 ```text
-Pendientes (4):
----
-pagar luz (vence: viernes 2 de octubre, 5:00 pm)
-[Hecha]
-[Descartar]
----
-entregar informe [universidad] (vence: sábado 3 de octubre, 5:00 pm)
-[Hecha]
-[Descartar]
----
-regar plantas [personal] (vence: domingo 4 de octubre, 9:00 am)
-[Hecha]
-[Descartar]
----
-comprar pan
-[Hecha]
-[Descartar]
+<b>Pendientes (4)</b>
+
+1. pagar luz · vie 2 oct, 5:00 pm
+2. entregar informe · universidad · hoy, 5:00 pm
+3. regar plantas · personal · mañana, 9:00 am
+4. comprar pan
+[1][2][3][4]
 ```
 
-_Hecha._
+_Se pulsa un número: la tarea en el mismo mensaje._
 
 ```text
 (edita el mismo mensaje)
-Hecha: regar plantas
+<b>pagar luz</b>
+
+Vence: vie 2 oct, 5:00 pm
+
+¿Qué hago con esta tarea?
+[Hecha][Descartar]
+[Volver]
 ```
 
-_Descartar._
+_Hecha: vuelve a la lista actualizada._
 
 ```text
 (edita el mismo mensaje)
-Descartada: comprar pan
+<b>Pendientes (3)</b>
+
+1. entregar informe · universidad · hoy, 5:00 pm
+2. regar plantas · personal · mañana, 9:00 am
+3. comprar pan
+
+<b>Hecha</b> · pagar luz
+[1][2][3]
 ```
 
-_Pulsar otra vez sobre una tarea ya cerrada._
+_Otra tarea, Descartar._
 
 ```text
 (edita el mismo mensaje)
-Esta tarea ya no está abierta: regar plantas
+<b>regar plantas</b>
+
+Área: personal
+Vence: mañana, 9:00 am
+
+¿Qué hago con esta tarea?
+[Hecha][Descartar]
+[Volver]
+```
+
+_Descartar: vuelve a la lista actualizada._
+
+```text
+(edita el mismo mensaje)
+<b>Pendientes (2)</b>
+
+1. entregar informe · universidad · hoy, 5:00 pm
+2. comprar pan
+
+<b>Descartada</b> · regar plantas
+[1][2]
+```
+
+_Volver sin hacer nada._
+
+```text
+(edita el mismo mensaje)
+<b>entregar informe</b>
+
+Área: universidad
+Vence: hoy, 5:00 pm
+
+¿Qué hago con esta tarea?
+[Hecha][Descartar]
+[Volver]
+---
+(edita el mismo mensaje)
+<b>Pendientes (2)</b>
+
+1. entregar informe · universidad · hoy, 5:00 pm
+2. comprar pan
+[1][2]
+```
+
+_Botón de una tarea que ya no está abierta: aviso breve y la lista se actualiza._
+
+```text
+(edita el mismo mensaje)
+<b>Pendientes (0)</b>
+
+No tienes tareas pendientes. Todo al día.
 ```
 
 _Filtrado por área._
 
 ```text
-Pendientes (1):
----
-entregar informe [universidad] (vence: sábado 3 de octubre, 5:00 pm)
-[Hecha]
-[Descartar]
+<b>Pendientes · universidad (1)</b>
+
+1. entregar informe · hoy, 5:00 pm
+[1]
 ```
 
-_Más de 10 tareas: se muestran 10 y se avisa._
+_Más de 10 tareas: se muestran 10 y se dice cuántas faltan._
 
 ```text
-Pendientes (13):
----
-tarea 1
-[Hecha]
-[Descartar]
----
-tarea 2
-[Hecha]
-[Descartar]
----
-tarea 3
-[Hecha]
-[Descartar]
----
-tarea 4
-[Hecha]
-[Descartar]
----
-tarea 5
-[Hecha]
-[Descartar]
----
-tarea 6
-[Hecha]
-[Descartar]
----
-tarea 7
-[Hecha]
-[Descartar]
----
-tarea 8
-[Hecha]
-[Descartar]
----
-tarea 9
-[Hecha]
-[Descartar]
----
-tarea 10
-[Hecha]
-[Descartar]
----
-Hay 3 más. Filtra por área: /pendientes nombre.
+<b>Pendientes (13)</b>
+
+1. tarea 1
+2. tarea 2
+3. tarea 3
+4. tarea 4
+5. tarea 5
+6. tarea 6
+7. tarea 7
+8. tarea 8
+9. tarea 9
+10. tarea 10
+
+y 3 más: filtra por área (/pendientes nombre)
+[1][2][3][4][5]
+[6][7][8][9][10]
 ```
 
 
@@ -671,43 +713,55 @@ Hay 3 más. Filtra por área: /pendientes nombre.
 _Sin recordatorios pendientes._
 
 ```text
+<b>Recordatorios</b>
+
 No tienes recordatorios pendientes.
 ```
 
 _Lista de pendientes, con área y repetición._
 
 ```text
-Recordatorios pendientes (3):
-- sábado 3 de octubre, 6:00 pm: llamar a mamá
-- domingo 4 de octubre, 8:00 am: llevar tarea [universidad]
-- domingo 4 de octubre, 10:00 am: ir a la iglesia [iglesia] (Cada domingo)
+<b>Recordatorios</b>
+
+<b>Pendientes (3)</b>
+- hoy, 6:00 pm · llamar a mamá
+- mañana, 8:00 am · llevar tarea · universidad
+- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
 ```
 
 _Con detenidos: motivo conocido y motivo desconocido._
 
 ```text
-Recordatorios pendientes (3):
-- sábado 3 de octubre, 6:00 pm: llamar a mamá (detenido: el bot está bloqueado en tu chat)
-- domingo 4 de octubre, 8:00 am: llevar tarea [universidad] (detenido: motivo desconocido)
-- domingo 4 de octubre, 10:00 am: ir a la iglesia [iglesia] (Cada domingo)
+<b>Recordatorios</b>
+
+<b>Pendientes (1)</b>
+- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
+
+<b>Detenidos (2)</b>
+- hoy, 6:00 pm · llamar a mamá · Motivo: el bot está bloqueado en tu chat
+- mañana, 8:00 am · llevar tarea · universidad · Motivo: motivo desconocido
 ```
 
 _Todos los motivos de detención que se explican._
 
 ```text
-Recordatorios pendientes (12):
-- sábado 3 de octubre, 6:00 pm: llamar a mamá (detenido: el bot está bloqueado en tu chat)
-- domingo 4 de octubre, 8:00 am: llevar tarea [universidad] (detenido: motivo desconocido)
-- domingo 4 de octubre, 10:00 am: ir a la iglesia [iglesia] (Cada domingo)
-- lunes 5 de octubre, 8:00 am: permanent:chat_not_found (detenido: no se encontró tu chat)
-- lunes 5 de octubre, 8:00 am: permanent:message_too_long (detenido: el mensaje era demasiado largo)
-- lunes 5 de octubre, 8:00 am: permanent:bad_request:cant_parse_entities (detenido: Telegram no pudo leer el formato del texto)
-- lunes 5 de octubre, 8:00 am: permanent:bad_request:empty_text (detenido: el texto estaba vacío)
-- lunes 5 de octubre, 8:00 am: permanent:bad_request:button_data_invalid (detenido: un botón no era válido)
-- lunes 5 de octubre, 8:00 am: permanent:bad_request:other (detenido: Telegram rechazó el mensaje)
-- lunes 5 de octubre, 8:00 am: horizon:telegram_down (detenido: Telegram no respondió durante 24 horas)
-- lunes 5 de octubre, 8:00 am: legacy (detenido: se detuvo en una versión anterior)
-- lunes 5 de octubre, 8:00 am: permanent:unexpected:KeyError (detenido: error inesperado al enviar)
+<b>Recordatorios</b>
+
+<b>Pendientes (1)</b>
+- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
+
+<b>Detenidos (11)</b>
+- hoy, 6:00 pm · llamar a mamá · Motivo: el bot está bloqueado en tu chat
+- mañana, 8:00 am · llevar tarea · universidad · Motivo: motivo desconocido
+- lun 5 oct, 8:00 am · permanent:chat_not_found · Motivo: no se encontró tu chat
+- lun 5 oct, 8:00 am · permanent:message_too_long · Motivo: el mensaje era demasiado largo
+- lun 5 oct, 8:00 am · permanent:bad_request:cant_parse_entities · Motivo: Telegram no pudo leer el formato del texto
+- lun 5 oct, 8:00 am · permanent:bad_request:empty_text · Motivo: el texto estaba vacío
+- lun 5 oct, 8:00 am · permanent:bad_request:button_data_invalid · Motivo: un botón no era válido
+- lun 5 oct, 8:00 am · permanent:bad_request:other · Motivo: Telegram rechazó el mensaje
+- lun 5 oct, 8:00 am · horizon:telegram_down · Motivo: Telegram no respondió durante 24 horas
+- lun 5 oct, 8:00 am · legacy · Motivo: se detuvo en una versión anterior
+- lun 5 oct, 8:00 am · permanent:unexpected:KeyError · Motivo: error inesperado al enviar
 ```
 
 
@@ -716,7 +770,7 @@ Recordatorios pendientes (12):
 _Sin texto._
 
 ```text
-Escribe /recordar seguido de qué y cuándo, por ejemplo: /recordar mañana 8 am llevar tarea
+<b>Aviso</b> · Escribe /recordar seguido de qué y cuándo, por ejemplo: /recordar mañana 8 am llevar tarea
 ```
 
 _Con texto: se guarda en la bandeja y pregunta el área._
@@ -789,7 +843,7 @@ Cuándo: domingo 4 de octubre, 9:00 pm
 _Sin texto._
 
 ```text
-Escribe /tarea seguido de la tarea, por ejemplo: /tarea comprar pan
+<b>Aviso</b> · Escribe /tarea seguido de la tarea, por ejemplo: /tarea comprar pan
 ```
 
 _Con texto: pregunta solo el área._
@@ -860,7 +914,7 @@ entregar informe el viernes
 _Sin texto._
 
 ```text
-Escribe /nota seguido de la nota, por ejemplo: /nota la clave del wifi está en el router
+<b>Aviso</b> · Escribe /nota seguido de la nota, por ejemplo: /nota la clave del wifi está en el router
 ```
 
 _Con texto: pregunta solo el área._
@@ -893,7 +947,8 @@ la clave del wifi
 _Lista de áreas._
 
 ```text
-Áreas:
+<b>Áreas (4)</b>
+
 - universidad
 - proyectos
 - iglesia
@@ -903,24 +958,27 @@ _Lista de áreas._
 _Un área sin descripción se marca._
 
 ```text
-Áreas:
+<b>Áreas (5)</b>
+
 - universidad
 - proyectos
 - iglesia
 - personal
-- Salud (sin descripción)
+- Salud · sin descripción
 ```
 
 _Sin áreas._
 
 ```text
+<b>Áreas</b>
+
 No hay áreas. Crea una con /nuevaarea nombre.
 ```
 
 _/nuevaarea sin nombre._
 
 ```text
-Escribe /nuevaarea seguido del nombre, por ejemplo: /nuevaarea Salud
+<b>Aviso</b> · Escribe /nuevaarea seguido del nombre, por ejemplo: /nuevaarea Salud
 ```
 
 _Con nombre: pregunta la descripción._
@@ -968,13 +1026,13 @@ No se creó el área.
 _Nombre repetido (sin distinguir mayúsculas ni acentos)._
 
 ```text
-Ya existe un área llamada «universidad».
+<b>Aviso</b> · Ya existe un área llamada «universidad».
 ```
 
 _Nombre demasiado largo._
 
 ```text
-El nombre es demasiado largo (máximo 40 caracteres).
+<b>Aviso</b> · El nombre es demasiado largo (máximo 40 caracteres).
 ```
 
 
@@ -983,25 +1041,34 @@ El nombre es demasiado largo (máximo 40 caracteres).
 _/start._
 
 ```text
-¡Hola! Soy tu asistente personal.
+<b>Hola, soy tu asistente personal</b>
+
 Escribe lo que quieras anotar y te pregunto qué es. /ayuda muestra los comandos.
 ```
 
 _/ayuda._
 
 ```text
-Comandos disponibles:
-/hoy [área] - lo que vence hoy
-/pendientes [área] - tus tareas abiertas
-/recordatorios - avisos pendientes y detenidos
-/recordar texto - crear un recordatorio
-/tarea texto - guardar una tarea
-/nota texto - guardar una nota
-/areas - ver las áreas
-/nuevaarea nombre - crear un área
-/start - saludo
-/ayuda - esta lista
-Cualquier otro mensaje lo guardo en tu bandeja y te pregunto qué es.
+<b>Ayuda</b>
+
+<b>Anotar</b>
+Escribe cualquier mensaje: lo guardo en tu bandeja y te pregunto qué es.
+/tarea texto · guardar una tarea
+/nota texto · guardar una nota
+/recordar texto · crear un recordatorio con su fecha
+
+<b>Consultar</b>
+/hoy [área] · lo que vence hoy
+/pendientes [área] · tus tareas abiertas
+/recordatorios · avisos pendientes y detenidos
+
+<b>Áreas</b>
+/areas · ver las áreas
+/nuevaarea nombre · crear un área
+
+<b>Otros</b>
+/start · saludo
+/ayuda · esta lista
 ```
 
 
@@ -1026,11 +1093,13 @@ _Botón de la bandeja de un flujo que ya no existe._
 <b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
-_Botón de tarea que no existe._
+_Botón de /pendientes con una tarea que no existe._
 
 ```text
 (edita el mismo mensaje)
-<b>Aviso</b> · Esa opción ya no está disponible.
+<b>Pendientes (0)</b>
+
+No tienes tareas pendientes. Todo al día.
 ```
 
 _Deshacer/Cambiar cuando el recordatorio ya no está pendiente._

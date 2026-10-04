@@ -24,24 +24,8 @@ from asistente.timeutil import Clock, to_local
 
 logger = logging.getLogger(__name__)
 
-START_TEXT = (
-    "¡Hola! Soy tu asistente personal.\n"
-    "Escribe lo que quieras anotar y te pregunto qué es. /ayuda muestra los comandos."
-)
-HELP_TEXT = (
-    "Comandos disponibles:\n"
-    "/hoy [área] - lo que vence hoy\n"
-    "/pendientes [área] - tus tareas abiertas\n"
-    "/recordatorios - avisos pendientes y detenidos\n"
-    "/recordar texto - crear un recordatorio\n"
-    "/tarea texto - guardar una tarea\n"
-    "/nota texto - guardar una nota\n"
-    "/areas - ver las áreas\n"
-    "/nuevaarea nombre - crear un área\n"
-    "/start - saludo\n"
-    "/ayuda - esta lista\n"
-    "Cualquier otro mensaje lo guardo en tu bandeja y te pregunto qué es."
-)
+START_TEXT = fmt.START
+HELP_TEXT = fmt.HELP
 UNKNOWN_COMMAND_TEXT = fmt.UNKNOWN_COMMAND
 NOT_ACTIVE_TEXT = fmt.REMINDER_NOT_ACTIVE
 SNOOZE_CHOICES_MINUTES = (reminders.SNOOZE_SHORT_MINUTES, reminders.SNOOZE_LONG_MINUTES)
@@ -173,10 +157,9 @@ async def handle_choice(
         if action == inbox.ACTION_FLOW:
             return await inbox.handle_flow_choice(ctx, choice, parts)
         return await inbox.handle_conversion_choice(ctx, choice, action, parts)
-    if action in (commands.ACTION_TASK_DONE, commands.ACTION_TASK_DROP):
+    if action == commands.ACTION_PENDING:
         ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
-        await commands.handle_task_choice(ctx, choice, action, parts)
-        return None
+        return await commands.handle_pending_choice(ctx, choice, parts)
     request = _parse_reminder_choice(choice.choice_id)
     if request is None:
         # Botón viejo o desconocido: se responde con cortesía y no se toca nada.

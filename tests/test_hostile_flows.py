@@ -165,6 +165,7 @@ def test_comandos_de_lectura_con_contenido_hostil(bot, conn, clock):
     reminders.create_reminder(conn, HOSTILE, local("2026-10-03 18:00"), clock, area_id=area.id)
     for command in ("/hoy", "/pendientes", "/recordatorios", "/areas", f"/hoy {HOSTILE}"):
         bot.say(command)
+    bot.tap("1")  # abre la tarea en el mismo mensaje
     bot.tap("Hecha")
     bot.assert_all_valid()
 

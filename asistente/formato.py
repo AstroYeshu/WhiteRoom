@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import html
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from asistente.parsing.dates import format_when
@@ -268,3 +269,120 @@ PARSER_QUESTIONS = {
     "same_weekday": "Hoy es ese día: ¿hoy o en 7 días?",
 }
 PARSER_QUESTION_GENERIC = "No pude entender la fecha o la hora; escríbela de otra forma."
+
+
+# --- Vistas: listas, secciones y pantallas -------------------------------------------------------
+
+
+def clip(text: str, limit: int = 60) -> str:
+    """El texto en una línea y como máximo `limit` caracteres (corta con puntos suspensivos)."""
+    flat = " ".join(text.split())
+    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+
+
+def bullet(*parts: str | None) -> Html:
+    """Una viñeta con partes separadas por punto medio: "- título · área · hoy, 5:00 pm"."""
+    kept = [part for part in parts if part]
+    return Html("- " + SEP.join(_safe(part) for part in kept))
+
+
+def numbered(items: Iterable[str]) -> Html:
+    """Lista numerada desde 1: "1. a", "2. b"."""
+    return block(*[Html(f"{number}. {_safe(item)}") for number, item in enumerate(items, start=1)])
+
+
+def section(title: str, items: Sequence[str], limit: int = 15) -> Html:
+    """Una sección: el título en negrita y sus líneas (como máximo `limit`; luego "y N más")."""
+    lines: list[str] = [bold(title), *items[:limit]]
+    if len(items) > limit:
+        lines.append(f"y {len(items) - limit} más")
+    return block(*lines)
+
+
+def screen(title: str, *blocks: str | None) -> Html:
+    """Una pantalla: título en negrita y bloques separados por una línea en blanco."""
+    return paragraphs(bold(title), *[part for part in blocks if part])
+
+
+@dataclass(frozen=True)
+class PendingRow:
+    """Una tarea de la lista de /pendientes."""
+
+    title: str
+    area: str | None = None
+    when: str | None = None  # ya con `fecha_corta`
+
+
+NOTHING_PENDING = "No tienes tareas pendientes. Todo al día."
+TASK_PROMPT = "¿Qué hago con esta tarea?"
+EMPTY_TODAY = "Nada para hoy: no hay tareas que venzan ni recordatorios."
+NO_REMINDERS = "No tienes recordatorios pendientes."
+NO_AREAS = "No hay áreas. Crea una con /nuevaarea nombre."
+BTN_DONE = "Hecha"
+BTN_DROP = "Descartar"
+BTN_BACK = "Volver"
+PENDING_LIMIT = 10  # tareas por mensaje de /pendientes
+LIST_LIMIT = 20  # líneas por sección de /recordatorios
+TODAY_LIMIT = 15  # líneas por sección de /hoy
+
+
+def pending_list(
+    total: int, rows: Sequence[PendingRow], area: str | None, note: str | None = None
+) -> Html:
+    """/pendientes: título con el total, lista numerada y, si faltan, cuántas más hay."""
+    title = "Pendientes" + (f"{SEP}{area}" if area else "") + f" ({total})"
+    if total == 0:
+        return screen(title, NOTHING_PENDING, note)
+    items = [
+        join([part for part in (clip(row.title), row.area, row.when) if part], SEP) for row in rows
+    ]
+    extra = total - len(rows)
+    footer = f"y {extra} más: filtra por área (/pendientes nombre)" if extra > 0 else None
+    return screen(title, numbered(items), footer, note)
+
+
+def pending_detail(row: PendingRow) -> Html:
+    """Una tarea abierta desde la lista: su título y sus datos con etiqueta."""
+    details = []
+    if row.area:
+        details.append(detail("Área", row.area))
+    if row.when:
+        details.append(detail("Vence", row.when))
+    return card(row.title, None, details, note=TASK_PROMPT)
+
+
+def _help_group(title: str, *lines: str) -> Html:
+    return block(bold(title), *lines)
+
+
+HELP = screen(
+    "Ayuda",
+    _help_group(
+        "Anotar",
+        "Escribe cualquier mensaje: lo guardo en tu bandeja y te pregunto qué es.",
+        f"/tarea texto{SEP}guardar una tarea",
+        f"/nota texto{SEP}guardar una nota",
+        f"/recordar texto{SEP}crear un recordatorio con su fecha",
+    ),
+    _help_group(
+        "Consultar",
+        f"/hoy [área]{SEP}lo que vence hoy",
+        f"/pendientes [área]{SEP}tus tareas abiertas",
+        f"/recordatorios{SEP}avisos pendientes y detenidos",
+    ),
+    _help_group(
+        "Áreas",
+        f"/areas{SEP}ver las áreas",
+        f"/nuevaarea nombre{SEP}crear un área",
+    ),
+    _help_group("Otros", f"/start{SEP}saludo", f"/ayuda{SEP}esta lista"),
+)
+START = card(
+    "Hola, soy tu asistente personal",
+    note="Escribe lo que quieras anotar y te pregunto qué es. /ayuda muestra los comandos.",
+)
+
+
+def dia_largo(moment_utc: datetime, tz_name: str, now: Clock) -> str:
+    """El día sin la hora: "sábado 3 de octubre"."""
+    return fecha_larga(moment_utc, tz_name, now).rpartition(", ")[0]

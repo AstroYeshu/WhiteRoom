@@ -67,11 +67,16 @@ def test_todo_lo_que_se_envia_es_html_valido(generated):
             assert html_problems("\n".join(body)) == [], message
 
 
-def test_las_filas_de_botones_no_tienen_mas_de_dos(generated):
+def test_las_filas_de_botones_no_tienen_mas_de_dos_salvo_los_numeros(generated):
+    """Filas de 2; solo la botonera de números de /pendientes va de a 5 (1 2 3 4 5)."""
     for screen in screens(generated):
         for line in screen.splitlines():
             if line.startswith("["):
-                assert len(re.findall(r"\[[^\[\]]+\]", line)) <= 2, line
+                labels = re.findall(r"\[([^\[\]]+)\]", line)
+                if all(label.isdigit() for label in labels):
+                    assert len(labels) <= 5, line
+                else:
+                    assert len(labels) <= 2, line
 
 
 def button_labels(text: str) -> list[str]:

@@ -21,7 +21,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 
 - Rediseño de mensajes (en pausa el 7c): corte 1 HECHO (`formato.py`, HTML con reintento en texto plano, aviso de
   recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Corte 2 HECHO (captura en una tarjeta: un solo mensaje que
-  evoluciona; `edit_text` con botones y distribución). Falta el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
+  evoluciona; `edit_text` con botones y distribución). Corte 3 HECHO (`/pendientes` en un solo mensaje numerado, `/hoy`, `/recordatorios`
+  con detenidos aparte, `/areas`, `/ayuda` agrupada; aviso breve para botones viejos). El 7c sigue en pausa.
 
 ## Pruebas del corte 2 (rediseño de mensajes), una línea por archivo
 - `tests/test_card.py` (nuevo, 29 pruebas): un solo mensaje por captura (tarea, nota, recordatorio, Cambiar, pregunta del parser, los tres

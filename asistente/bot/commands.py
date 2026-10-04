@@ -1,7 +1,8 @@
 """Comandos del dueño: /hoy, /pendientes, /recordatorios, /recordar, /tarea, /nota, /areas,
 /nuevaarea. Independientes de la plataforma: reciben un `Ctx` y el texto tras el comando.
 
-El texto del usuario NUNCA va al log; sí los ids y los códigos estables (motivos de parada).
+Los textos salen de `formato.py` (con todo el texto del usuario escapado). El texto del usuario
+NUNCA va al log; sí los ids y los códigos estables (motivos de parada).
 """
 
 from __future__ import annotations
@@ -9,22 +10,21 @@ from __future__ import annotations
 import logging
 from datetime import datetime, time, timedelta
 
+from asistente import formato as fmt
 from asistente.bot import inbox
 from asistente.bot.inbox import Ctx
-from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
+from asistente.bot.ui import show
 from asistente.channels.base import Choice, IncomingChoice
 from asistente.choices import encode_choice_id
 from asistente.core import areas, reminders, tasks
-from asistente.parsing.dates import format_when
 from asistente.timeutil import from_utc_iso, local_to_utc, to_local
 
 logger = logging.getLogger(__name__)
 
-ACTION_TASK_DONE = "tk_done"
-ACTION_TASK_DROP = "tk_drop"
-PENDING_LIMIT = 10  # tareas de /pendientes: cada una es un mensaje con botones
-TODAY_LIMIT = 15  # líneas por sección de /hoy
-REMINDERS_LIMIT = 20
+ACTION_PENDING = "pd"  # pd:o:AREA:TAREA | pd:h:AREA:TAREA | pd:d:AREA:TAREA | pd:b:AREA
+VERB_OPEN, VERB_DONE, VERB_DROP, VERB_BACK = "o", "h", "d", "b"
+PENDING_LIMIT = fmt.PENDING_LIMIT
+NUMBERS_PER_ROW = 5
 
 # Códigos estables de `reminders.stop_reason` -> lenguaje claro. Nunca se muestra el código crudo.
 STOP_REASON_TEXT = {
@@ -56,14 +56,9 @@ def stop_reason_text(code: str) -> str | None:
 # --- Utilidades ------------------------------------------------------------------------------
 
 
-def _clock_text(moment: datetime, ctx: Ctx) -> str:
-    """ "5:00 pm" (la hora de format_when, sin el día)."""
-    return format_when(moment, ctx.tz_name, ctx.now).rpartition(", ")[2]
-
-
-def _area_suffix(ctx: Ctx, area_id: int | None) -> str:
+def _area_name(ctx: Ctx, area_id: int | None) -> str | None:
     area = areas.get_area(ctx.conn, area_id) if area_id is not None else None
-    return f" [{area.name}]" if area is not None else ""
+    return area.name if area is not None else None
 
 
 async def _area_filter(ctx: Ctx, args: str) -> tuple[bool, int | None]:
@@ -73,20 +68,10 @@ async def _area_filter(ctx: Ctx, args: str) -> tuple[bool, int | None]:
         return True, None
     area = areas.find_area_by_name(ctx.conn, name)
     if area is None:
-        await ctx.channel.send_text(
-            ctx.user_ref,
-            f"No encuentro el área «{shown(name)}». Escribe /areas para ver las que hay.",
-        )
+        message = f"No encuentro el área «{fmt.clip(name)}». Escribe /areas para ver las que hay."
+        await ctx.channel.send_text(ctx.user_ref, fmt.aviso(message))
         return False, None
     return True, area.id
-
-
-def _more(lines: list[str], limit: int) -> list[str]:
-    return (
-        lines[:limit]
-        if len(lines) <= limit
-        else [*lines[:limit], f"...y {len(lines) - limit} más."]
-    )
 
 
 # --- /hoy ------------------------------------------------------------------------------------
@@ -101,104 +86,149 @@ async def today(ctx: Ctx, args: str) -> None:
     # El día termina a las 00:00 LOCALES de mañana (no a medianoche UTC).
     day_end = local_to_utc(datetime.combine(today_local + timedelta(days=1), time(0)), ctx.tz_name)
 
-    task_lines = []
+    task_items: list[fmt.Html] = []
     for task in tasks.list_due_before(ctx.conn, day_end, area_id):
         assert task.due_at_utc is not None
         due = from_utc_iso(task.due_at_utc)
+        when = fmt.fecha_corta(due, ctx.tz_name, ctx.now)
         if to_local(due, ctx.tz_name).date() < today_local:
-            when = f"vencida: {format_when(due, ctx.tz_name, ctx.now)}"
-        else:
-            when = f"hoy, {_clock_text(due, ctx)}"
-        task_lines.append(f"- {task.title} ({when}){_area_suffix(ctx, task.area_id)}")
+            when = f"vencida {when}"
+        area = None if area_id is not None else _area_name(ctx, task.area_id)
+        task_items.append(fmt.bullet(fmt.clip(task.title), when, area))
 
-    reminder_lines = []
+    reminder_items: list[fmt.Html] = []
     for reminder in reminders.list_pending(ctx.conn):
         fire = from_utc_iso(reminder.fire_at_utc)
         if fire >= day_end or (area_id is not None and reminder.area_id != area_id):
             continue
-        if to_local(fire, ctx.tz_name).date() < today_local:
-            when = format_when(fire, ctx.tz_name, ctx.now)
-        else:
-            when = _clock_text(fire, ctx)
-        stopped = " (detenido)" if reminder.stopped else ""
-        line = f"- {when}: {reminder.text}{_area_suffix(ctx, reminder.area_id)}{stopped}"
-        reminder_lines.append(line)
+        area = None if area_id is not None else _area_name(ctx, reminder.area_id)
+        when = fmt.fecha_corta(fire, ctx.tz_name, ctx.now)
+        stopped = "detenido" if reminder.stopped else None
+        reminder_items.append(fmt.bullet(when, fmt.clip(reminder.text), area, stopped))
 
-    header = format_when(moment, ctx.tz_name, ctx.now).rpartition(", ")[0]
-    lines = [f"Hoy, {header}"]
-    if task_lines:
-        lines += ["Tareas:", *_more(task_lines, TODAY_LIMIT)]
-    if reminder_lines:
-        lines += ["Recordatorios:", *_more(reminder_lines, TODAY_LIMIT)]
-    if not task_lines and not reminder_lines:
-        lines.append("No tienes nada para hoy.")
+    title = f"Hoy{fmt.SEP}{fmt.dia_largo(moment, ctx.tz_name, ctx.now)}"
+    if area_id is not None:
+        title += f"{fmt.SEP}{_area_name(ctx, area_id)}"
+    blocks: list[str | None] = []
+    if task_items:
+        blocks.append(fmt.section("Tareas", task_items, fmt.TODAY_LIMIT))
+    if reminder_items:
+        blocks.append(fmt.section("Recordatorios", reminder_items, fmt.TODAY_LIMIT))
+    if not blocks:
+        blocks.append(fmt.EMPTY_TODAY)
     inbox_count = tasks.count_inbox(ctx.conn) if area_id is None else 0
     if inbox_count:
-        lines.append(f"{inbox_count} en bandeja sin área")
-    await ctx.channel.send_text(ctx.user_ref, "\n".join(lines))
+        blocks.append(f"{inbox_count} en bandeja sin área")
+    await ctx.channel.send_text(ctx.user_ref, fmt.screen(title, *blocks))
 
 
-# --- /pendientes ---------------------------------------------------------------------------------
+# --- /pendientes: un solo mensaje ----------------------------------------------------------------
+
+
+def _pending_view(
+    ctx: Ctx, area_id: int | None, note: str | None = None
+) -> tuple[fmt.Html, list[Choice], tuple[int, ...] | None]:
+    """La lista (texto, un botón por número y su distribución); sin tareas, sin botones."""
+    open_tasks = tasks.list_open(ctx.conn, area_id, limit=10_000)
+    shown_tasks = open_tasks[:PENDING_LIMIT]
+    rows = []
+    for task in shown_tasks:
+        due = from_utc_iso(task.due_at_utc) if task.due_at_utc else None
+        rows.append(
+            fmt.PendingRow(
+                task.title,
+                None if area_id is not None else _area_name(ctx, task.area_id),
+                fmt.fecha_corta(due, ctx.tz_name, ctx.now) if due else None,
+            )
+        )
+    text = fmt.pending_list(len(open_tasks), rows, _area_name(ctx, area_id), note)
+    choices = [
+        Choice(encode_choice_id(ACTION_PENDING, VERB_OPEN, area_id or 0, task.id), str(number))
+        for number, task in enumerate(shown_tasks, start=1)
+    ]
+    layout = fmt.rows_layout(len(choices), per_row=NUMBERS_PER_ROW) if choices else None
+    return text, choices, layout
 
 
 async def pending(ctx: Ctx, args: str) -> None:
     ok, area_id = await _area_filter(ctx, args)
     if not ok:
         return
-    open_tasks = tasks.list_open(ctx.conn, area_id, limit=10_000)
-    if not open_tasks:
-        await ctx.channel.send_text(ctx.user_ref, "No tienes tareas pendientes.")
-        return
-    await ctx.channel.send_text(ctx.user_ref, f"Pendientes ({len(open_tasks)}):")
-    for task in open_tasks[:PENDING_LIMIT]:
-        text = f"{task.title}{_area_suffix(ctx, task.area_id)}"
-        if task.due_at_utc:
-            due = format_when(from_utc_iso(task.due_at_utc), ctx.tz_name, ctx.now)
-            text += f" (vence: {due})"
-        await ctx.channel.send_choices(
-            ctx.user_ref,
-            text,
-            [
-                Choice(encode_choice_id(ACTION_TASK_DONE, task.id), "Hecha"),
-                Choice(encode_choice_id(ACTION_TASK_DROP, task.id), "Descartar"),
-            ],
-        )
-    extra = len(open_tasks) - PENDING_LIMIT
-    if extra > 0:
-        await ctx.channel.send_text(
-            ctx.user_ref, f"Hay {extra} más. Filtra por área: /pendientes nombre."
-        )
+    text, choices, layout = _pending_view(ctx, area_id)
+    if choices:
+        await ctx.channel.send_choices(ctx.user_ref, text, choices, layout=layout)
+    else:
+        await ctx.channel.send_text(ctx.user_ref, text)
 
 
-async def handle_task_choice(
-    ctx: Ctx, choice: IncomingChoice, action: str, parts: list[str]
+def _ids(parts: list[str]) -> list[int] | None:
+    if all(part.isascii() and part.isdigit() for part in parts):
+        return [int(part) for part in parts]
+    return None
+
+
+async def _refresh_list(
+    ctx: Ctx, choice: IncomingChoice, area_id: int | None, note: str | None = None
 ) -> None:
-    """`tk_done:ID` / `tk_drop:ID`. Pulsar dos veces o sobre una tarea ya cerrada no da error."""
-    task = None
-    if len(parts) == 1 and parts[0].isascii() and parts[0].isdigit():
-        task = tasks.get_task(ctx.conn, int(parts[0]))
-    if task is None:
-        await show(ctx.channel, choice, STALE_CHOICE_TEXT)
-        return
-    if action == ACTION_TASK_DONE:
-        closed, label = tasks.mark_done(ctx.conn, task.id, ctx.now), "Hecha"
+    text, choices, layout = _pending_view(ctx, area_id, note)
+    await show(ctx.channel, choice, text, choices or None, layout)
+
+
+async def handle_pending_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str]) -> str | None:
+    """`pd:VERBO:AREA[:TAREA]`: abrir una tarea, Hecha, Descartar o Volver a la lista. No guarda
+    estado: todo viaja en el id, así que los botones sobreviven a un reinicio. Devuelve el aviso
+    breve si el botón ya no aplica (tarea cerrada, id mal formado)."""
+    verb = parts[0] if parts else ""
+    ids = _ids(parts[1:])
+    needs_task = verb in (VERB_OPEN, VERB_DONE, VERB_DROP)
+    if verb not in (VERB_OPEN, VERB_DONE, VERB_DROP, VERB_BACK) or ids is None:
+        return fmt.TOAST_STALE
+    if len(ids) != (2 if needs_task else 1):
+        return fmt.TOAST_STALE
+    area_id = ids[0] or None
+    if area_id is not None and areas.get_area(ctx.conn, area_id) is None:
+        area_id = None
+    if verb == VERB_BACK:
+        await _refresh_list(ctx, choice, area_id)
+        return None
+    task = tasks.get_task(ctx.conn, ids[1])
+    if task is None or task.status != "open":  # ya no está abierta: aviso y la lista al día
+        await _refresh_list(ctx, choice, area_id)
+        return fmt.TOAST_STALE
+    if verb == VERB_OPEN:
+        due = from_utc_iso(task.due_at_utc) if task.due_at_utc else None
+        row = fmt.PendingRow(
+            task.title,
+            _area_name(ctx, task.area_id),
+            fmt.fecha_corta(due, ctx.tz_name, ctx.now) if due else None,
+        )
+        ids_for = (area_id or 0, task.id)
+        buttons = [
+            Choice(encode_choice_id(ACTION_PENDING, VERB_DONE, *ids_for), fmt.BTN_DONE),
+            Choice(encode_choice_id(ACTION_PENDING, VERB_DROP, *ids_for), fmt.BTN_DROP),
+            Choice(encode_choice_id(ACTION_PENDING, VERB_BACK, area_id or 0), fmt.BTN_BACK),
+        ]
+        await show(ctx.channel, choice, fmt.pending_detail(row), buttons, (2, 1))
+        return None
+    if verb == VERB_DONE:
+        closed, state = tasks.mark_done(ctx.conn, task.id, ctx.now), "Hecha"
     else:
-        closed, label = tasks.drop_task(ctx.conn, task.id, ctx.now), "Descartada"
-    if closed:
-        logger.info("Tarea %s: %s", task.id, label.lower())
-        await show(ctx.channel, choice, f"{label}: {task.title}")
-    else:
-        await show(ctx.channel, choice, f"Esta tarea ya no está abierta: {task.title}")
+        closed, state = tasks.drop_task(ctx.conn, task.id, ctx.now), "Descartada"
+    if not closed:
+        await _refresh_list(ctx, choice, area_id)
+        return fmt.TOAST_STALE
+    logger.info("Tarea %s: %s", task.id, state.lower())
+    note = fmt.state_line(state, fmt.clip(task.title))
+    await _refresh_list(ctx, choice, area_id, note)
+    return None
 
 
-# --- /recordatorios -----------------------------------------------------------------------------
+# --- /recordatorios: pendientes y detenidos por separado -----------------------------------------
 
 
-def _reminder_line(ctx: Ctx, reminder: reminders.Reminder) -> str:
-    when = format_when(from_utc_iso(reminder.fire_at_utc), ctx.tz_name, ctx.now)
-    line = f"- {when}: {reminder.text}{_area_suffix(ctx, reminder.area_id)}"
-    if reminder.rrule:
-        line += f" ({inbox.describe_rrule(reminder.rrule)})"
+def _reminder_item(ctx: Ctx, reminder: reminders.Reminder) -> fmt.Html:
+    when = fmt.fecha_corta(from_utc_iso(reminder.fire_at_utc), ctx.tz_name, ctx.now)
+    area = _area_name(ctx, reminder.area_id)
     if reminder.stopped:
         code = reminder.stop_reason or ""
         reason = stop_reason_text(code)
@@ -207,30 +237,39 @@ def _reminder_line(ctx: Ctx, reminder: reminders.Reminder) -> str:
                 "Recordatorio %s detenido con un motivo desconocido: %r", reminder.id, code
             )
             reason = UNKNOWN_STOP_TEXT
-        line += f" (detenido: {reason})"
-    return line
+        return fmt.bullet(when, fmt.clip(reminder.text, 80), area, f"Motivo: {reason}")
+    repeat = inbox.describe_rrule(reminder.rrule) if reminder.rrule else None
+    return fmt.bullet(when, fmt.clip(reminder.text, 80), area, repeat)
 
 
 async def reminders_list(ctx: Ctx, args: str) -> None:
-    pending_reminders = reminders.list_pending(ctx.conn)
-    if not pending_reminders:
-        await ctx.channel.send_text(ctx.user_ref, "No tienes recordatorios pendientes.")
-        return
-    lines = [_reminder_line(ctx, reminder) for reminder in pending_reminders]
-    text = "\n".join([f"Recordatorios pendientes ({len(lines)}):", *_more(lines, REMINDERS_LIMIT)])
-    await ctx.channel.send_text(ctx.user_ref, text)
+    pending_items: list[fmt.Html] = []
+    stopped_items: list[fmt.Html] = []
+    for reminder in reminders.list_pending(ctx.conn):
+        target = stopped_items if reminder.stopped else pending_items
+        target.append(_reminder_item(ctx, reminder))
+    blocks: list[str | None] = []
+    if pending_items:
+        title = f"Pendientes ({len(pending_items)})"
+        blocks.append(fmt.section(title, pending_items, fmt.LIST_LIMIT))
+    if stopped_items:
+        title = f"Detenidos ({len(stopped_items)})"
+        blocks.append(fmt.section(title, stopped_items, fmt.LIST_LIMIT))
+    if not blocks:
+        blocks.append(fmt.NO_REMINDERS)
+    await ctx.channel.send_text(ctx.user_ref, fmt.screen("Recordatorios", *blocks))
 
 
 # --- /recordar, /tarea, /nota --------------------------------------------------------------------
 
-REMIND_USAGE = (
+REMIND_USAGE = fmt.aviso(
     "Escribe /recordar seguido de qué y cuándo, por ejemplo: /recordar mañana 8 am llevar tarea"
 )
-TASK_USAGE = "Escribe /tarea seguido de la tarea, por ejemplo: /tarea comprar pan"
-NOTE_USAGE = (
+TASK_USAGE = fmt.aviso("Escribe /tarea seguido de la tarea, por ejemplo: /tarea comprar pan")
+NOTE_USAGE = fmt.aviso(
     "Escribe /nota seguido de la nota, por ejemplo: /nota la clave del wifi está en el router"
 )
-NEW_AREA_USAGE = "Escribe /nuevaarea seguido del nombre, por ejemplo: /nuevaarea Salud"
+NEW_AREA_USAGE = fmt.aviso("Escribe /nuevaarea seguido del nombre, por ejemplo: /nuevaarea Salud")
 
 
 async def remind(ctx: Ctx, args: str) -> None:
@@ -254,19 +293,21 @@ async def new_note(ctx: Ctx, args: str) -> None:
     await inbox.capture_as(ctx, args, inbox.KIND_NOTE)
 
 
-# --- /areas y /nuevaarea -----------------------------------------------------------------
+# --- /areas y /nuevaarea -------------------------------------------------------------------------
 
 
 async def areas_list(ctx: Ctx, args: str) -> None:
     available = areas.list_areas(ctx.conn)
     if not available:
-        await ctx.channel.send_text(ctx.user_ref, "No hay áreas. Crea una con /nuevaarea nombre.")
+        await ctx.channel.send_text(ctx.user_ref, fmt.screen("Áreas", fmt.NO_AREAS))
         return
-    lines = [
-        f"- {area.name}" + ("" if area.description.strip() else " (sin descripción)")
+    items = [
+        fmt.bullet(area.name, None if area.description.strip() else "sin descripción")
         for area in available
     ]
-    await ctx.channel.send_text(ctx.user_ref, "\n".join(["Áreas:", *lines]))
+    await ctx.channel.send_text(
+        ctx.user_ref, fmt.screen(f"Áreas ({len(items)})", fmt.block(*items))
+    )
 
 
 async def new_area(ctx: Ctx, args: str) -> None:
@@ -276,7 +317,7 @@ async def new_area(ctx: Ctx, args: str) -> None:
     try:
         name = areas.validate_new_name(ctx.conn, args)
     except areas.AreaError as error:
-        await ctx.channel.send_text(ctx.user_ref, str(error))
+        await ctx.channel.send_text(ctx.user_ref, fmt.aviso(str(error)))
         return
     await inbox.start_new_area(ctx, name)
 

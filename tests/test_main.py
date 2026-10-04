@@ -16,7 +16,7 @@ def test_dry_run_arranca_sin_secretos_y_responde(monkeypatch, tmp_path, capsys):
     sys.stdout.seek(0)
     output = sys.stdout.read()
     assert "Hola" in output
-    assert "Comandos disponibles" in output
+    assert "Ayuda" in output and "Consultar" in output  # /ayuda, agrupada por tipo
     assert "¿Qué es?\n\nhola" in output  # el mensaje libre abre la tarjeta de la bandeja
     assert "¿Qué es?" in output
     assert (tmp_path / "data" / "dry_run.db").exists()

@@ -236,3 +236,60 @@ def test_etiqueta_con_hora_usa_am_pm_y_cabe_en_un_boton(day, when, expected):
     result = fmt.etiqueta_hora(day, local(when), TZ)
     assert result == expected
     assert len(result) <= fmt.MAX_LABEL
+
+
+# --- Corte 3: piezas de las vistas (listas, secciones, pantallas) --------------------------------
+
+
+def test_clip_acorta_con_puntos_suspensivos_y_junta_espacios():
+    assert fmt.clip("hola   mundo") == "hola mundo"
+    assert fmt.clip("x" * 100, 10) == "x" * 9 + "…"
+    assert fmt.clip("corto", 10) == "corto"
+
+
+def test_bullet_une_las_partes_con_punto_medio_y_salta_las_vacias():
+    assert fmt.bullet("a", None, "b", "", "c") == Html("- a · b · c")
+
+
+def test_numbered_numera_desde_uno():
+    assert fmt.numbered(["a", "b"]) == Html("1. a\n2. b")
+
+
+def test_section_pone_el_titulo_en_negrita_y_limita_con_un_resumen():
+    assert fmt.section("Tareas", ["- a", "- b"]) == Html("<b>Tareas</b>\n- a\n- b")
+    cut = fmt.section("Tareas", ["- a", "- b", "- c"], limit=2)
+    assert fmt.plain(cut) == "Tareas\n- a\n- b\ny 1 más"
+
+
+def test_screen_separa_los_bloques_con_una_linea_en_blanco_y_salta_los_vacios():
+    assert fmt.screen("Hoy", "uno", None, "", "dos") == Html("<b>Hoy</b>\n\nuno\n\ndos")
+
+
+@pytest.mark.parametrize("text", HOSTILE)
+def test_las_piezas_de_las_vistas_escapan_el_texto(text):
+    built = fmt.screen(
+        text,
+        fmt.section(text, [fmt.bullet(text, text)]),
+        fmt.numbered([fmt.bullet(text)]),
+    )
+    assert html_problems(built) == []
+    assert text in fmt.plain(built)
+
+
+def test_pending_list_numera_pone_el_total_y_resume_las_que_faltan():
+    rows = [fmt.PendingRow("uno", "uni", "hoy, 5:00 pm"), fmt.PendingRow("dos")]
+    assert fmt.plain(fmt.pending_list(5, rows, None)) == (
+        "Pendientes (5)\n\n1. uno · uni · hoy, 5:00 pm\n2. dos\n\n"
+        "y 3 más: filtra por área (/pendientes nombre)"
+    )
+    assert fmt.plain(fmt.pending_list(2, rows, "uni")).startswith("Pendientes · uni (2)\n\n")
+    assert fmt.pending_list(0, [], None, note="x") == Html(
+        "<b>Pendientes (0)</b>\n\nNo tienes tareas pendientes. Todo al día.\n\nx"
+    )
+
+
+def test_pending_list_no_escapa_dos_veces():
+    built = fmt.pending_list(1, [fmt.PendingRow("a & b <c>", "x&y", None)], None)
+    assert html_problems(built) == []
+    assert fmt.plain(built).endswith("1. a & b <c> · x&y")
+    assert "&amp;amp;" not in built
