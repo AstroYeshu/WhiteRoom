@@ -102,6 +102,29 @@ def set_due(
 CONVERSION_REASONS = ("converted_to_reminder", "converted_to_note")
 
 
+def _close_in_transaction(
+    conn: sqlite3.Connection,
+    task_id: int,
+    status: str,
+    now: Clock,
+    closed_reason: str | None,
+) -> bool:
+    """Cierra una tarea abierta o pospuesta SIN abrir transacción (la pone quien llama).
+
+    Cancela los recordatorios pendientes de la tarea (preparación incluida): una tarea ya hecha
+    o descartada no debe seguir avisando.
+    """
+    stamp = to_utc_iso(now())
+    cursor = conn.execute(
+        "UPDATE tasks SET status = ?, closed_at = ?, updated_at = ?, closed_reason = ?"
+        " WHERE id = ? AND status IN ('open', 'postponed')",
+        (status, stamp, stamp, closed_reason, task_id),
+    )
+    if cursor.rowcount == 1:
+        reminders.cancel_for_task_in_transaction(conn, task_id)
+    return cursor.rowcount == 1
+
+
 def _close(
     conn: sqlite3.Connection,
     task_id: int,
@@ -109,21 +132,9 @@ def _close(
     now: Clock,
     closed_reason: str | None = None,
 ) -> bool:
-    """Cierra una tarea abierta o pospuesta. Devuelve False si no existía o ya estaba cerrada.
-
-    Cancela en la misma transacción los recordatorios pendientes de la tarea (preparación
-    incluida): una tarea ya hecha o descartada no debe seguir avisando.
-    """
-    stamp = to_utc_iso(now())
+    """Cierra una tarea abierta o pospuesta. Devuelve False si no existía o ya estaba cerrada."""
     with conn:
-        cursor = conn.execute(
-            "UPDATE tasks SET status = ?, closed_at = ?, updated_at = ?, closed_reason = ?"
-            " WHERE id = ? AND status IN ('open', 'postponed')",
-            (status, stamp, stamp, closed_reason, task_id),
-        )
-        if cursor.rowcount == 1:
-            reminders.cancel_for_task_in_transaction(conn, task_id)
-    return cursor.rowcount == 1
+        return _close_in_transaction(conn, task_id, status, now, closed_reason)
 
 
 def mark_done(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
@@ -144,6 +155,75 @@ def close_as_converted(conn: sqlite3.Connection, task_id: int, reason: str, now:
     if reason not in CONVERSION_REASONS:
         raise ValueError(f"Motivo de conversión inválido: {reason!r}")
     return _close(conn, task_id, "dropped", now, reason)
+
+
+def convert_to_reminder(
+    conn: sqlite3.Connection,
+    task_id: int,
+    text: str,
+    fire_at_utc: datetime,
+    now: Clock,
+    *,
+    area_id: int | None = None,
+    rrule: str | None = None,
+) -> reminders.Reminder | None:
+    """Convierte una tarea de bandeja en un recordatorio, todo en UNA transacción.
+
+    Cierra la tarea como `converted_to_reminder` y crea el recordatorio (sin `task_id`, así la
+    cascada de la tarea no lo cancela). Devuelve None si la tarea ya no estaba abierta (no se
+    crea nada). Si la fecha es pasada lanza `PastReminderError` y tampoco queda nada hecho.
+    """
+    with conn:
+        if not _close_in_transaction(conn, task_id, "dropped", now, "converted_to_reminder"):
+            return None
+        reminder_id = reminders.insert_reminder_in_transaction(
+            conn, text, fire_at_utc, now, area_id=area_id, rrule=rrule
+        )
+    return reminders.get_reminder(conn, reminder_id)
+
+
+def _reopen_in_transaction(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
+    cursor = conn.execute(
+        "UPDATE tasks SET status = 'open', closed_at = NULL, closed_reason = NULL, updated_at = ?"
+        " WHERE id = ? AND status = 'dropped' AND closed_reason IN (?, ?)",
+        (to_utc_iso(now()), task_id, *CONVERSION_REASONS),
+    )
+    return cursor.rowcount == 1
+
+
+def reopen_converted(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
+    """Deshace una conversión de bandeja: la tarea vuelve a `open` y se limpia `closed_reason`.
+
+    Solo reabre tareas cerradas por conversión; una descartada de verdad no se toca.
+    """
+    with conn:
+        return _reopen_in_transaction(conn, task_id, now)
+
+
+class _CannotUndo(Exception):
+    """Interna: obliga a deshacer la transacción entera."""
+
+
+def undo_reminder_conversion(
+    conn: sqlite3.Connection, task_id: int, reminder_id: int, now: Clock
+) -> bool:
+    """Deshacer: cancela el recordatorio y reabre la tarea de bandeja en UNA transacción.
+
+    False (sin cambiar nada) si el recordatorio ya no está pendiente —ya sonó, se pospuso o se
+    canceló— o si la tarea ya no es una conversión.
+    """
+    try:
+        with conn:
+            cursor = conn.execute(
+                "UPDATE reminders SET status = 'cancelled'"
+                " WHERE id = ? AND status = 'pending' AND task_id IS NULL",
+                (reminder_id,),
+            )
+            if cursor.rowcount != 1 or not _reopen_in_transaction(conn, task_id, now):
+                raise _CannotUndo
+    except _CannotUndo:
+        return False
+    return True
 
 
 def postpone_task(conn: sqlite3.Connection, task_id: int, until_utc: datetime, now: Clock) -> bool:

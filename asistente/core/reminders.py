@@ -171,6 +171,23 @@ def _insert_reminder(
     return cursor.lastrowid
 
 
+def insert_reminder_in_transaction(
+    conn: sqlite3.Connection,
+    text: str,
+    fire_at_utc: datetime,
+    now: Clock,
+    *,
+    area_id: int | None = None,
+    rrule: str | None = None,
+) -> int:
+    """Inserta un recordatorio suelto SIN abrir transacción (la pone quien llama).
+
+    Sirve para juntar en una sola transacción el alta y otra escritura (p. ej. cerrar la tarea
+    de bandeja que se convirtió en este recordatorio). Devuelve el id.
+    """
+    return _insert_reminder(conn, text, fire_at_utc, now, area_id, None, rrule, 1)
+
+
 def list_pending(conn: sqlite3.Connection) -> list[Reminder]:
     """Recordatorios que aún no se han avisado (incluye los detenidos, para marcarlos)."""
     rows = conn.execute("SELECT * FROM reminders WHERE status = 'pending' ORDER BY fire_at_utc, id")
