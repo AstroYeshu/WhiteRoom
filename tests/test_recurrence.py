@@ -29,6 +29,13 @@ def utc(local_text: str, tz: str = TZ) -> datetime:
             True,
             "tomar vitaminas",
         ),
+        (
+            "todos los días a las 2 menos cuarto",
+            "FREQ=DAILY",
+            "2026-10-04 13:45",
+            True,
+            "",
+        ),  # regla 3
         ("todos los días", "FREQ=DAILY", "2026-10-04 09:00", False, ""),  # 09:00 de hoy ya pasó
         ("todos los días 8pm leer", "FREQ=DAILY", "2026-10-03 20:00", True, "leer"),
         ("cada domingo 8pm", "FREQ=WEEKLY;BYDAY=SU", "2026-10-04 20:00", True, ""),
@@ -75,7 +82,6 @@ def test_expresiones_reconocidas(text, rrule, first, has_time, title):
         ("todos los días a las 8 y a las 5", "two_dates"),
         ("todos los días mañana", "two_dates"),
         ("cada lunes el 15 de octubre", "two_dates"),
-        ("todos los días a las 2 menos cuarto", "unrecognized_time"),
         ("cada martes 8:30", "ambiguous_meridiem"),
         ("todos los días a las 8", "ambiguous_meridiem"),
         ("de lunes a viernes a las 6", "ambiguous_meridiem"),

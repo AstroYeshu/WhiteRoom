@@ -233,19 +233,28 @@ def split_doubtful_weak(original: str, weak: list[Hit]) -> tuple[list[Hit], bool
 
 # --- Horas ---------------------------------------------------------------------------------
 
-_RE_PERIOD_TIME = re.compile(
-    r"(?:\ba\s+las?\s+)?(?<![\d:])(?P<h>\d{1,2})(?::(?P<m>[0-5]\d))?\s*"
-    r"(?:de|por|en)\s+la\s+(?P<per>manana|tarde|noche|madrugada)\b"
+_HOUR_WORDS = {
+    "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7,
+    "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
+}  # fmt: skip
+_MINUTE_WORDS = {"cinco": 5, "diez": 10, "veinte": 20, "veinticinco": 25, "cuarto": 15, "media": 30}
+_MINUTE_ALT = r"\d{1,2}|" + "|".join(_MINUTE_WORDS)
+# Una sola expresión para toda hora: "a las 8", "a la una", "3:30", "8 pm", "8 a. m.",
+# con "y cuarto / y media / y 15 / y cinco" o "menos cuarto / menos 10". Las palabras ("dos", "una")
+# solo valen tras "a la(s)"; un número sin "a las", sin ":" y sin marcador NO es hora.
+_RE_CLOCK = re.compile(
+    r"(?:\ba\s+las?\s+(?P<hw>\d{1,2}|" + "|".join(_HOUR_WORDS) + r")\b|(?<![\w:])(?P<hd>\d{1,2}))"
+    r"(?::(?P<m>[0-5]\d)(?![\d:]))?"
+    r"(?:\s+(?:y\s+(?P<plus>" + _MINUTE_ALT + r")|menos\s+(?P<minus>" + _MINUTE_ALT + r"))\b)?"
+    r"(?:\s*(?P<ap>[ap])\s*\.?\s*m\b\.?|\s+(?:de|por|en)\s+la\s+(?P<per>manana|tarde|noche|madrugada)\b)?"
 )
-_RE_AMPM = re.compile(
-    r"(?:\ba\s+las?\s+)?(?<![\d:])(?P<h>\d{1,2})(?::(?P<m>[0-5]\d))?\s*(?P<ap>[ap])\.?m\b\.?"
-)
-_RE_COLON = re.compile(r"(?P<pre>\ba\s+las?\s+)?(?<![\d:])(?P<h>\d{1,2}):(?P<m>[0-5]\d)(?![\d:])")
-_RE_A_LAS = re.compile(r"\ba\s+las?\s+(?P<h>\d{1,2})\b(?:\s+y\s+(?P<q>media|cuarto)\b)?(?!:)")
-_RE_NOON = re.compile(r"\b(?:a\s+|al\s+)?mediodia\b")
+_RE_NOON = re.compile(r"\b(?:a\s+|al\s+)?(?:mediodia|medio\s+dia)\b")
+_RE_MIDNIGHT = re.compile(r"\b(?:a\s+|a\s+la\s+)?medianoche\b")
 # Restos que parecen una hora pero no se entendieron: ante la duda se pregunta.
 RE_TIME_LEFTOVER = re.compile(
-    r"\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*[ap]\.?m\b|\bmedianoche\b|\ba\s+las?\s+\d"
+    r"\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*[ap]\s*\.?\s*m\b|\ba\s+las?\s+(?:\d|"
+    + "|".join(_HOUR_WORDS)
+    + r")\b"
     r"|\b(?:de|por|en)\s+la\s+(?:manana|tarde|noche|madrugada)\b"
     r"|\besta\s+(?:manana|tarde|noche)\b|\by\s+(?:media|cuarto)\b|\bmenos\s+(?:cuarto|\d)"
 )
@@ -297,6 +306,12 @@ def _resolve_clock(
     return time(hour, minute), True
 
 
+def _minutes_of(token: str) -> int | None:
+    """ "15" / "cuarto" / "media" / "cinco" -> minutos; None si no es un minuto válido (> 59)."""
+    value = int(token) if token.isdigit() else _MINUTE_WORDS[token]
+    return value if value <= 59 else None
+
+
 def _mask(work: str, start: int, end: int) -> str:
     return work[:start] + " " * (end - start) + work[end:]
 
@@ -320,26 +335,39 @@ def scan_times(
         strong.append(Hit(match.start(), match.end(), "time", value, inferred, (hour, minute)))
         work = _mask(work, match.start(), match.end())
 
-    for m in list(_RE_PERIOD_TIME.finditer(work)):
-        hour, minute = int(m["h"]), int(m["m"] or 0)
-        take(m, hour, minute, _resolve_clock(hour, minute, m["per"], False, ask_range))
-    for m in list(_RE_AMPM.finditer(work)):
-        hour, minute = int(m["h"]), int(m["m"] or 0)
-        take(m, hour, minute, _resolve_clock(hour, minute, m["ap"] + "m", False, ask_range))
-    for m in list(_RE_COLON.finditer(work)):
-        hour_text = m["h"]
-        hour, minute = int(hour_text), int(m["m"])
-        literal24 = len(hour_text) == 2 and hour_text[0] == "0"
-        value, inferred = _resolve_clock(hour, minute, None, literal24, ask_range)
-        if m["pre"] or hour >= 13 or literal24:
-            take(m, hour, minute, (value, inferred))
-        else:
-            weak.append(Hit(m.start(), m.end(), "time", value, inferred, (hour, minute)))
-    for m in list(_RE_A_LAS.finditer(work)):
-        hour, minute = int(m["h"]), {"media": 30, "cuarto": 15}.get(m["q"] or "", 0)
-        take(m, hour, minute, _resolve_clock(hour, minute, None, False, ask_range))
+    for m in list(_RE_CLOCK.finditer(work)):
+        prefixed = m["hw"] is not None
+        hour_text = m["hw"] or m["hd"]
+        hour = int(hour_text) if hour_text.isdigit() else _HOUR_WORDS[hour_text]
+        marker = m["per"] or (m["ap"] + "m" if m["ap"] else None)
+        if not (prefixed or m["m"] or marker):
+            continue  # un número suelto no es hora ("mañana 7 dentista": lo pregunta quien llama)
+        if not prefixed and m["m"] is None and (m["plus"] or m["minus"]):
+            continue
+        minute = int(m["m"] or 0)
+        if m["plus"]:
+            extra = _minutes_of(m["plus"])
+            minute += extra if extra is not None else 99
+        elif m["minus"]:
+            extra = _minutes_of(m["minus"])
+            if extra is None or not 1 <= extra <= 59:
+                minute = 99
+            else:
+                hour = 12 if hour == 1 else hour - 1 if hour >= 2 else 23
+                minute = 60 - extra
+        if minute > 59:
+            take(m, hour, 0, ("invalid_time", False))
+            continue
+        literal24 = prefixed is False and len(hour_text) == 2 and hour_text[0] == "0"
+        resolved = _resolve_clock(hour, minute, marker, literal24, ask_range)
+        if not prefixed and marker is None and not (hour >= 13 or literal24):
+            weak.append(Hit(m.start(), m.end(), "time", *resolved, (hour, minute)))
+            continue
+        take(m, hour, minute, resolved)
     for m in list(_RE_NOON.finditer(work)):
         take(m, 12, 0, (time(12, 0), False))
+    for m in list(_RE_MIDNIGHT.finditer(work)):
+        take(m, 0, 0, ("ambiguous_time", False))
     return strong, weak, work
 
 
@@ -574,6 +602,11 @@ def parse_when(
     meridiem_hit = next((h for h in strong if h.value == "ambiguous_meridiem"), None)
     for hit in strong:
         if isinstance(hit.value, str) and hit is not meridiem_hit:
+            if hit.value == "ambiguous_time" and hit.raw is not None and hit.raw[0] in (0, 12):
+                day_hit = plain_days[0].value if len(plain_days) == 1 else (today, None, None)
+                assert isinstance(day_hit, tuple)
+                options = _midnight_options(day_hit[0], hit.raw[1], tz_name, moment)
+                return _ask(title, "ambiguous_time", options)
             return _ask(title, hit.value)
     if RE_TIME_LEFTOVER.search(work):
         return _ask(title, "unrecognized_time")
@@ -634,6 +667,20 @@ def parse_when(
         has_time=has_time,
         meridiem_inferred=bool(strong) and strong[0].inferred,
     )
+
+
+def _midnight_options(
+    day: date | None, minute: int, tz_name: str, moment: datetime
+) -> tuple[datetime, ...]:
+    """ "12 am" / "medianoche": ¿la de ese día (00:00) o la del día siguiente? Solo las futuras."""
+    if day is None:
+        return ()
+    clock = time(0, minute)
+    options = (
+        local_to_utc(datetime.combine(day, clock), tz_name),
+        local_to_utc(datetime.combine(day + timedelta(days=1), clock), tz_name),
+    )
+    return tuple(option for option in options if option > moment)
 
 
 def _future_alternatives(

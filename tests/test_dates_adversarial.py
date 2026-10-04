@@ -116,3 +116,83 @@ def test_nunca_se_descarta_una_cita_en_una_repeticion():
         "leer Juan 3:16 todos los días", lambda: local(SAT_1530), TZ, DEFAULT_MORNING
     )
     assert result.status == "ok" and result.has_time is False
+
+
+# --- Familia 2: marcadores a. m. / p. m. y horas en palabras (reglas 2 y 3) -----------------------
+MARKERS_AND_WORDS = [
+    ("mañana a las 3 a. m.", SAT_1530, ("ok", "2026-10-04 03:00", True)),
+    ("mañana a las 3 a.m.", SAT_1530, ("ok", "2026-10-04 03:00", True)),
+    ("mañana a las 3 a m", SAT_1530, ("ok", "2026-10-04 03:00", True)),
+    ("mañana a las 3 AM", SAT_1530, ("ok", "2026-10-04 03:00", True)),
+    ("mañana a las 3 A. M.", SAT_1530, ("ok", "2026-10-04 03:00", True)),
+    ("mañana a las 3 p. m.", SAT_1530, ("ok", "2026-10-04 15:00", True)),
+    ("mañana a las 3:30 p.m.", SAT_1530, ("ok", "2026-10-04 15:30", True)),
+    ("mañana 8 a. m.", SAT_1530, ("ok", "2026-10-04 08:00", True)),
+    ("mañana a la una", SAT_1530, ("ok", "2026-10-04 13:00", True)),
+    ("mañana a las dos", SAT_1530, ("ok", "2026-10-04 14:00", True)),
+    ("mañana a las cuatro", SAT_1530, ("ok", "2026-10-04 16:00", True)),
+    (
+        "mañana a las cinco",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 05:00", "2026-10-04 17:00"]),
+    ),
+    ("mañana a las doce", SAT_1530, ("ok", "2026-10-04 12:00", True)),
+    ("mañana a las ocho de la noche", SAT_1530, ("ok", "2026-10-04 20:00", True)),
+    ("mañana a las diez am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("mañana a mediodía", SAT_1530, ("ok", "2026-10-04 12:00", True)),
+    ("mañana al mediodía", SAT_1530, ("ok", "2026-10-04 12:00", True)),
+    ("mañana a medio día", SAT_1530, ("ok", "2026-10-04 12:00", True)),
+    (
+        "mañana a medianoche",
+        SAT_1530,
+        ("ask", "ambiguous_time", ["2026-10-04 00:00", "2026-10-05 00:00"]),
+    ),
+    (
+        "mañana a las 12 am",
+        SAT_1530,
+        ("ask", "ambiguous_time", ["2026-10-04 00:00", "2026-10-05 00:00"]),
+    ),
+    ("mañana a las 3 y 15", SAT_1530, ("ok", "2026-10-04 15:15", True)),
+    ("mañana a las 3 y cuarto", SAT_1530, ("ok", "2026-10-04 15:15", True)),
+    ("mañana a las 3 y media", SAT_1530, ("ok", "2026-10-04 15:30", True)),
+    ("mañana a las dos y cinco", SAT_1530, ("ok", "2026-10-04 14:05", True)),
+    ("mañana a la una y media", SAT_1530, ("ok", "2026-10-04 13:30", True)),
+    ("mañana a las 12 y media", SAT_1530, ("ok", "2026-10-04 12:30", True)),
+    (
+        "mañana a las 7 y 20",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 07:20", "2026-10-04 19:20"]),
+    ),
+    (
+        "mañana a las siete y media",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 07:30", "2026-10-04 19:30"]),
+    ),
+    ("mañana a las 8 y 15 pm", SAT_1530, ("ok", "2026-10-04 20:15", True)),
+    ("mañana a las 4 menos cuarto", SAT_1530, ("ok", "2026-10-04 15:45", True)),
+    ("mañana a las 2 menos 5", SAT_1530, ("ok", "2026-10-04 13:55", True)),
+    ("mañana a la una menos cuarto", SAT_1530, ("ok", "2026-10-04 12:45", True)),
+    (
+        "mañana a las 8 menos cuarto",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 07:45", "2026-10-04 19:45"]),
+    ),
+    ("mañana a las 8 menos 10 pm", SAT_1530, ("ok", "2026-10-04 19:50", True)),
+    (
+        "mañana a las doce menos cuarto",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 11:45", "2026-10-04 23:45"]),
+    ),
+    ("mañana a las 8 y 70", SAT_1530, ("ask", "invalid_time")),
+    ("mañana a las 8 menos 70", SAT_1530, ("ask", "invalid_time")),
+    # No son hora: "a m" / "a" + palabra, y números sueltos
+    ("llevar a mamá mañana", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+    ("mañana comprar 3 a manera", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "now_local", "expected"), MARKERS_AND_WORDS, ids=[c[0] for c in MARKERS_AND_WORDS]
+)
+def test_marcadores_y_horas_en_palabras(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)

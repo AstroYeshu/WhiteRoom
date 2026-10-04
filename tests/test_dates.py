@@ -31,6 +31,7 @@ def utc(local_text: str, tz: str = TZ) -> datetime:
 
 # (frase, fecha local esperada, ¿trae hora?, título esperado o None si no se comprueba)
 OK_CASES = [
+    ("mañana a las 2 menos cuarto", "2026-10-04 13:45", True, None),  # regla 3: "menos cuarto"
     ("mañana 8am", "2026-10-04 08:00", True, None),
     ("mañana a las 8 am", "2026-10-04 08:00", True, None),
     ("mañana a las 8 de la mañana", "2026-10-04 08:00", True, None),
@@ -174,7 +175,12 @@ def test_12_am_y_12_de_la_noche_siguen_preguntando():
     for text in ("mañana a las 12 am", "mañana 12 de la noche", "mañana 12:30 am"):
         result = parse(text)
         assert (result.status, result.reason) == ("ask", "ambiguous_time"), text
-        assert result.candidates == ()
+        # Regla 3 + interpretación 5: las dos medianoches futuras (la de mañana y la siguiente)
+        minute = "30" if "12:30" in text else "00"
+        assert list(result.candidates) == [
+            utc(f"2026-10-04 00:{minute}"),
+            utc(f"2026-10-05 00:{minute}"),
+        ], text
 
 
 def test_h_mm_suelto_sin_dia_no_es_hora():
@@ -242,13 +248,16 @@ ASK_CASES = [
     ("el 30 de febrero", "invalid_date", []),
     ("el 15/13", "invalid_date", []),
     ("en media semana", "invalid_date", []),
-    ("mañana a las 12 de la noche", "ambiguous_time", []),
-    ("mañana a las 12 am", "ambiguous_time", []),
+    ("mañana a las 12 de la noche", "ambiguous_time", ["2026-10-04 00:00", "2026-10-05 00:00"]),
+    ("mañana a las 12 am", "ambiguous_time", ["2026-10-04 00:00", "2026-10-05 00:00"]),
     ("mañana a las 1 de la noche", "ambiguous_time", []),
     ("mañana por la mañana", "unrecognized_time", []),
     ("mañana por la tarde", "unrecognized_time", []),
-    ("mañana medianoche", "unrecognized_time", []),
-    ("mañana a las 2 menos cuarto", "unrecognized_time", []),
+    (
+        "mañana medianoche",
+        "ambiguous_time",
+        ["2026-10-04 00:00", "2026-10-05 00:00"],
+    ),  # regla 3: medianoche
     ("mañana a las 25", "invalid_time", []),
     ("mañana a las 15 pm", "invalid_time", []),
     ("mañana a las 0 am", "invalid_time", []),
