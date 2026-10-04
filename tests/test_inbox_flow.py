@@ -719,3 +719,17 @@ def test_la_confirmacion_sin_hora_dice_hora_por_defecto(bot):
 def test_la_confirmacion_con_hora_no_dice_hora_por_defecto(bot):
     confirmed(bot)
     assert "hora por defecto" not in bot.question[0]
+
+
+def test_los_botones_de_la_pregunta_anterior_no_valen_para_la_siguiente_en_el_mismo_paso(bot, conn):
+    """Dos preguntas seguidas de «¿cuándo?»: el índice del candidato se reutiliza, así que el id
+    del flujo es lo único que impide que un botón viejo apunte a la fecha de la pregunta nueva."""
+    waiting_for_when(bot)
+    bot.say("mañana a las 9")  # pregunta 1: [9:00 am] [9:00 pm]
+    old_nine_am = bot.choice_id("9:00 am")
+    bot.say("hoy a las 8")  # pregunta 2: un solo candidato, el índice 0 es otra fecha (8 pm hoy)
+    bot.press(old_nine_am)
+    assert pending(conn) == []  # el botón viejo NO creó el recordatorio de las 8 pm
+    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    bot.tap("8:00 pm")  # el botón vigente sí
+    assert local_hhmm(pending(conn)[0]) == "2026-10-03 20:00"
