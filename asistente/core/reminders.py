@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 LATE_GRACE = timedelta(minutes=2)  # más tarde que esto = "(retrasado)"
 BACKOFF_BASE_SECONDS = 30
 BACKOFF_CAP_SECONDS = 5 * 60  # tope de espera entre intentos con el canal caído
+RETRY_AFTER_CAP_SECONDS = 10 * 60  # red de seguridad: tope a lo que pide RetryAfter
 GIVE_UP_AFTER = timedelta(hours=24)  # horizonte: desde `first_failed_at` (vive en la base)
 
 ACTION_DONE = "rem_done"
@@ -446,7 +447,10 @@ class ReminderEngine:
             return Delivery.SKIPPED  # un fallo permanente es de ESA fila: los demás siguen
         except Exception as error:  # noqa: BLE001 - cualquier otro fallo se trata como pasajero
             self._fail_transient(
-                reminder, self._now(), getattr(error, "reason", type(error).__name__)
+                reminder,
+                self._now(),
+                getattr(error, "reason", type(error).__name__),
+                getattr(error, "retry_after", None),
             )
             return Delivery.CHANNEL_DOWN
         self._channel_failures = 0  # el canal respondió: se acabó la espera
@@ -535,14 +539,25 @@ class ReminderEngine:
     def _horizon_reason(reason: str) -> str:
         return f"horizon:{reason}"
 
-    def _fail_transient(self, reminder: Reminder, moment: datetime, reason: str) -> None:
+    def _fail_transient(
+        self,
+        reminder: Reminder,
+        moment: datetime,
+        reason: str,
+        retry_after: float | None = None,
+    ) -> None:
         """Fallo pasajero: el CANAL espera más cada vez (con tope); la fila lleva su horizonte.
 
-        No toca `fire_at_utc`. Si el primer fallo de la fila fue hace 24 h o más, se detiene.
+        Si la plataforma pidió una espera (`retry_after`), se espera AL MENOS eso, con un tope de
+        10 min como red de seguridad. No toca `fire_at_utc`. Si el primer fallo de la fila fue hace
+        24 h o más, se detiene.
         """
         self._last_failure_reason = reason
         self._channel_failures += 1
-        self._channel_retry_at = moment + timedelta(seconds=backoff_seconds(self._channel_failures))
+        wait = backoff_seconds(self._channel_failures)
+        if retry_after is not None:
+            wait = max(wait, min(retry_after, RETRY_AFTER_CAP_SECONDS))
+        self._channel_retry_at = moment + timedelta(seconds=wait)
         first_failed = (
             from_utc_iso(reminder.first_failed_at) if reminder.first_failed_at else moment
         )

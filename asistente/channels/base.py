@@ -45,7 +45,14 @@ class ChannelError(Exception):
 
 
 class TransientChannelError(ChannelError):
-    """Falla pasajera (red, timeout, plataforma caída): vale la pena reintentar."""
+    """Falla pasajera (red, timeout, plataforma caída): vale la pena reintentar.
+
+    `retry_after` (segundos) es la espera mínima que pidió la plataforma, si la hubo.
+    """
+
+    def __init__(self, reason: str = "unknown", retry_after: float | None = None) -> None:
+        super().__init__(reason)
+        self.retry_after = retry_after
 
 
 class PermanentChannelError(ChannelError):
