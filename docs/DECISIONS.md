@@ -205,3 +205,6 @@ Se compararon las 30 pruebas quitadas de `test_commands.py` con `test_vistas.py`
 
 ## Kit de despliegue: README
 El README asume Raspberry Pi OS Bookworm (Python 3.11) y el usuario `pi`; los ejemplos usan `/home/pi/WhiteRoom`. Restaurar mueve la base y sus `-wal`/`-shm` a `data/descartado/` (no se borra nada) antes de copiar el respaldo. La checklist de aceptación en la Pi es manual y NO se ha ejecutado: no hay Pi disponible en esta sesión.
+
+## Auditoría de deriva
+`docs/AUDITORIA.md` compara SPEC y código sin arreglar nada. La mayoría de las 13 discrepancias se resuelven editando el SPEC; la única decisión de diseño pendiente es la 10 (cómo será «¿Quitas alguna?» en la Fase 3).

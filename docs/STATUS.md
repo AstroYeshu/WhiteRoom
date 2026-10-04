@@ -70,6 +70,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - 2e HECHO: README reescrito (laptop, dev/prod con dos bots y dos bases, despliegue en la Pi, actualizar, restaurar, checklist de aceptación);
   `tests/test_readme.py` (5 pruebas) vigila que lo que menciona exista. Kit de despliegue COMPLETO; falta solo la verificación real en la Pi (checklist).
 
+- Auditoría SPEC contra código HECHA: `docs/AUDITORIA.md` (13 discrepancias, casi todas de SPEC desactualizado; sin cambios de código).
+- Preguntas abiertas para el dueño: `docs/PREGUNTAS.md`.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
