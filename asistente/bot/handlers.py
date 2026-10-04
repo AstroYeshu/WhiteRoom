@@ -1,8 +1,9 @@
 """Conversación independiente de la plataforma.
 
 Los canales convierten lo recibido en `IncomingMessage` / `IncomingChoice` y llaman aquí.
-Hoy: `/start`, `/ayuda` y los botones de los recordatorios (`rem_done`, `rem_snooze`,
-`rem_tomorrow`). Pulsar un botón EDITA el mensaje (texto nuevo, sin teclado).
+Hoy: `/start`, `/ayuda`, la bandeja de mensajes libres (`inbox.py`) y los botones de los
+recordatorios (`rem_done`, `rem_snooze`, `rem_tomorrow`). Pulsar un botón EDITA el mensaje
+(texto nuevo, sin teclado).
 """
 
 from __future__ import annotations
@@ -11,8 +12,11 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 
+from asistente.bot import inbox
 from asistente.bot.auth import is_allowed
 from asistente.bot.choices import decode_choice_id
+from asistente.bot.conversation import Conversation
+from asistente.bot.ui import STALE_CHOICE_TEXT, show
 from asistente.channels.base import Channel, IncomingChoice, IncomingMessage
 from asistente.core import reminders
 from asistente.parsing.dates import format_when
@@ -27,11 +31,6 @@ START_TEXT = (
 )
 HELP_TEXT = "Comandos disponibles:\n/start - saludo\n/ayuda - esta lista"
 UNKNOWN_COMMAND_TEXT = "No conozco ese comando. Escribe /ayuda para ver los disponibles."
-NOT_SAVED_TEXT = (
-    "Todavía no guardo mensajes: tareas, notas y recordatorios llegan en la siguiente fase. "
-    "Escribe /ayuda para ver lo que sí puedo hacer."
-)
-STALE_CHOICE_TEXT = "Esa opción ya no está disponible."
 NOT_ACTIVE_TEXT = "Este recordatorio ya no está activo."
 SNOOZE_CHOICES_MINUTES = (reminders.SNOOZE_SHORT_MINUTES, reminders.SNOOZE_LONG_MINUTES)
 
@@ -49,20 +48,30 @@ def _reject(user_ref: str) -> None:
     logger.info("Mensaje ignorado de usuario no autorizado: user_ref=%s", user_ref)
 
 
-async def handle_message(msg: IncomingMessage, channel: Channel, allowed_user_id: int) -> None:
+async def handle_message(
+    msg: IncomingMessage,
+    channel: Channel,
+    allowed_user_id: int,
+    conn: sqlite3.Connection,
+    now: Clock,
+    tz_name: str,
+    conversation: Conversation,
+) -> None:
     if not is_allowed(msg.user_ref, allowed_user_id):
         _reject(msg.user_ref)
         return
 
     command = _command_name(msg.text)
+    if command is None:  # un mensaje libre: va a la bandeja
+        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, msg.user_ref)
+        await inbox.capture(ctx, msg.text)
+        return
     if command == "start":
         reply = START_TEXT
     elif command == "ayuda":
         reply = HELP_TEXT
-    elif command is not None:
-        reply = UNKNOWN_COMMAND_TEXT
     else:
-        reply = NOT_SAVED_TEXT
+        reply = UNKNOWN_COMMAND_TEXT
     await channel.send_text(msg.user_ref, reply)
 
 
@@ -95,14 +104,6 @@ def _when_text(target: datetime, tz_name: str, now: Clock) -> str:
     return full
 
 
-async def _show(channel: Channel, choice: IncomingChoice, text: str) -> None:
-    """Edita el mensaje del botón (sin teclado); si el canal no puede, manda uno nuevo."""
-    if choice.message_ref is None:
-        await channel.send_text(choice.user_ref, text)
-    else:
-        await channel.edit_text(choice.user_ref, choice.message_ref, text)
-
-
 async def _handle_reminder_choice(
     choice: IncomingChoice,
     request: tuple[str, int, int | None],
@@ -114,12 +115,12 @@ async def _handle_reminder_choice(
     action, reminder_id, minutes = request
     reminder = reminders.get_reminder(conn, reminder_id)
     if reminder is None:
-        await _show(channel, choice, NOT_ACTIVE_TEXT)
+        await show(channel, choice, NOT_ACTIVE_TEXT)
         return
 
     if action == reminders.ACTION_DONE:
         if reminders.mark_done(conn, reminder_id):
-            await _show(channel, choice, f"✅ Hecho: {reminder.text}")
+            await show(channel, choice, f"✅ Hecho: {reminder.text}")
             return
     else:
         if action == reminders.ACTION_SNOOZE and minutes is not None:
@@ -128,11 +129,11 @@ async def _handle_reminder_choice(
             target = reminders.snooze_until_tomorrow(conn, reminder_id, now, tz_name)
         if target is not None:
             when = _when_text(target, tz_name, now)
-            await _show(channel, choice, f"⏱ Pospuesto para {when}: {reminder.text}")
+            await show(channel, choice, f"⏱ Pospuesto para {when}: {reminder.text}")
             return
 
     # Pulsó dos veces, o el recordatorio ya se hizo, se canceló o se pospuso: sin error.
-    await _show(channel, choice, f"⏰ {reminder.text} (ya no está activo)")
+    await show(channel, choice, f"⏰ {reminder.text} (ya no está activo)")
 
 
 async def handle_choice(
@@ -142,9 +143,18 @@ async def handle_choice(
     conn: sqlite3.Connection,
     now: Clock,
     tz_name: str,
+    conversation: Conversation,
 ) -> None:
     if not is_allowed(choice.user_ref, allowed_user_id):
         _reject(choice.user_ref)
+        return
+    action, parts = decode_choice_id(choice.choice_id)
+    if action in (inbox.ACTION_FLOW, inbox.ACTION_UNDO, inbox.ACTION_CHANGE):
+        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
+        if action == inbox.ACTION_FLOW:
+            await inbox.handle_flow_choice(ctx, choice, parts)
+        else:
+            await inbox.handle_conversion_choice(ctx, choice, action, parts)
         return
     request = _parse_reminder_choice(choice.choice_id)
     if request is None:

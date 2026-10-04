@@ -1,12 +1,15 @@
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 import pytest
 
+from asistente import db
 from asistente.bot import handlers
 from asistente.bot.choices import MAX_CHOICE_ID_BYTES, decode_choice_id, encode_choice_id
+from asistente.bot.conversation import Conversation
 from asistente.channels.base import IncomingChoice, IncomingMessage
-from tests.fakes import FakeChannel
+from tests.fakes import FakeChannel, FakeClock
 
 OWNER = 12345
 TZ = "America/Mexico_City"
@@ -14,7 +17,11 @@ TZ = "America/Mexico_City"
 
 def send(text: str, user_ref: str = str(OWNER)) -> FakeChannel:
     channel = FakeChannel()
-    asyncio.run(handlers.handle_message(IncomingMessage("fake", user_ref, text), channel, OWNER))
+    conn = db.open_db(":memory:")
+    clock = FakeClock(datetime(2026, 10, 3, 21, 30, tzinfo=UTC))
+    event = IncomingMessage("fake", user_ref, text)
+    asyncio.run(handlers.handle_message(event, channel, OWNER, conn, clock, TZ, Conversation()))
+    conn.close()
     return channel
 
 
@@ -32,9 +39,18 @@ def test_comando_tolera_mayusculas_espacios_y_nombre_del_bot(text: str):
     assert send(text).texts[0][1] == handlers.START_TEXT
 
 
-def test_comando_desconocido_y_texto_libre():
+def test_comando_desconocido():
     assert send("/inventado").texts[0][1] == handlers.UNKNOWN_COMMAND_TEXT
-    assert send("comprar leche").texts[0][1] == handlers.NOT_SAVED_TEXT
+
+
+def test_texto_libre_va_a_la_bandeja_y_pregunta_que_es():
+    channel = send("comprar leche")
+    assert channel.texts == []
+    assert [choice.label for choice in channel.choices[0][2]][:3] == [
+        "📝 Tarea",
+        "⏰ Recordatorio",
+        "🗒 Nota",
+    ]
 
 
 @pytest.mark.parametrize("text", ["/start", "/ayuda", "hola"])
@@ -46,14 +62,14 @@ def test_usuario_no_autorizado_no_recibe_nada(text: str):
 def test_choice_de_no_autorizado_no_recibe_nada(conn, clock):
     channel = FakeChannel()
     event = IncomingChoice("fake", "99999", "done:1")
-    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ))
+    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ, Conversation()))
     assert channel.sent_anything is False
 
 
 def test_choice_del_dueno_recibe_aviso_amable(conn, clock):
     channel = FakeChannel()
     event = IncomingChoice("fake", str(OWNER), "done:1")
-    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ))
+    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ, Conversation()))
     assert channel.texts[0][1] == handlers.STALE_CHOICE_TEXT
 
 

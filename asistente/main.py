@@ -19,6 +19,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from asistente.bot.conversation import Conversation
 from asistente.bot.handlers import handle_choice, handle_message
 from asistente.channels.base import Channel
 from asistente.config import ConfigError, Settings, load_settings
@@ -64,16 +65,18 @@ def build_engine(settings: Settings, conn: sqlite3.Connection, channel: Channel)
     return ReminderEngine(conn, channel, str(settings.allowed_user_id), settings.tz_name, now)
 
 
-def _choice_handler(settings: Settings, conn: sqlite3.Connection, channel: Channel):
-    """`handle_choice` con la base, el reloj real y la zona del dueño ya conectados."""
-    return partial(
-        handle_choice,
-        channel=channel,
-        allowed_user_id=settings.allowed_user_id,
-        conn=conn,
-        now=now,
-        tz_name=settings.tz_name,
-    )
+def _handlers(settings: Settings, conn: sqlite3.Connection, channel: Channel):
+    """`handle_message` y `handle_choice` con la base, el reloj real, la zona del dueño y UNA
+    misma conversación (el estado a medias vive en memoria y lo comparten mensajes y botones)."""
+    wiring = {
+        "channel": channel,
+        "allowed_user_id": settings.allowed_user_id,
+        "conn": conn,
+        "now": now,
+        "tz_name": settings.tz_name,
+        "conversation": Conversation(),
+    }
+    return partial(handle_message, **wiring), partial(handle_choice, **wiring)
 
 
 def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
@@ -84,13 +87,8 @@ def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
         sys.stdout.reconfigure(encoding="utf-8")
     channel = ConsoleChannel(user_ref=str(settings.allowed_user_id))
     engine = build_engine(settings, conn, channel)
-    asyncio.run(
-        channel.serve(
-            partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
-            _choice_handler(settings, conn, channel),
-            engine.tick,
-        )
-    )
+    on_message, on_choice = _handlers(settings, conn, channel)
+    asyncio.run(channel.serve(on_message, on_choice, engine.tick))
 
 
 def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
@@ -99,11 +97,9 @@ def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
 
     channel = TelegramChannel(settings.telegram_bot_token, settings.allowed_user_id)
     engine = build_engine(settings, conn, channel)
-    channel.run_polling(
-        partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
-        _choice_handler(settings, conn, channel),
-        engine.tick,  # Telegram lo corre cada 30 s y una vez al arrancar (first=0)
-    )
+    on_message, on_choice = _handlers(settings, conn, channel)
+    # El tick de Telegram corre cada 30 s y una vez al arrancar (first=0)
+    channel.run_polling(on_message, on_choice, engine.tick)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

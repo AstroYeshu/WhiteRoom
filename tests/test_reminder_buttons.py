@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from asistente.bot import handlers
+from asistente.bot.conversation import Conversation
 from asistente.channels.base import IncomingChoice
 from asistente.core import reminders
 from asistente.timeutil import from_utc_iso, local_to_utc
@@ -37,7 +38,7 @@ def sent_reminder(conn, clock) -> reminders.Reminder:
 
 def press(conn, clock, channel, choice_id: str, user: int = OWNER, ref: str | None = REF) -> None:
     event = IncomingChoice("fake", str(user), choice_id, ref)
-    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ))
+    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ, Conversation()))
 
 
 def row(conn, reminder_id: int) -> reminders.Reminder:

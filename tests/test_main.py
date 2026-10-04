@@ -17,7 +17,8 @@ def test_dry_run_arranca_sin_secretos_y_responde(monkeypatch, tmp_path, capsys):
     output = sys.stdout.read()
     assert "Hola" in output
     assert "Comandos disponibles" in output
-    assert "Todavía no guardo mensajes" in output
+    assert "Guardado en tu bandeja" in output  # el mensaje libre va a la bandeja
+    assert "¿Qué es?" in output
     assert (tmp_path / "data" / "dry_run.db").exists()
 
 
