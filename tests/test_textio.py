@@ -8,7 +8,7 @@ from asistente.textio import force_utf8_output
 
 def ascii_stream() -> tuple[io.BytesIO, io.TextIOWrapper]:
     raw = io.BytesIO()
-    return raw, io.TextIOWrapper(raw, encoding="ascii", errors="strict")
+    return raw, io.TextIOWrapper(raw, encoding="ascii", errors="strict", newline="\n")
 
 
 def test_stdout_pasa_a_utf8(monkeypatch):
