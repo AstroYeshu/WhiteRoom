@@ -22,6 +22,7 @@ class Task:
     created_at: str
     updated_at: str
     closed_at: str | None
+    closed_reason: str | None
 
 
 def _from_row(row: sqlite3.Row) -> Task:
@@ -95,7 +96,16 @@ def set_due(
         )
 
 
-def _close(conn: sqlite3.Connection, task_id: int, status: str, now: Clock) -> bool:
+CONVERSION_REASONS = ("converted_to_reminder", "converted_to_note")
+
+
+def _close(
+    conn: sqlite3.Connection,
+    task_id: int,
+    status: str,
+    now: Clock,
+    closed_reason: str | None = None,
+) -> bool:
     """Cierra una tarea abierta o pospuesta. Devuelve False si no existía o ya estaba cerrada.
 
     Cancela en la misma transacción los recordatorios pendientes de la tarea (preparación
@@ -104,9 +114,9 @@ def _close(conn: sqlite3.Connection, task_id: int, status: str, now: Clock) -> b
     stamp = to_utc_iso(now())
     with conn:
         cursor = conn.execute(
-            "UPDATE tasks SET status = ?, closed_at = ?, updated_at = ?"
+            "UPDATE tasks SET status = ?, closed_at = ?, updated_at = ?, closed_reason = ?"
             " WHERE id = ? AND status IN ('open', 'postponed')",
-            (status, stamp, stamp, task_id),
+            (status, stamp, stamp, closed_reason, task_id),
         )
         if cursor.rowcount == 1:
             reminders.cancel_for_task(conn, task_id)
@@ -118,8 +128,19 @@ def mark_done(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
 
 
 def drop_task(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
-    """Descartar = soft delete (`status='dropped'`); sigue en la base."""
-    return _close(conn, task_id, "dropped", now)
+    """Descartar = soft delete (`dropped` + `closed_reason='discarded'`); sigue en la base."""
+    return _close(conn, task_id, "dropped", now, "discarded")
+
+
+def close_as_converted(conn: sqlite3.Connection, task_id: int, reason: str, now: Clock) -> bool:
+    """Cierra una tarea de bandeja que se convirtió en recordatorio o nota.
+
+    Queda `dropped` (no `done`: no debe inflar las hechas) con `closed_reason` de conversión,
+    así `/papelera` y los reportes (que filtran `discarded`) no la cuentan como descartada.
+    """
+    if reason not in CONVERSION_REASONS:
+        raise ValueError(f"Motivo de conversión inválido: {reason!r}")
+    return _close(conn, task_id, "dropped", now, reason)
 
 
 def postpone_task(conn: sqlite3.Connection, task_id: int, until_utc: datetime, now: Clock) -> bool:

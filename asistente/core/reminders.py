@@ -40,9 +40,6 @@ LATE_GRACE = timedelta(minutes=2)  # más tarde que esto = "(retrasado)"
 BACKOFF_BASE_SECONDS = 30
 BACKOFF_CAP_SECONDS = 15 * 60
 GIVE_UP_AFTER = timedelta(hours=24)  # tiempo total reintentando un canal caído
-STOPPED_ATTEMPTS = (
-    1000  # valor centinela de `attempts`: el envío se detuvo (ver `Reminder.stopped`)
-)
 
 ACTION_DONE = "rem_done"
 ACTION_SNOOZE = "rem_snooze"
@@ -95,11 +92,14 @@ class Reminder:
     nag_count: int
     created_at: str
     last_fired_at: str | None
+    first_failed_at: str | None
+    stopped_at: str | None
+    stop_reason: str | None
 
     @property
     def stopped(self) -> bool:
         """Envío detenido (error permanente o 24 h sin poder enviar): se marca en /recordatorios."""
-        return self.attempts >= STOPPED_ATTEMPTS
+        return self.stop_reason is not None
 
 
 def _from_row(row: sqlite3.Row) -> Reminder:
@@ -157,13 +157,12 @@ def list_due(conn: sqlite3.Connection, moment: datetime) -> list[Reminder]:
       `NAG_MAX_RESENDS` reenvíos y al menos `NAG_INTERVAL` desde el último aviso.
     """
     rows = conn.execute(
-        "SELECT * FROM reminders WHERE attempts < :stopped AND ("
+        "SELECT * FROM reminders WHERE stop_reason IS NULL AND ("
         " (status = 'pending' AND fire_at_utc <= :now)"
         " OR (status = 'sent' AND priority = 2 AND nag_count < :max_nags"
         "     AND last_fired_at <= :nag_cutoff))"
         " ORDER BY fire_at_utc, id",
         {
-            "stopped": STOPPED_ATTEMPTS,
             "now": to_utc_iso(moment),
             "max_nags": NAG_MAX_RESENDS,
             "nag_cutoff": to_utc_iso(moment - NAG_INTERVAL),
@@ -451,14 +450,15 @@ class ReminderEngine:
         )
 
     def _stop(self, reminder: Reminder, why: str) -> None:
-        """Detiene el envío (queda `pending`, `attempts` centinela; se marca en /recordatorios).
+        """Detiene el envío (queda `pending` con `stop_reason`; se marca en /recordatorios).
 
         Si es una serie, la siguiente ocurrencia se crea igual: rendirse con una no corta la serie.
         """
         self._retry_at.pop(reminder.id, None)
         with self._conn:
             self._conn.execute(
-                "UPDATE reminders SET attempts = ? WHERE id = ?", (STOPPED_ATTEMPTS, reminder.id)
+                "UPDATE reminders SET stopped_at = ?, stop_reason = ? WHERE id = ?",
+                (to_utc_iso(self._now()), why, reminder.id),
             )
             if reminder.status == "pending":
                 self._spawn_next(reminder, self._now())
