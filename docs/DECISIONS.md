@@ -117,3 +117,9 @@ descripción ([Omitir] la deja vacía) y `/areas` marca «(sin descripción)». 
 (`create_area` ya no la exige); el nombre es único sin distinguir mayúsculas ni acentos y las áreas archivadas también
 reservan el suyo. Un texto que llega mientras se espera la descripción del área SIEMPRE es la descripción (los comandos
 no); si pasan 10 minutos se vuelve a tratar como captura nueva.
+
+## `/tarea` con fecha límite
+Solo `/tarea` (no el texto libre ni `/nota`): si `parse_when` devuelve una fecha CLARA (`ok`), después del área se pregunta
+«¿Es la fecha límite de «título»?» con [Sí] [No] [Cancelar]. Sí: el título queda sin la fecha, `due_at_utc` se fija con
+`tasks.set_due` (crea los avisos de preparación) y `source_text` conserva lo escrito. No: la tarea queda con el texto
+completo y sin fecha. Si el parser duda (am/pm, "el N", etc.) o no hay fecha, no se pregunta nada: no se adivina.

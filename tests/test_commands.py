@@ -397,6 +397,7 @@ def test_tarea_solo_pregunta_el_area(bot, conn):
 def test_tarea_con_texto_de_recordatorio_no_se_convierte_en_recordatorio(bot, conn):
     bot.say("/tarea recuérdame mañana 8am llevar tarea")
     bot.tap("Sin área")
+    bot.tap("No")  # la fecha del texto se ofrece como fecha límite; aquí no lo es
     assert reminders.list_pending(conn) == []
     assert "Tarea guardada" in bot.last[1]
 
@@ -579,3 +580,111 @@ def test_el_tiempo_de_un_dia_cercano_a_medianoche_usa_la_zona_del_usuario(bot, c
     add_task(conn, clock, "tarde", "2026-10-03 23:59")
     assert "tarde (hoy, 11:59 pm)" in bot.reply("/hoy")
     assert timedelta(0) < local("2026-10-03 23:59") - clock.current < timedelta(hours=5)
+
+
+# --- /tarea con fecha límite --------------------------------------------------------------------
+
+
+def task_with_deadline(bot, text: str = "/tarea entregar informe el viernes"):
+    bot.say(text)
+    bot.tap("Sin área")
+
+
+def only_task(conn) -> tasks.Task:
+    [row] = conn.execute("SELECT id FROM tasks").fetchall()
+    return tasks.get_task(conn, row["id"])
+
+
+def test_tarea_con_fecha_pregunta_si_es_la_fecha_limite_despues_del_area(bot, conn):
+    bot.say("/tarea entregar informe el viernes")
+    assert "¿En qué área" in bot.question[0]
+    bot.tap("universidad")
+    text, _ = bot.question
+    assert text == (
+        "¿Es la fecha límite de «entregar informe»?\n"
+        "Fecha: viernes 9 de octubre, 9:00 am (hora por defecto)"
+    )
+    assert bot.labels() == ["Sí", "No", "Cancelar"]
+    task = only_task(conn)
+    assert task.due_at_utc is None and task.status == "open"  # aún no se decidió
+
+
+def test_si_pone_la_fecha_limite_limpia_el_titulo_y_crea_los_avisos_de_preparacion(bot, conn):
+    bot.say("/tarea entregar informe el viernes")
+    bot.tap("universidad")
+    bot.tap("Sí")
+    task = only_task(conn)
+    assert task.title == "entregar informe"
+    assert task.due_at_utc == to_utc_iso(local("2026-10-09 09:00"))
+    assert (task.status, task.area_id) == ("open", area_id(conn, "universidad"))
+    assert task.source_text == "entregar informe el viernes"  # lo original se conserva
+    assert len(reminders.list_pending(conn)) == 2  # 1 día y 1 hora antes
+    assert bot.edits()[-1] == (
+        "Tarea guardada en universidad: «entregar informe» (vence: viernes 9 de octubre, 9:00 am)"
+    )
+
+
+def test_no_deja_la_tarea_con_el_texto_completo_y_sin_fecha(bot, conn):
+    task_with_deadline(bot)
+    bot.tap("No")
+    task = only_task(conn)
+    assert task.title == "entregar informe el viernes" and task.due_at_utc is None
+    assert reminders.list_pending(conn) == []
+    assert bot.edits()[-1] == "Tarea guardada: «entregar informe el viernes»"
+
+
+def test_cancelar_la_pregunta_deja_la_tarea_en_la_bandeja(bot, conn):
+    task_with_deadline(bot)
+    bot.tap("Cancelar")
+    task = only_task(conn)
+    assert (task.title, task.due_at_utc, task.status) == (
+        "entregar informe el viernes",
+        None,
+        "open",
+    )
+
+
+def test_con_una_fecha_dudosa_no_se_pregunta_nada(bot, conn):
+    bot.say("/tarea llamar mañana a las 9")  # ambiguous_meridiem: no se adivina
+    bot.tap("Sin área")
+    assert "Tarea guardada" in bot.last[1]
+    assert only_task(conn).due_at_utc is None
+
+
+def test_sin_fecha_no_se_pregunta_nada(bot, conn):
+    bot.say("/tarea comprar pan")
+    bot.tap("Sin área")
+    assert "Tarea guardada" in bot.last[1]
+
+
+def test_el_texto_libre_con_fecha_no_pregunta_por_fecha_limite(bot, conn):
+    bot.say("entregar informe el viernes")
+    bot.tap("Tarea")
+    bot.tap("Sin área")
+    assert "Tarea guardada" in bot.last[1]
+    assert only_task(conn).due_at_utc is None
+
+
+def test_pulsar_si_dos_veces_no_da_error_ni_duplica_avisos(bot, conn):
+    task_with_deadline(bot)
+    yes = bot.choice_id("Sí")
+    bot.press(yes)
+    bot.press(yes)
+    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    assert len(reminders.list_pending(conn)) == 2
+
+
+def test_sin_areas_la_pregunta_de_fecha_limite_sale_igual(bot, conn):
+    for area in areas.list_areas(conn):
+        areas.archive_area(conn, area.id)
+    bot.say("/tarea entregar informe el viernes")
+    assert "fecha límite" in bot.question[0]
+    bot.tap("Sí")
+    assert only_task(conn).due_at_utc == to_utc_iso(local("2026-10-09 09:00"))
+
+
+def test_set_title_cambia_solo_el_titulo(conn, clock):
+    task = tasks.create_task(conn, "viejo", clock, source_text="viejo")
+    tasks.set_title(conn, task.id, "nuevo", clock)
+    stored = tasks.get_task(conn, task.id)
+    assert (stored.title, stored.source_text) == ("nuevo", "viejo")

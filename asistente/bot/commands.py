@@ -244,7 +244,7 @@ async def new_task(ctx: Ctx, args: str) -> None:
     if not args.strip():
         await ctx.channel.send_text(ctx.user_ref, TASK_USAGE)
         return
-    await inbox.capture_as(ctx, args, inbox.KIND_TASK)
+    await inbox.capture_as(ctx, args, inbox.KIND_TASK, ask_deadline=True)
 
 
 async def new_note(ctx: Ctx, args: str) -> None:

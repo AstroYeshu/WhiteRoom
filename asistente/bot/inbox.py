@@ -19,10 +19,12 @@ from asistente.bot.choices import encode_choice_id
 from asistente.bot.conversation import (
     STEP_AREA,
     STEP_AREA_DESC,
+    STEP_DEADLINE,
     STEP_KIND,
     STEP_SERIES,
     STEP_WHEN,
     Conversation,
+    Deadline,
     Flow,
     Pending,
 )
@@ -30,7 +32,13 @@ from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Channel, Choice, IncomingChoice
 from asistente.core import areas, notes, reminders, tasks
 from asistente.core.settings import get_meridiem_ask_range, get_time_setting
-from asistente.parsing.dates import WEEKDAY_NAMES_ES, fold, format_when, strip_reminder_verb
+from asistente.parsing.dates import (
+    WEEKDAY_NAMES_ES,
+    fold,
+    format_when,
+    parse_when,
+    strip_reminder_verb,
+)
 from asistente.parsing.recurrence import ScheduleResult, parse_schedule
 from asistente.timeutil import Clock, local_to_utc, to_local
 
@@ -196,11 +204,16 @@ async def capture(ctx: Ctx, text: str) -> None:
     await _start_capture(ctx, text, None, False)
 
 
-async def capture_as(ctx: Ctx, text: str, kind: str, preview: bool = False) -> None:
-    """/tarea, /nota, /recordar: el tipo ya está dicho; solo falta el área (y la fecha)."""
+async def capture_as(
+    ctx: Ctx, text: str, kind: str, preview: bool = False, ask_deadline: bool = False
+) -> None:
+    """/tarea, /nota, /recordar: el tipo ya está dicho; solo falta el área (y la fecha).
+
+    `ask_deadline` (solo /tarea): si el texto trae una fecha clara, después del área se pregunta
+    si es la fecha límite."""
     text = text.strip()
     if text:
-        await _start_capture(ctx, text, kind, preview)
+        await _start_capture(ctx, text, kind, preview, ask_deadline)
 
 
 async def _drop_current_flow(ctx: Ctx) -> None:
@@ -212,7 +225,9 @@ async def _drop_current_flow(ctx: Ctx) -> None:
         await ctx.channel.send_text(ctx.user_ref, notice)
 
 
-async def _start_capture(ctx: Ctx, text: str, kind: str | None, preview: bool) -> None:
+async def _start_capture(
+    ctx: Ctx, text: str, kind: str | None, preview: bool, ask_deadline: bool = False
+) -> None:
     """Guarda el texto en la bandeja y pregunta lo que falte. `kind` None = preguntar el tipo."""
     await _drop_current_flow(ctx)
     task = tasks.create_task(ctx.conn, text, ctx.now, source_text=text)
@@ -223,6 +238,8 @@ async def _start_capture(ctx: Ctx, text: str, kind: str | None, preview: bool) -
         kind = KIND_REMINDER
     if kind is not None:
         flow.kind, flow.preview = kind, preview
+        if ask_deadline:
+            flow.deadline = _detect_deadline(ctx, text)
         await _ask_area(ctx, flow, None, header)
         return
     buttons: list[Button] = [(KIND_ACTION, kind, label) for kind, label in KIND_LABELS.items()]
@@ -247,7 +264,9 @@ async def _after_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: 
     """Ya se sabe tipo y área: se termina (tarea, nota) o se sigue con la fecha (recordatorio)."""
     area = _area_name(ctx, flow.area_id)
     suffix = f" en {area}" if area else ""
-    if flow.kind == KIND_TASK:
+    if flow.kind == KIND_TASK and flow.deadline is not None:
+        await _ask_deadline(ctx, flow, choice, ack)
+    elif flow.kind == KIND_TASK:
         tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
         ctx.conversation.clear()
         await _say(ctx, choice, f"Tarea guardada{suffix}: «{shown(flow.text)}»")
@@ -261,6 +280,65 @@ async def _after_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: 
         result = _parse(ctx, flow.text)
         flow.title = strip_reminder_verb(result.title).strip() or flow.text
         await _apply_schedule(ctx, flow, result, None)
+
+
+# --- Fecha límite de una tarea (/tarea) ------------------------------------------------------
+
+
+def _detect_deadline(ctx: Ctx, text: str) -> Deadline | None:
+    """Una fecha CLARA en el texto (`ok`); si el parser duda o no hay fecha, no se pregunta nada."""
+    result = parse_when(
+        text,
+        ctx.now,
+        ctx.tz_name,
+        get_time_setting(ctx.conn, "default_morning_time"),
+        get_meridiem_ask_range(ctx.conn),
+    )
+    if result.status != "ok" or result.when_utc is None:
+        return None
+    title = strip_reminder_verb(result.title).strip() or text
+    return Deadline(result.when_utc, result.has_time, title)
+
+
+async def _ask_deadline(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: str) -> None:
+    deadline = flow.deadline
+    assert deadline is not None
+    await _ack(ctx, choice, ack)
+    when = format_when(deadline.when_utc, ctx.tz_name, ctx.now)
+    default = "" if deadline.has_time else " (hora por defecto)"
+    text = f"¿Es la fecha límite de «{shown(deadline.title)}»?\nFecha: {when}{default}"
+    buttons: list[Button] = [("ly", None, "Sí"), ("ln", None, "No"), CANCEL]
+    await _send_question(ctx, flow, STEP_DEADLINE, text, buttons)
+
+
+async def _finish_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, with_deadline: bool) -> None:
+    tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
+    area = _area_name(ctx, flow.area_id)
+    suffix = f" en {area}" if area else ""
+    deadline = flow.deadline
+    ctx.conversation.clear()
+    if with_deadline and deadline is not None:
+        tasks.set_title(ctx.conn, flow.task_id, deadline.title, ctx.now)
+        tasks.set_due(ctx.conn, flow.task_id, deadline.when_utc, ctx.now)
+        when = format_when(deadline.when_utc, ctx.tz_name, ctx.now)
+        text = f"Tarea guardada{suffix}: «{shown(deadline.title)}» (vence: {when})"
+    else:
+        text = f"Tarea guardada{suffix}: «{shown(flow.text)}»"
+    await show(ctx.channel, choice, text)
+
+
+async def _on_deadline_yes(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
+    if args:
+        return False
+    await _finish_task(ctx, flow, choice, True)
+    return True
+
+
+async def _on_deadline_no(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
+    if args:
+        return False
+    await _finish_task(ctx, flow, choice, False)
+    return True
 
 
 # --- Fecha -----------------------------------------------------------------------------------
@@ -550,6 +628,8 @@ _FLOW_ACTIONS = {
     "t": (STEP_WHEN, _on_better_as_task),
     "s": (STEP_SERIES, _on_save),
     "d": (STEP_AREA_DESC, _on_skip_description),
+    "ly": (STEP_DEADLINE, _on_deadline_yes),
+    "ln": (STEP_DEADLINE, _on_deadline_no),
     "x": (None, _on_cancel),
 }
 

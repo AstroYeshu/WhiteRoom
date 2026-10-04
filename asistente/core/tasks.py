@@ -69,6 +69,15 @@ def create_task(
     return task
 
 
+def set_title(conn: sqlite3.Connection, task_id: int, title: str, now: Clock) -> None:
+    """Cambia solo el título; `source_text` conserva lo que el usuario escribió."""
+    with conn:
+        conn.execute(
+            "UPDATE tasks SET title = ?, updated_at = ? WHERE id = ?",
+            (title, to_utc_iso(now()), task_id),
+        )
+
+
 def set_area(conn: sqlite3.Connection, task_id: int, area_id: int | None, now: Clock) -> None:
     with conn:
         conn.execute(

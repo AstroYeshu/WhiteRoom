@@ -20,6 +20,7 @@ STEP_KIND = "kind"  # ¿tarea, recordatorio o nota?
 STEP_AREA = "area"  # ¿en qué área?
 STEP_WHEN = "when"  # ¿cuándo? (botones o un texto con la fecha)
 STEP_SERIES = "series"  # vista previa de un recordatorio (o repetición): guardar o cancelar
+STEP_DEADLINE = "deadline"  # /tarea con fecha: ¿es la fecha límite?
 STEP_AREA_DESC = "area_desc"  # /nuevaarea: se espera la descripción (o Omitir)
 
 
@@ -30,6 +31,15 @@ class Pending:
     when_utc: datetime
     rrule: str | None
     has_time: bool
+
+
+@dataclass(frozen=True)
+class Deadline:
+    """La fecha que /tarea encontró en el texto, a la espera del Sí/No del usuario."""
+
+    when_utc: datetime
+    has_time: bool
+    title: str  # el texto sin la fecha
 
 
 @dataclass
@@ -45,6 +55,7 @@ class Flow:
     candidates: tuple[datetime, ...] = ()  # opciones de fecha ya resueltas (UTC)
     preview: bool = False  # /recordar: SIEMPRE se muestra la interpretación antes de guardar
     pending: Pending | None = None
+    deadline: Deadline | None = None
 
 
 class Conversation:
