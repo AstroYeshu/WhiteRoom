@@ -37,3 +37,24 @@ class FakeClock:
 
     def advance(self, **delta: float) -> None:
         self.current += timedelta(**delta)
+
+
+class ScriptedChannel(FakeChannel):
+    """Canal que puede fallar a voluntad: `fail_if(texto)` devuelve la excepción a lanzar o None."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_if = lambda text: None
+        self.attempts: list[str] = []  # todo intento de envío, haya salido o no
+
+    async def send_choices(
+        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+    ) -> None:
+        self.attempts.append(text)
+        error = self.fail_if(text)
+        if error is not None:
+            raise error
+        await super().send_choices(to, text, choices, kind)
+
+    def always_fail_with(self, error: Exception | None) -> None:
+        self.fail_if = lambda text: error

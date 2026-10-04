@@ -32,6 +32,26 @@ class IncomingChoice:
     choice_id: str
 
 
+class ChannelError(Exception):
+    """Error al enviar. Cada canal traduce los errores de su plataforma a una de estas clases.
+
+    `reason` es un código corto y estable (p. ej. "bot_blocked", "timeout"); NUNCA lleva el
+    texto del usuario, porque es lo único que el motor de recordatorios registra en el log.
+    """
+
+    def __init__(self, reason: str = "unknown") -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class TransientChannelError(ChannelError):
+    """Falla pasajera (red, timeout, plataforma caída): vale la pena reintentar."""
+
+
+class PermanentChannelError(ChannelError):
+    """Falla que no se arregla reintentando (bot bloqueado, chat no encontrado)."""
+
+
 class Channel(Protocol):
     """Todo lo que el sistema envía pasa por aquí.
 
