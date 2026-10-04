@@ -248,12 +248,14 @@ def test_main_pasa_on_tick_a_telegram_y_el_tick_envia_los_vencidos(monkeypatch, 
         async def send_text(self, to, text, kind="reply") -> None:
             sent.append((to, text, kind))
 
-        def run_polling(self, on_message, on_choice, on_tick) -> None:
+        def run_polling(self, on_message, on_choice, on_tick, tick_seconds) -> None:
             captured["on_tick"] = on_tick
+            captured["tick_seconds"] = tick_seconds
             asyncio.run(on_tick())  # lo que haría `first=0` del job al arrancar
 
     monkeypatch.setattr(tg, "TelegramChannel", FakeTelegram)
 
     assert app.main([]) == 0
     assert captured["init"] == ("123456:token-falso", 7)
+    assert captured["tick_seconds"] == 30  # el valor por defecto de TICK_SECONDS
     assert sent == [("7", "⏰ llevar tarea (retrasado)", "reminder")]
