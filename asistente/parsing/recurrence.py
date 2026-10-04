@@ -1,12 +1,15 @@
 """Recordatorios repetidos: lista CERRADA de expresiones -> regla `rrule` (RFC 5545).
 
 Se entiende solo:
-    "todos los días [hora]"
-    "cada <día de la semana> [hora]"
+    "todos los días [hora]" / "cada día [hora]" / "diario [hora]"
+    "cada <día de la semana> [hora]" / "todos los <días de la semana> [hora]"
     "de lunes a viernes [hora]"
-Cualquier otra cosa no se interpreta (el handler pregunta). La hora usa las mismas reglas
-que `parsing/dates.py`. `next_occurrence` es la función que también usa el motor de
-recordatorios: calcula desde la hora PROGRAMADA (no desde `now`) y respeta el horario de verano.
+Cualquier otra cosa no se interpreta (el handler pregunta); una palabra de repetición
+("cada mes", "semanal") que no encaje NUNCA se guarda como aviso único.
+La hora usa las mismas reglas que `parsing/dates.py`. `next_occurrence` es la función que
+también usa el motor de recordatorios: calcula desde la hora PROGRAMADA (no desde `now`) y
+respeta el horario de verano. `parse_schedule` es el flujo del handler: primero la repetición,
+luego la fecha suelta.
 """
 
 from __future__ import annotations
@@ -20,8 +23,10 @@ from dateutil.rrule import rrulestr
 
 from asistente.parsing.dates import (
     DEFAULT_MERIDIEM_ASK_RANGE,
+    RE_RECURRENCE_KEYWORD,
     RE_TIME_LEFTOVER,
     WEEKDAYS,
+    WhenResult,
     clean_title,
     fold,
     has_dotted_time,
@@ -35,8 +40,10 @@ from asistente.parsing.dates import (
 from asistente.timeutil import Clock, local_to_utc, to_local
 
 _RRULE_DAYS = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")  # mismo orden que WEEKDAYS
-_RE_DAILY = re.compile(r"\btodos\s+los\s+dias\b")
-_RE_EVERY_WEEKDAY = re.compile(r"\bcada\s+(?P<wd>" + "|".join(WEEKDAYS) + r")\b")
+_RE_DAILY = re.compile(r"\b(?:todos\s+los\s+dias|cada\s+dia|diari[oa])\b")
+_RE_EVERY_WEEKDAY = re.compile(
+    r"\b(?:cada|todos\s+los)\s+(?P<wd>" + "|".join(WEEKDAYS) + r")(?:s)?\b"  # "todos los lunes"
+)
 _RE_WORKDAYS = re.compile(r"\bde\s+lunes\s+a\s+viernes\b")
 
 
@@ -83,6 +90,10 @@ def parse_recurrence(
         day = _RRULE_DAYS[WEEKDAYS.index(match["wd"])]
         found.append((match, f"FREQ=WEEKLY;BYDAY={day}"))
     if not found:
+        if RE_RECURRENCE_KEYWORD.search(folded):  # suena a repetición pero no es de la lista
+            return RecurrenceResult(
+                "ask", strip_reminder_verb(clean_title(text, [])), reason="unrecognized_recurrence"
+            )
         return RecurrenceResult("none", clean_title(text, []))
 
     work = folded
@@ -110,6 +121,8 @@ def parse_recurrence(
         return ask("two_dates")
     if times and isinstance(times[0].value, str):
         return ask(times[0].value)
+    if RE_RECURRENCE_KEYWORD.search(work):  # además de la serie, otra palabra de repetición
+        return ask("unrecognized_recurrence")
     if RE_TIME_LEFTOVER.search(work):
         return ask("unrecognized_time")
     if parse_when(title, now, tz_name, default_morning, meridiem_ask_range).status != "none":
@@ -129,3 +142,47 @@ def parse_recurrence(
         has_time=bool(times),
         meridiem_inferred=bool(times) and times[0].inferred,
     )
+
+
+@dataclass(frozen=True)
+class ScheduleResult:
+    """Qué entendió el parser de un texto con fecha: `none`, un aviso `once`, una `series` o `ask`.
+
+    Trae el resultado detallado del parser que contestó (`when` o `series`) para que el handler
+    muestre la interpretación y las opciones antes de guardar.
+    """
+
+    kind: Literal["none", "once", "series", "ask"]
+    title: str
+    when: WhenResult | None = None
+    series: RecurrenceResult | None = None
+    reason: str | None = None
+
+
+_parse_single = parse_when  # nombre aparte para poder comprobar el orden en las pruebas
+
+
+def parse_schedule(
+    text: str,
+    now: Clock,
+    tz_name: str,
+    default_morning: time,
+    meridiem_ask_range: tuple[int, int] = DEFAULT_MERIDIEM_ASK_RANGE,
+) -> ScheduleResult:
+    """Flujo del handler: PRIMERO la repetición, LUEGO la fecha suelta.
+
+    Así "todos los lunes a las 7 pm" nunca se guarda como un aviso único, y una palabra de
+    repetición que no se entiende ("cada mes") se pregunta en vez de tratarse como fecha.
+    La fecha suelta solo se consulta si la repetición dijo `none`.
+    """
+    series = parse_recurrence(text, now, tz_name, default_morning, meridiem_ask_range)
+    if series.status == "ok":
+        return ScheduleResult("series", series.title, series=series)
+    if series.status == "ask":
+        return ScheduleResult("ask", series.title, series=series, reason=series.reason)
+    when = _parse_single(text, now, tz_name, default_morning, meridiem_ask_range)
+    if when.status == "ok":
+        return ScheduleResult("once", when.title, when=when)
+    if when.status == "ask":
+        return ScheduleResult("ask", when.title, when=when, reason=when.reason)
+    return ScheduleResult("none", when.title, when=when)

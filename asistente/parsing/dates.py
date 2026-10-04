@@ -260,6 +260,13 @@ RE_TIME_LEFTOVER = re.compile(
     r"|\b(?:de|por|en)\s+la\s+(?:manana|tarde|noche|madrugada)\b"
     r"|\besta\s+(?:manana|tarde|noche)\b|\by\s+(?:media|cuarto)\b|\bmenos\s+(?:cuarto|\d)"
 )
+# Palabras que anuncian una REPETICIÓN. La usan `dates.py` y `recurrence.py`: si aparece una y no
+# se entendió como serie, se pregunta; jamás se guarda un aviso único.
+RECURRENCE_KEYWORD_ALT = (
+    r"todos\s+los|todas\s+las|cada|diari(?:o|a|os|as|amente)"
+    r"|(?:semanal|mensual|quincenal|anual)(?:es|mente)?"
+)
+RE_RECURRENCE_KEYWORD = re.compile(r"\b(?:" + RECURRENCE_KEYWORD_ALT + r")\b")
 _RE_PAST_LEFTOVER = re.compile(r"\b(?:pasad[oa]|anterior|hace)\b")
 
 
@@ -661,6 +668,9 @@ def parse_when(
         strong.extend(usable)
     hits = days + strong
     dotted = has_dotted_time(work, bool(days))
+    if RE_RECURRENCE_KEYWORD.search(folded):  # "cada mes", "semanal": nunca un aviso único
+        spans = [(h.start, h.end) for h in hits]
+        return _ask(strip_reminder_verb(clean_title(original, spans)), "unrecognized_recurrence")
     if skipped_name and not days:  # ¿Domingo es una persona o el día? Nunca se asume "hoy"
         title = strip_reminder_verb(clean_title(original, [(h.start, h.end) for h in hits]))
         return _ask(title, "name_or_day")

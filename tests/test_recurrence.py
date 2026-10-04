@@ -94,12 +94,22 @@ def test_ante_la_duda_pregunta(text, reason):
     assert result.first_at_utc is None
 
 
-@pytest.mark.parametrize(
-    "text",
-    ["comprar leche", "cada quince días", "los lunes", "mañana a las 8", "diario", "cada semana"],
-)
-def test_fuera_de_la_lista_cerrada_no_se_interpreta(text):
+@pytest.mark.parametrize("text", ["comprar leche", "los lunes", "mañana a las 8"])
+def test_sin_palabra_de_repeticion_no_hay_serie(text):
     assert parse(text).status == "none"
+
+
+@pytest.mark.parametrize("text", ["cada quince días", "cada semana"])
+def test_palabra_de_repeticion_fuera_de_la_lista_pregunta(text):
+    # Regla 8 (antes: status "none"): "cada ..." que no encaja nunca se guarda como aviso único
+    result = parse(text)
+    assert (result.status, result.reason) == ("ask", "unrecognized_recurrence")
+
+
+def test_diario_es_una_serie_diaria():
+    # Regla 8, gramática ampliada (antes: status "none")
+    result = parse("diario")
+    assert (result.status, result.rrule) == ("ok", "FREQ=DAILY")
 
 
 # --- next_occurrence: sin deriva y con horario de verano -------------------------------------

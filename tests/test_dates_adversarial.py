@@ -364,3 +364,140 @@ DATES = [
 )
 def test_fechas_con_aspecto_de_fecha(phrase, now_local, expected):
     check(run(phrase, now_local), expected, phrase)
+
+
+# --- Familia 6: repeticiones (regla 8) y flujo "primero la repetición, luego la fecha" ---------
+# (frase, reloj, esperado): ("series", rrule, primera local, ¿trae hora?) | ("once", local)
+#                           | ("ask", razón) | ("none",)
+SERIES = [
+    (
+        "todos los lunes a las 7 pm",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=MO", "2026-10-05 19:00", True),
+    ),
+    (
+        "todos los lunes 7 pm",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=MO", "2026-10-05 19:00", True),
+    ),
+    (
+        "todos los sábados a las 6 pm",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=SA", "2026-10-03 18:00", True),
+    ),
+    (
+        "todos los domingos 10 am misa",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=SU", "2026-10-04 10:00", True),
+    ),
+    ("todos los martes", SAT_1530, ("series", "FREQ=WEEKLY;BYDAY=TU", "2026-10-06 09:00", False)),
+    ("cada día a las 8 pm", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 20:00", True)),
+    ("cada dia", SAT_1530, ("series", "FREQ=DAILY", "2026-10-04 09:00", False)),
+    ("diario a las 8 pm", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 20:00", True)),
+    ("diaria 8 pm tomar pastilla", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 20:00", True)),
+    ("diario", SAT_1530, ("series", "FREQ=DAILY", "2026-10-04 09:00", False)),
+    ("todos los días a las 8 pm", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 20:00", True)),
+    (
+        "cada viernes a las 5 pm",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=FR", "2026-10-09 17:00", True),
+    ),
+    (
+        "de lunes a viernes a las 7 am",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", "2026-10-05 07:00", True),
+    ),
+    (
+        "leer Juan 3:16 todos los lunes",
+        SAT_1530,
+        ("series", "FREQ=WEEKLY;BYDAY=MO", "2026-10-05 09:00", False),
+    ),
+    # Un solo aviso, sin repetición
+    ("mañana a las 8 pm", SAT_1530, ("once", "2026-10-04 20:00")),
+    ("el lunes a las 7 pm", SAT_1530, ("once", "2026-10-05 19:00")),
+    ("comprar leche", SAT_1530, ("none",)),
+    # Palabra de repetición que no se entiende como serie: SIEMPRE se pregunta, nunca un aviso único
+    ("cada mes", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("cada semana", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("semanal", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("mensual a las 8 pm", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("pagar renta mensual", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("pagar renta el 5 mensual", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("diariamente a las 8 pm", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("todas las noches a las 9 pm", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("cada 2 semanas", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("cada mañana", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("tomar pastilla cada 8 horas", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("todos los santos", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("cada quincena", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("mañana a las 8 pm cada semana", SAT_1530, ("ask", "unrecognized_recurrence")),
+    ("todos los lunes cada 2 semanas", SAT_1530, ("ask", "unrecognized_recurrence")),
+    # Serie reconocida pero con algo más: se pregunta por eso
+    ("todos los lunes a las 7 y 20", SAT_1530, ("ask", "ambiguous_meridiem")),
+    ("cada lunes y jueves", SAT_1530, ("ask", "two_dates")),
+    ("todos los días mañana", SAT_1530, ("ask", "two_dates")),
+]
+
+
+def schedule(phrase: str, now_local: str = SAT_1530):
+    from asistente.parsing.recurrence import parse_schedule
+
+    return parse_schedule(phrase, lambda: local(now_local), TZ, DEFAULT_MORNING)
+
+
+@pytest.mark.parametrize(("phrase", "now_local", "expected"), SERIES, ids=[c[0] for c in SERIES])
+def test_repeticiones(phrase, now_local, expected):
+    result = schedule(phrase, now_local)
+    kind = expected[0]
+    assert result.kind == kind, (phrase, result)
+    if kind == "series":
+        assert result.series.rrule == expected[1], (phrase, result)
+        shown = to_local(result.series.first_at_utc, TZ).strftime("%Y-%m-%d %H:%M")
+        assert shown == expected[2], (phrase, result)
+        assert result.series.has_time is expected[3], (phrase, result)
+    elif kind == "once":
+        shown = to_local(result.when.when_utc, TZ).strftime("%Y-%m-%d %H:%M")
+        assert shown == expected[1], (phrase, result)
+    elif kind == "ask":
+        assert result.reason == expected[1], (phrase, result)
+
+
+def test_parse_when_solo_tampoco_guarda_un_aviso_unico_con_palabras_de_repeticion():
+    # Defensa en profundidad: aunque alguien llame solo a parse_when, no devuelve "ok"
+    for phrase in ("cada mes a las 8 pm", "mañana a las 8 pm semanal", "todos los santos mañana"):
+        result = run(phrase)
+        assert (result.status, result.reason) == ("ask", "unrecognized_recurrence"), phrase
+
+
+def test_el_flujo_prueba_primero_la_repeticion_y_luego_la_fecha(monkeypatch):
+    from asistente.parsing import recurrence
+
+    calls: list[str] = []
+    real_recurrence, real_when = recurrence.parse_recurrence, recurrence.parse_when
+
+    def spy_recurrence(*args, **kwargs):
+        calls.append("recurrence")
+        return real_recurrence(*args, **kwargs)
+
+    def spy_when(*args, **kwargs):
+        calls.append("when")
+        return real_when(*args, **kwargs)
+
+    monkeypatch.setattr(recurrence, "parse_recurrence", spy_recurrence)
+    # La fecha suelta solo se consulta cuando la repetición dijo "none"
+    calls.clear()
+    monkeypatch.setattr(recurrence, "_parse_single", spy_when)
+    assert schedule("mañana a las 8 pm").kind == "once"
+    assert calls == ["recurrence", "when"]
+    calls.clear()
+    assert schedule("todos los lunes a las 7 pm").kind == "series"
+    assert calls == ["recurrence"]
+    calls.clear()
+    assert schedule("cada mes").kind == "ask"
+    assert calls == ["recurrence"]
+
+
+def test_la_constante_de_palabras_de_repeticion_es_compartida():
+    from asistente.parsing import dates, recurrence
+
+    assert recurrence.RE_RECURRENCE_KEYWORD is dates.RE_RECURRENCE_KEYWORD
