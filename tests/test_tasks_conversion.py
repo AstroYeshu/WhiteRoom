@@ -5,6 +5,8 @@ Reloj: sábado 2026-10-03 15:30 en México.
 
 from datetime import timedelta
 
+import sqlite3
+
 import pytest
 
 from asistente.core import reminders, tasks
@@ -91,3 +93,16 @@ def test_convertir_una_serie_guarda_la_rrule(conn, clock, inbox_task):
         conn, inbox_task.id, "x", when(clock), clock, rrule="FREQ=DAILY"
     )
     assert created.rrule == "FREQ=DAILY"
+
+
+def test_si_falla_al_cerrar_la_tarea_no_queda_ningun_recordatorio(conn, clock, inbox_task):
+    """Atomicidad: un fallo a mitad de la conversión no deja un recordatorio huérfano."""
+    with conn:
+        conn.execute(
+            "CREATE TRIGGER falla_al_cerrar BEFORE UPDATE OF status ON tasks"
+            " BEGIN SELECT RAISE(ABORT, 'falla simulada'); END"
+        )
+    with pytest.raises(sqlite3.DatabaseError):
+        tasks.convert_to_reminder(conn, inbox_task.id, "x", when(clock), clock)
+    assert reminders.list_pending(conn) == []
+    assert tasks.get_task(conn, inbox_task.id).status == "open"
