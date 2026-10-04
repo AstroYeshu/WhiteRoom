@@ -378,7 +378,7 @@ _CONTEXTS = [
 
 def _expected_for(day: str, caps: str, has_determiner: bool, at_start: bool, template: str):
     # Regla 5 revisada: sin determinante pregunta SOLO tras "a"/"con" (cualquier capitalización)
-    # o con mayúscula inicial a mitad de frase. Al inicio (sin me/te/le...) o en minúsculas es fecha.
+    # o con mayúscula inicial a mitad de frase. Al inicio (sin me/te/le...) o en minúscula es fecha.
     after_a_or_con = " a {d}" in template or " con {d}" in template
     capitalized_mid_sentence = caps != "minúscula" and not at_start
     is_name = (
