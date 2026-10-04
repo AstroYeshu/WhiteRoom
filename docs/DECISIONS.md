@@ -208,3 +208,6 @@ El README asume Raspberry Pi OS Bookworm (Python 3.11) y el usuario `pi`; los ej
 
 ## Auditoría de deriva
 `docs/AUDITORIA.md` compara SPEC y código sin arreglar nada. La mayoría de las 13 discrepancias se resuelven editando el SPEC; la única decisión de diseño pendiente es la 10 (cómo será «¿Quitas alguna?» en la Fase 3).
+
+## Bug de los botones (TypeError) y pruebas con la librería real
+Causa: en 2d (`/estado`) añadí `runtime` al diccionario `wiring` de `main._handlers`, que alimenta DOS funciones (`handle_message` y `handle_choice`), pero solo le di el parámetro a la primera. Los falsos llamaban a los manejadores directo (sin `main`) y el dry-run solo probaba mensajes, así que nada lo vio. Arreglo: `handle_choice` acepta `runtime`. Diagnóstico permanente: `describe_error` registra tipo y las últimas 5 líneas `archivo:línea en función` (sin mensaje, argumentos ni rutas). Regla nueva en CLAUDE.md: los cambios en canales o callbacks se prueban también con `Update.de_json`. `main._handlers` acepta `conversation` y `TelegramChannel` separó `_register_handlers` de `run_polling` solo para poder probarlos.

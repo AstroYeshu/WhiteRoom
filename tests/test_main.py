@@ -29,3 +29,23 @@ def test_modo_real_sin_config_falla_con_codigo_2(monkeypatch, tmp_path, capsys):
 
     assert app.main([]) == 2
     assert "Faltan variables obligatorias" in capsys.readouterr().err
+
+
+def test_dry_run_atiende_una_pulsacion_de_boton(monkeypatch, tmp_path, caplog):
+    """El cableado de `main` debe servir también a los botones (`handle_choice`), no solo a los
+    mensajes: escribir el número de un botón de la consola es una pulsación."""
+    for name in ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_ID", "DRY_RUN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("hola\n1\n/salir\n"))
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="utf-8"))
+
+    assert app.main(["--dry-run"]) == 0
+
+    sys.stdout.seek(0)
+    output = sys.stdout.read()
+    assert (
+        "¿En qué área va?" in output or "Tarea guardada" in output
+    )  # el botón 1 avanzó la tarjeta
+    assert "Error" not in output
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]

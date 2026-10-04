@@ -7,8 +7,10 @@ a cualquier usuario que no sea `ALLOWED_USER_ID` (ni siquiera responde al botón
 from __future__ import annotations
 
 import logging
+import traceback
 from collections.abc import Awaitable, Sequence
 from datetime import timedelta
+from pathlib import PurePath
 from typing import TypeVar
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -74,6 +76,22 @@ def build_keyboard(
 def seconds_from(value: int | float | timedelta) -> float:
     """Espera en segundos: la librería entrega `retry_after` como `int` o como `timedelta`."""
     return value.total_seconds() if isinstance(value, timedelta) else float(value)
+
+
+def describe_error(error: BaseException, frames: int = 5) -> str:
+    """El tipo del error y las últimas `frames` líneas de su traza: `archivo.py:LÍNEA en función`.
+
+    Para diagnosticar sin filtrar nada del usuario: NO incluye el mensaje de la excepción, sus
+    argumentos ni el código fuente de las líneas (solo el nombre del archivo, sin rutas).
+    """
+    name = type(error).__name__
+    steps = traceback.extract_tb(error.__traceback__)[-frames:]
+    if not steps:
+        return name
+    where = " > ".join(
+        f"{PurePath(step.filename).name}:{step.lineno} en {step.name}" for step in steps
+    )
+    return f"{name} en {where}"
 
 
 def _bad_request_reason(error: tg_error.BadRequest) -> str:
@@ -207,20 +225,8 @@ class TelegramChannel:
 
     # --- Entrada -------------------------------------------------------------------
 
-    def run_polling(
-        self,
-        on_message: MessageCallback,
-        on_choice: ChoiceCallback,
-        on_tick: TickCallback,
-        tick_seconds: float = TICK_INTERVAL_SECONDS,
-    ) -> None:
-        """Arranca el long polling (bloqueante). No abre puertos.
-
-        `on_tick` corre cada `tick_seconds` (y al arrancar) en el `job_queue` de la librería.
-        """
-
-        async def _tick_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-            await run_tick_safely(on_tick)
+    def _register_handlers(self, on_message: MessageCallback, on_choice: ChoiceCallback) -> None:
+        """Conecta mensajes, botones y el manejador de errores al `Application` (sin arrancarlo)."""
 
         async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if update.effective_user is None or update.message is None:
@@ -258,12 +264,31 @@ class TelegramChannel:
                     logger.warning("No se pudo responder a la pulsación: %s", type(error).__name__)
 
         async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-            # Solo el tipo de error: el texto del mensaje del usuario nunca se registra.
-            logger.error("Error en Telegram: %s", type(context.error).__name__)
+            # Tipo y últimas líneas de la traza; el texto del mensaje del usuario nunca se registra.
+            error = context.error
+            detail = describe_error(error) if error is not None else "desconocido"
+            logger.error("Error en Telegram: %s", detail)
 
         self._application.add_handler(MessageHandler(filters.TEXT, _on_text))
         self._application.add_handler(CallbackQueryHandler(_on_callback))
         self._application.add_error_handler(_on_error)
+
+    def run_polling(
+        self,
+        on_message: MessageCallback,
+        on_choice: ChoiceCallback,
+        on_tick: TickCallback,
+        tick_seconds: float = TICK_INTERVAL_SECONDS,
+    ) -> None:
+        """Arranca el long polling (bloqueante). No abre puertos.
+
+        `on_tick` corre cada `tick_seconds` (y al arrancar) en el `job_queue` de la librería.
+        """
+
+        async def _tick_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+            await run_tick_safely(on_tick)
+
+        self._register_handlers(on_message, on_choice)
         job_queue = self._application.job_queue
         if job_queue is None:  # falta el extra `job-queue`: sin él no habría recordatorios
             raise RuntimeError("python-telegram-bot sin el extra job-queue")

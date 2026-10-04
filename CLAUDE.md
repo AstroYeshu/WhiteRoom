@@ -36,6 +36,8 @@ El diseño completo está en `SPEC.md`. Implementa SOLO la fase que se te pida, 
 - Antes de añadir una dependencia, pregunta.
 - Tests con pytest para toda lógica de dinero, fechas, recordatorios y decisiones de clasificación.
   Inyecta el reloj (`now()`) para poder probar el tiempo.
+- Todo cambio en canales o callbacks se prueba también con objetos reales de la librería
+  (`Update.de_json`), no solo con falsos (`tests/test_telegram_real.py`).
 
 ## Flujo de trabajo
 - Al empezar: lee `docs/STATUS.md` y `git log -n 10` antes de planificar.

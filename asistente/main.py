@@ -85,6 +85,7 @@ def _handlers(
     conn: sqlite3.Connection,
     channel: Channel,
     runtime: RuntimeStatus | None = None,
+    conversation: Conversation | None = None,
 ):
     """`handle_message` y `handle_choice` con la base, el reloj real, la zona del dueño y UNA
     misma conversación (el estado a medias vive en memoria y lo comparten mensajes y botones)."""
@@ -94,7 +95,7 @@ def _handlers(
         "conn": conn,
         "now": now,
         "tz_name": settings.tz_name,
-        "conversation": Conversation(),
+        "conversation": conversation or Conversation(),
         "runtime": runtime,
     }
     return partial(handle_message, **wiring), partial(handle_choice, **wiring)

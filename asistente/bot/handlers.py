@@ -148,6 +148,7 @@ async def handle_choice(
     now: Clock,
     tz_name: str,
     conversation: Conversation,
+    runtime: RuntimeStatus | None = None,
 ) -> str | None:
     """Atiende un botón. Devuelve el aviso breve con que se responde (o None)."""
     if not is_allowed(choice.user_ref, allowed_user_id):
@@ -155,12 +156,12 @@ async def handle_choice(
         return None
     action, parts = decode_choice_id(choice.choice_id)
     if action in (inbox.ACTION_FLOW, inbox.ACTION_UNDO, inbox.ACTION_CHANGE):
-        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
+        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref, runtime)
         if action == inbox.ACTION_FLOW:
             return await inbox.handle_flow_choice(ctx, choice, parts)
         return await inbox.handle_conversion_choice(ctx, choice, action, parts)
     if action == commands.ACTION_PENDING:
-        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
+        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref, runtime)
         return await commands.handle_pending_choice(ctx, choice, parts)
     request = _parse_reminder_choice(choice.choice_id)
     if request is None:

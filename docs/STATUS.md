@@ -73,6 +73,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - Auditoría SPEC contra código HECHA: `docs/AUDITORIA.md` (13 discrepancias, casi todas de SPEC desactualizado; sin cambios de código).
 - Preguntas abiertas para el dueño: `docs/PREGUNTAS.md`.
 
+- BUG corregido (botones de Telegram daban `TypeError`): `handle_choice` no aceptaba `runtime` y `main._handlers` se lo pasaba (lo introduje en 2d).
+  Nuevo `tests/test_telegram_real.py` (13 pruebas, `Update.de_json` + `Application` real) y el error de Telegram ahora registra tipo y 5 líneas de traza.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
