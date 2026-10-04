@@ -15,7 +15,7 @@ import asyncio
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from enum import Enum
 
 from dateutil.rrule import rrulestr
@@ -47,6 +47,7 @@ ACTION_SNOOZE = "rem_snooze"
 ACTION_TOMORROW = "rem_tomorrow"
 SNOOZE_SHORT_MINUTES = 10
 SNOOZE_LONG_MINUTES = 60
+EARLY_MORNING_CUTOFF = time(5, 0)  # antes de esto, "mañana" es hoy (M5)
 
 NAG_INTERVAL = timedelta(minutes=15)  # insistencia (priority=2): cada cuánto se reenvía
 NAG_MAX_RESENDS = 3  # reenvíos tras el primer aviso, si no se pulsa ✅ Hecho
@@ -294,10 +295,20 @@ def snooze(
 def snooze_until_tomorrow(
     conn: sqlite3.Connection, reminder_id: int, now: Clock, tz_name: str
 ) -> datetime | None:
-    """🌅 Mañana a `default_morning_time` (hora local del usuario)."""
+    """🌅 Mañana a `default_morning_time` (hora local del usuario).
+
+    Antes de las 05:00 locales "mañana" casi siempre significa "cuando me levante", o sea HOY:
+    se ofrece hoy a esa hora, siempre que todavía no haya pasado (M5).
+    """
     morning = get_time_setting(conn, "default_morning_time")
-    tomorrow = to_local(now(), tz_name).date() + timedelta(days=1)
-    target = local_to_utc(datetime.combine(tomorrow, morning), tz_name)
+    moment = now()
+    local_now = to_local(moment, tz_name)
+    day = local_now.date()
+    if local_now.time() >= EARLY_MORNING_CUTOFF:
+        day += timedelta(days=1)
+    target = local_to_utc(datetime.combine(day, morning), tz_name)
+    if target <= moment:  # la hora de hoy ya pasó: mañana
+        target = local_to_utc(datetime.combine(day + timedelta(days=1), morning), tz_name)
     return _snooze_to(conn, reminder_id, target)
 
 
