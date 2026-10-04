@@ -17,8 +17,6 @@ def service_lines() -> list[str]:
 
 def test_la_unidad_tiene_lo_que_pide_el_spec():
     lines = service_lines()
-    assert "After=network-online.target" in lines
-    assert "Wants=network-online.target" in lines
     assert "Restart=always" in lines
     assert "RestartSec=5" in lines
     assert "WantedBy=multi-user.target" in lines
@@ -56,3 +54,24 @@ def test_env_example_no_tiene_comentarios_al_final_de_linea():
     for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.startswith("#"):
             assert "#" not in line, line
+
+
+def test_la_unidad_avisa_que_time_sync_se_verifica_en_la_pi():
+    text = SERVICE.read_text(encoding="utf-8")
+    assert "verificar en la Pi" in text
+
+
+def test_la_unidad_espera_a_la_red_y_a_la_hora_con_after():
+    assert "After=network-online.target time-sync.target" in service_lines()
+
+
+def test_la_unidad_pide_la_red_y_la_hora_con_wants():
+    assert "Wants=network-online.target time-sync.target" in service_lines()
+
+
+def test_after_y_wants_nombran_los_mismos_targets():
+    lines = service_lines()
+    [after] = [line for line in lines if line.startswith("After=")]
+    [wants] = [line for line in lines if line.startswith("Wants=")]
+    assert after.removeprefix("After=").split() == wants.removeprefix("Wants=").split()
+    assert "time-sync.target" in after.split("=")[1].split()

@@ -11,8 +11,9 @@
 
 [Unit]
 Description=Asistente personal por Telegram
-After=network-online.target
-Wants=network-online.target
+# time-sync.target: que la hora esté sincronizada antes de arrancar (verificar en la Pi).
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=simple

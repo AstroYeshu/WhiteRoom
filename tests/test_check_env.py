@@ -24,8 +24,11 @@ def load_script():
 
 
 @pytest.fixture
-def script():
-    return load_script()
+def script(monkeypatch):
+    module = load_script()
+    # Sin git de verdad: la fecha del último commit se inyecta en cada prueba que la necesita.
+    monkeypatch.setattr(module, "last_commit_time", lambda root=None: None)
+    return module
 
 
 @pytest.fixture
@@ -307,3 +310,163 @@ def test_bot_env_invalido_falla_nombrando_la_variable_sin_su_valor(script, env, 
     assert code == 1
     assert "BOT_ENV" in out
     assert "produccion-secreta" not in out
+
+
+# --- Reloj contra el último commit, y la salida en UTF-8 ------------------------------------------
+
+
+class Done:
+    def __init__(self, out: str, code: int = 0) -> None:
+        self.stdout, self.returncode = out, code
+
+
+def test_la_fecha_del_ultimo_commit_se_lee_de_git(monkeypatch):
+    fresh = load_script()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Done("1759500000\n")
+
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: "/usr/bin/git")
+    monkeypatch.setattr(fresh.subprocess, "run", fake_run)
+    assert fresh.last_commit_time() == datetime.fromtimestamp(1759500000, tz=UTC)
+    assert calls[-1][0][0] == "git" and "log" in calls[-1][0]
+    assert "--format=%ct" in calls[-1][0]
+    assert calls[-1][1]["timeout"] <= 10
+
+
+@pytest.mark.parametrize("out", ["", "no es un numero\n", "-5x"])
+def test_sin_fecha_de_commit_legible_es_desconocida(monkeypatch, out):
+    fresh = load_script()
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: "/usr/bin/git")
+    monkeypatch.setattr(fresh.subprocess, "run", lambda *a, **k: Done(out))
+    assert fresh.last_commit_time() is None
+
+
+def test_sin_git_o_con_git_fallando_la_fecha_es_desconocida(monkeypatch):
+    fresh = load_script()
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: None)
+    assert fresh.last_commit_time() is None
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: "/usr/bin/git")
+    monkeypatch.setattr(fresh.subprocess, "run", lambda *a, **k: Done("1759500000", 128))
+    assert fresh.last_commit_time() is None
+
+    def boom(*a, **k):
+        raise OSError("no se puede ejecutar")
+
+    monkeypatch.setattr(fresh.subprocess, "run", boom)
+    assert fresh.last_commit_time() is None
+
+
+def test_reloj_detras_del_ultimo_commit_es_aviso(script, env):
+    commit = NOW + timedelta(days=2)
+    results = by_name(script.run_checks(env, now=NOW, ntp_synced=None, commit_time=commit))
+    status, detail = results["Reloj"]
+    assert status == "AVISO" and "commit" in detail
+
+
+def test_reloj_despues_del_ultimo_commit_es_ok(script, env):
+    commit = NOW - timedelta(days=2)
+    assert (
+        by_name(script.run_checks(env, now=NOW, ntp_synced=None, commit_time=commit))["Reloj"][0]
+        == "OK"
+    )
+
+
+def test_la_tolerancia_con_el_commit_es_de_5_minutos(script, env):
+    inside = NOW + timedelta(minutes=4)
+    outside = NOW + timedelta(minutes=6)
+    assert (
+        by_name(script.run_checks(env, now=NOW, ntp_synced=None, commit_time=inside))["Reloj"][0]
+        == "OK"
+    )
+    assert (
+        by_name(script.run_checks(env, now=NOW, ntp_synced=None, commit_time=outside))["Reloj"][0]
+        == "AVISO"
+    )
+
+
+def test_sin_fecha_de_commit_el_reloj_no_cambia(script, env):
+    assert (
+        by_name(script.run_checks(env, now=NOW, ntp_synced=None, commit_time=None))["Reloj"][0]
+        == "OK"
+    )
+
+
+def test_el_piso_fijo_sigue_avisando_aunque_el_commit_no_sepa(script, env):
+    old = datetime(2024, 1, 1, tzinfo=UTC)
+    results = by_name(script.run_checks(env, now=old, ntp_synced=None, commit_time=None))
+    assert results["Reloj"][0] == "AVISO"
+
+
+def test_el_reloj_con_ntp_y_commit_a_la_vez_junta_los_motivos(script, env):
+    commit = NOW + timedelta(days=1)
+    status, detail = by_name(script.run_checks(env, now=NOW, ntp_synced=False, commit_time=commit))[
+        "Reloj"
+    ]
+    assert status == "AVISO" and "commit" in detail and "NTP" in detail
+
+
+def test_el_commit_real_del_repositorio_se_lee_o_es_desconocido():
+    real = load_script().last_commit_time()
+    assert real is None or real.tzinfo is not None
+
+
+def test_la_salida_sale_en_utf8_aunque_la_consola_sea_ascii(script, env, tmp_path, monkeypatch):
+    import io
+
+    raw = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(raw, encoding="ascii", errors="strict"))
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="ascii"))
+    code = run_main(script, env, tmp_path, ntp_synced=True)
+    sys.stdout.flush()
+    assert code == 0
+    assert "TZ_NAME es una zona válida".encode() in raw.getvalue()
+
+
+def test_run_checks_consulta_el_ultimo_commit_por_defecto(script, env, monkeypatch):
+    monkeypatch.setattr(script, "last_commit_time", lambda root=None: NOW + timedelta(days=3))
+    results = by_name(script.run_checks(env, now=NOW, ntp_synced=None))
+    assert results["Reloj"][0] == "AVISO" and "commit" in results["Reloj"][1]
+
+
+def test_main_avisa_si_el_reloj_va_detras_del_commit(script, env, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(script, "last_commit_time", lambda root=None: NOW + timedelta(days=3))
+    code = run_main(script, env, tmp_path, ntp_synced=True)
+    assert code == 0  # sigue siendo AVISO, no FALLA
+    out = capsys.readouterr().out
+    assert [line for line in out.splitlines() if line.startswith("AVISO Reloj")]
+
+
+@pytest.mark.parametrize("code", [1, 128])
+def test_git_que_falla_no_da_fecha_aunque_imprima_un_numero(monkeypatch, code):
+    fresh = load_script()
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: "/usr/bin/git")
+    monkeypatch.setattr(fresh.subprocess, "run", lambda *a, **k: Done("1759500000", code))
+    assert fresh.last_commit_time() is None
+
+
+def test_la_consulta_a_git_pide_solo_la_fecha_del_ultimo_commit(monkeypatch):
+    fresh = load_script()
+
+    def fake_run(cmd, **kwargs):
+        return Done("1759500000" if "--format=%ct" in cmd and "-1" in cmd else "abc123")
+
+    monkeypatch.setattr(fresh.shutil, "which", lambda name: "/usr/bin/git")
+    monkeypatch.setattr(fresh.subprocess, "run", fake_run)
+    assert fresh.last_commit_time() is not None
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_la_salida_de_main_en_utf8_con_y_sin_fallas(script, env, tmp_path, monkeypatch, broken):
+    import io
+
+    if broken:
+        env["TZ_NAME"] = "Marte/Olimpo"  # una línea FALLA con acentos
+    raw = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(raw, encoding="ascii"))
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="ascii"))
+    run_main(script, env, tmp_path, ntp_synced=True)
+    sys.stdout.flush()
+    assert "válid".encode() in raw.getvalue()

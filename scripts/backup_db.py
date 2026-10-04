@@ -23,6 +23,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from asistente.textio import force_utf8_output  # noqa: E402
+
 RETENTION_DAYS = 14
 MIN_KEEP = 7  # nunca quedan menos de estos respaldos (los más recientes)
 DEFAULT_DB_PATH = "data/asistente.db"
@@ -121,6 +125,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
+    force_utf8_output()
     args = parse_args(argv)
     load_dotenv(Path.cwd() / ".env")  # solo el del directorio actual, como main.py
     source = args.db or Path(os.environ.get("DB_PATH") or DEFAULT_DB_PATH)

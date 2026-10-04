@@ -334,3 +334,31 @@ def test_backup_directo_si_falla_la_poda_lanza_backuperror_y_el_respaldo_queda(
     with pytest.raises(script.BackupError, match="ya está hecho|está hecho"):
         script.backup(source, target, TODAY)
     assert (target / backup_name(TODAY)).exists()
+
+
+def test_la_salida_sale_en_utf8_aunque_la_consola_sea_ascii(script, source, tmp_path, monkeypatch):
+    import io
+    import sys
+
+    out, err = io.BytesIO(), io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(out, encoding="ascii", errors="strict"))
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(err, encoding="ascii", errors="strict"))
+    monkeypatch.setattr(script, "_integrity_ok", lambda conn: False)
+    code = script.main(["--db", str(source), "--dir", str(tmp_path / "b")], today=TODAY)
+    sys.stderr.flush()
+    assert code == 1
+    assert "no pasó la verificación".encode() in err.getvalue()  # tilde y ó en UTF-8
+
+
+def test_el_exito_con_una_ruta_con_acentos_sale_en_utf8(script, source, tmp_path, monkeypatch):
+    import io
+    import sys
+
+    out = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(out, encoding="ascii", errors="strict"))
+    code = script.main(
+        ["--db", str(source), "--dir", str(tmp_path / "respaldos ñandú")], today=TODAY
+    )
+    sys.stdout.flush()
+    assert code == 0
+    assert "ñandú".encode() in out.getvalue()

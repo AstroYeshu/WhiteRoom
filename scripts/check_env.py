@@ -29,14 +29,16 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from asistente.config import REQUIRED_VARS, ConfigError, load_settings  # noqa: E402
+from asistente.textio import force_utf8_output  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS = ROOT / "requirements.txt"
 MIN_PYTHON = (3, 11)
 DEFAULT_DB_PATH = "data/asistente.db"
 
-# Un reloj anterior a esta fecha (la de esta versión) casi seguro está mal: una Raspberry
-# Pi sin pila arranca con la última hora guardada hasta que NTP la corrige.
+# PISO fijo: un reloj anterior a esta fecha casi seguro está mal (una Raspberry Pi sin pila arranca
+# con la última hora guardada hasta que NTP la corrige). La señal principal es `timedatectl` (NTP)
+# y la fecha del último commit; esta constante solo cubre cuando no se pueden consultar.
 MIN_PLAUSIBLE_UTC = datetime(2026, 10, 1, tzinfo=UTC)
 CLOCK_TOLERANCE = timedelta(minutes=5)
 
@@ -187,6 +189,30 @@ def ntp_synchronized() -> bool | None:
     return {"yes": True, "no": False}.get(done.stdout.strip())
 
 
+def last_commit_time(root: Path = ROOT) -> datetime | None:
+    """Fecha del último commit (UTC) si git está disponible; el reloj no puede ir detrás de ella.
+
+    `None` si no hay git, no es un repositorio o la salida no se entiende.
+    """
+    if not shutil.which("git"):
+        return None
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "log", "-1", "--format=%ct"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    try:
+        return datetime.fromtimestamp(int(done.stdout.strip()), tz=UTC)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def _latest_database_activity(path: Path) -> datetime | None:
     """La marca de tiempo más reciente que ya guarda la base (solo lectura), si se puede leer."""
     if not path.is_file():
@@ -209,10 +235,17 @@ def _latest_database_activity(path: Path) -> datetime | None:
         return None
 
 
-def check_clock(now: datetime, db_path: Path, ntp_synced: bool | None) -> Result:
+def check_clock(
+    now: datetime,
+    db_path: Path,
+    ntp_synced: bool | None,
+    commit_time: datetime | None = None,
+) -> Result:
     problems = []
     if now < MIN_PLAUSIBLE_UTC:
         problems.append("la fecha del sistema es anterior a la de esta versión")
+    if commit_time is not None and now + CLOCK_TOLERANCE < commit_time:
+        problems.append("el reloj va detrás de la fecha del último commit")
     last = _latest_database_activity(db_path)
     if last is not None and now + CLOCK_TOLERANCE < last:
         problems.append("el reloj va detrás de lo último que registró la base")
@@ -231,9 +264,12 @@ def run_checks(
     requirements: Path = REQUIREMENTS,
     env_file: Path | None = None,
     ntp_synced: object = _UNSET,
+    commit_time: object = _UNSET,
 ) -> list[Result]:
     if ntp_synced is _UNSET:
         ntp_synced = ntp_synchronized()
+    if commit_time is _UNSET:
+        commit_time = last_commit_time()
     return [
         check_python(python_version or sys.version_info),
         check_tzdata(version_of),
@@ -242,7 +278,12 @@ def run_checks(
         check_database(environ),
         check_packages(requirements, version_of),
         check_env_file(env_file or Path.cwd() / ".env"),
-        check_clock(now or datetime.now(UTC), db_file(environ), ntp_synced),  # type: ignore[arg-type]
+        check_clock(
+            now or datetime.now(UTC),
+            db_file(environ),
+            ntp_synced,  # type: ignore[arg-type]
+            commit_time,  # type: ignore[arg-type]
+        ),
     ]
 
 
@@ -253,6 +294,7 @@ def main(
     env_file: Path | None = None,
     ntp_synced: object = _UNSET,
 ) -> int:
+    force_utf8_output()
     env_file = env_file or Path.cwd() / ".env"
     if environ is None:
         load_dotenv(env_file)  # solo el del directorio actual, como main.py

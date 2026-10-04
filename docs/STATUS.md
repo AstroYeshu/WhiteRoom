@@ -76,6 +76,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - BUG corregido (botones de Telegram daban `TypeError`): `handle_choice` no aceptaba `runtime` y `main._handlers` se lo pasaba (lo introduje en 2d).
   Nuevo `tests/test_telegram_real.py` (13 pruebas, `Update.de_json` + `Application` real) y el error de Telegram ahora registra tipo y 5 líneas de traza.
 
+- Tras el bug de los botones: guarda estructural `tests/test_main_wiring.py`, CLAUDE.md a 45 líneas (detalle en `docs/FLUJO.md`), respaldo con mínimo de 7
+  y nunca el último, reloj de `check_env` contra `timedatectl` y último commit, UTF-8 en los scripts, `time-sync.target` en la unidad.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
