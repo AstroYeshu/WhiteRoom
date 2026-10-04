@@ -334,6 +334,16 @@ class ReminderEngine:
         return is_quiet_hour(moment, start, end, self._tz_name)
 
     async def _deliver(self, reminder: Reminder, moment: datetime) -> bool:
+        # Releer antes de enviar: entre la consulta del tick y este punto el usuario pudo cancelar
+        # o posponer. Si la fila cambió, no se envía (el siguiente tick la verá como esté).
+        current = get_reminder(self._conn, reminder.id)
+        if (
+            current is None
+            or current.status != reminder.status
+            or current.fire_at_utc != reminder.fire_at_utc
+        ):
+            self._retry_at.pop(reminder.id, None)
+            return False
         is_resend = reminder.status == "sent"  # insistencia: no es un aviso "retrasado"
         delayed = not is_resend and moment - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
         text = format_reminder_text(reminder.text, self._area_name(reminder.area_id), delayed)
@@ -348,7 +358,7 @@ class ReminderEngine:
             self._fail_transient(reminder, moment, getattr(error, "reason", type(error).__name__))
             return False
         try:
-            self._finish_send(reminder, moment)
+            return self._finish_send(reminder, moment)
         except Exception as error:  # noqa: BLE001 - un fallo de base no debe frenar el resto
             # Todo se revirtió (una sola transacción): en el próximo tick se reintenta entero.
             logger.error(
@@ -357,7 +367,6 @@ class ReminderEngine:
                 type(error).__name__,
             )
             return False
-        return True
 
     def _area_name(self, area_id: int | None) -> str | None:
         if area_id is None:
@@ -365,9 +374,14 @@ class ReminderEngine:
         row = self._conn.execute("SELECT name FROM areas WHERE id = ?", (area_id,)).fetchone()
         return row["name"] if row else None
 
-    def _finish_send(self, reminder: Reminder, moment: datetime) -> None:
+    def _finish_send(self, reminder: Reminder, moment: datetime) -> bool:
         """Registra el envío. En el primer aviso de una serie, marcar `sent` e insertar la
-        siguiente ocurrencia es UNA transacción: o ocurren las dos cosas o ninguna."""
+        siguiente ocurrencia es UNA transacción: o ocurren las dos cosas o ninguna.
+
+        Solo marca `sent` si la fila sigue `pending` en la MISMA hora que se leyó antes de enviar
+        (comprueba filas afectadas). Si el usuario canceló o pospuso mientras se enviaba, no se
+        pisa su acción: sin siguiente de serie y sin insistencia. Devuelve si se registró.
+        """
         if reminder.status == "sent":  # reenvío de insistencia
             with self._conn:
                 self._conn.execute(
@@ -377,13 +391,16 @@ class ReminderEngine:
                 )
         else:
             with self._conn:
-                self._conn.execute(
+                cursor = self._conn.execute(
                     "UPDATE reminders SET status = 'sent', last_fired_at = ?, attempts = 0"
-                    " WHERE id = ?",
-                    (to_utc_iso(moment), reminder.id),
+                    " WHERE id = ? AND status = 'pending' AND fire_at_utc = ?",
+                    (to_utc_iso(moment), reminder.id, reminder.fire_at_utc),
                 )
+                if cursor.rowcount != 1:
+                    return False
                 self._spawn_next(reminder, moment)
         self._retry_at.pop(reminder.id, None)
+        return True
 
     def _spawn_next(self, reminder: Reminder, moment: datetime) -> None:
         """Inserta la siguiente ocurrencia de una serie, contada desde la hora PROGRAMADA.

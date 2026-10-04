@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -46,11 +47,15 @@ class ScriptedChannel(FakeChannel):
         super().__init__()
         self.fail_if = lambda text: None
         self.attempts: list[str] = []  # todo intento de envío, haya salido o no
+        # Se ejecuta "mientras se envía": simula al usuario pulsando un botón a mitad del envío.
+        self.during_send: Callable[[], None] | None = None
 
     async def send_choices(
         self, to: str, text: str, choices: list[Choice], kind: str = "reply"
     ) -> None:
         self.attempts.append(text)
+        if self.during_send is not None:
+            self.during_send()
         error = self.fail_if(text)
         if error is not None:
             raise error
