@@ -80,3 +80,11 @@ La nota se crea y LUEGO se cierra la tarea (dos pasos): el peor caso es una nota
 candidato. La opción se revisa al PULSAR: si ya pasó, no se crea y se vuelve a preguntar. Una repetición se previsualiza
 con [Guardar][Cancelar] antes de guardar. «¿Cuándo?» ofrece [Hoy 18:00 (solo si es futuro)] [Mañana 9:00] [Cancelar].
 
+## «¿Cuándo?» invita a escribir y ofrece «Mejor como tarea»
+La pregunta «¿Cuándo?» (y la de «hora pasada») dice «o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5"» y trae
+[📝 Mejor como tarea]: deja la entrada como tarea con el área ya elegida, sin recordatorio. Solo en «¿Cuándo?», no en las
+preguntas con candidatos. La confirmación de una fecha sin hora dice «9:00 am (hora por defecto)» (con am/pm, como el
+resto de `format_when`). Regla de respuesta: un texto es respuesta a «¿cuándo?» si `parse_schedule` lo entiende (`once`,
+`series` o `ask` salvo `name_or_day`/`time_or_verse`); `none` es captura nueva y avisa. Se usa `parse_schedule` y no
+`parse_when` a secas para que «todos los lunes…» también cuente como respuesta.
+

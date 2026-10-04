@@ -46,12 +46,15 @@ EVENING = time(18, 0)  # la opción "Hoy 18:00" de la pregunta ¿cuándo?
 
 ABANDONED_TEXT = "Dejé sin terminar lo anterior; sigue en tu bandeja como tarea."
 CANCELLED_TEXT = "↩ Cancelado. «{text}» sigue en tu bandeja como tarea."
-WHEN_PROMPT = "¿Cuándo?"
+WHEN_PROMPT = (
+    '¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".'
+)
 WRITE_WHEN_PROMPT = "Escribe la fecha y la hora, por ejemplo «mañana 8 pm»."
-PAST_PROMPT = "Esa hora ya pasó. ¿Cuándo?"
+PAST_PROMPT = f"Esa hora ya pasó. {WHEN_PROMPT}"
 NOT_UNDOABLE_TEXT = "Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente."
 
 CANCEL = ("x", None, "↩ Cancelar")
+AS_TASK = ("t", None, "📝 Mejor como tarea")
 Button = tuple[str, object | None, str]  # (acción, argumento, texto del botón)
 
 # Preguntas del parser (docs/PLAN_FASE1.md). Con candidatos, cada uno es un botón.
@@ -253,7 +256,7 @@ def _quick_targets(ctx: Ctx) -> dict[str, tuple[datetime, str]]:
 async def _ask_when(ctx: Ctx, flow: Flow, text: str, extra: list[Button] | None = None) -> None:
     flow.candidates = ()
     quick: list[Button] = [(key, None, label) for key, (_, label) in _quick_targets(ctx).items()]
-    await _send_question(ctx, flow, STEP_WHEN, text, [*(extra or []), *quick, CANCEL])
+    await _send_question(ctx, flow, STEP_WHEN, text, [*(extra or []), *quick, AS_TASK, CANCEL])
 
 
 def _question_text(ctx: Ctx, reason: str | None, candidates: tuple[datetime, ...]) -> str:
@@ -424,6 +427,18 @@ async def _on_save_series(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: li
     return True
 
 
+async def _on_better_as_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
+    """«Mejor como tarea»: queda como tarea (con el área elegida) y sin recordatorio."""
+    if args:
+        return False
+    tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
+    ctx.conversation.clear()
+    area = _area_name(ctx, flow.area_id)
+    suffix = f" en {area}" if area else ""
+    await show(ctx.channel, choice, f"📝 Tarea guardada{suffix}: «{shown(flow.text)}»")
+    return True
+
+
 async def _on_cancel(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
@@ -443,6 +458,7 @@ _FLOW_ACTIONS = {
     "w": (STEP_WHEN, _on_candidate),
     "o": (STEP_WHEN, _on_write_other),
     "n": (STEP_WHEN, _on_no_date),
+    "t": (STEP_WHEN, _on_better_as_task),
     "s": (STEP_SERIES, _on_save_series),
     "x": (None, _on_cancel),
 }

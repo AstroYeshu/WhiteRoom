@@ -229,7 +229,7 @@ def test_hora_por_defecto_se_avisa(bot, conn):
     bot.say("mañana llevar tarea")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    assert "hora por defecto" in bot.question[0]
+    assert "9:00 am (hora por defecto)" in bot.question[0]
     assert local_hhmm(pending(conn)[0]) == "2026-10-04 09:00"
 
 
@@ -268,7 +268,7 @@ def test_sin_fecha_pregunta_cuando_con_hoy_y_manana(bot, conn):
     bot.tap("Sin área")
     text, _ = bot.question
     assert "¿Cuándo?" in text
-    assert bot.labels() == ["Hoy 18:00", "Mañana 9:00", "↩ Cancelar"]
+    assert bot.labels() == ["Hoy 18:00", "Mañana 9:00", "📝 Mejor como tarea", "↩ Cancelar"]
     bot.tap("Mañana 9:00")
     [reminder] = pending(conn)
     assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-04 09:00"
@@ -279,7 +279,7 @@ def test_hoy_18_solo_se_ofrece_si_es_futuro(bot, clock):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    assert bot.labels() == ["Mañana 9:00", "↩ Cancelar"]
+    assert bot.labels() == ["Mañana 9:00", "📝 Mejor como tarea", "↩ Cancelar"]
 
 
 def test_hoy_18_pulsado_cuando_ya_paso_no_crea_nada(bot, conn, clock):
@@ -638,3 +638,84 @@ def test_candidato_unico_en_cuando_cuenta_como_respuesta_y_se_confirma(bot, conn
     bot.tap("8:00 pm")
     [reminder] = pending(conn)
     assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-03 20:00"
+
+
+# --- «¿Cuándo?» más usable ---------------------------------------------------------------------
+
+
+def test_cuando_invita_a_escribir_la_hora_con_ejemplos(bot):
+    waiting_for_when(bot)
+    text = bot.question[0]
+    assert text.startswith("¿Cuándo?")
+    assert "o escribe cuándo" in text
+    assert '"en 2 horas"' in text and '"el viernes a las 5"' in text
+
+
+def test_el_aviso_de_hora_pasada_tambien_invita_a_escribir(bot, clock):
+    clock.advance(hours=2, minutes=25)  # 17:55
+    bot.say("llamar al dentista")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    hoy = bot.choice_id("Hoy 18:00")
+    clock.advance(minutes=6)
+    bot.press(hoy)
+    assert "Esa hora ya pasó. ¿Cuándo?" in bot.question[0]
+    assert "o escribe cuándo" in bot.question[0]
+    assert "📝 Mejor como tarea" in bot.labels()
+
+
+def test_mejor_como_tarea_conserva_el_area_y_no_crea_recordatorio(bot, conn):
+    first_id = waiting_for_when_in(bot, "iglesia")
+    bot.tap("Mejor como tarea")
+    assert pending(conn) == []
+    task = tasks.get_task(conn, first_id)
+    assert (task.status, task.closed_reason) == ("open", None)
+    assert task.area_id == areas.find_area_by_name(conn, "iglesia").id
+    assert "Tarea guardada en iglesia" in bot.last[1]
+    assert bot.conversation.current(bot.clock) is None
+
+
+def test_mejor_como_tarea_sin_area(bot, conn):
+    first_id = waiting_for_when_in(bot, "Sin área")
+    bot.tap("Mejor como tarea")
+    task = tasks.get_task(conn, first_id)
+    assert (task.status, task.area_id) == ("open", None)
+    assert pending(conn) == [] and notes.list_notes(conn) == []
+
+
+def test_mejor_como_tarea_dos_veces_no_da_error(bot, conn):
+    waiting_for_when_in(bot, "personal")
+    button = bot.choice_id("Mejor como tarea")
+    bot.press(button)
+    bot.press(button)
+    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    assert len(all_tasks(conn)) == 1 and pending(conn) == []
+
+
+def test_mejor_como_tarea_tambien_sirve_tras_cambiar(bot, conn):
+    old = confirmed(bot)
+    bot.tap("Cambiar")
+    bot.tap("Mejor como tarea")
+    assert reminders.get_reminder(conn, old.id).status == "cancelled"
+    assert pending(conn) == []
+    [task] = all_tasks(conn)
+    assert (task.status, task.closed_reason) == ("open", None)
+
+
+def waiting_for_when_in(bot, area_label: str) -> int:
+    bot.say("llamar al dentista")
+    bot.tap("Recordatorio")
+    bot.tap(area_label)
+    return all_tasks(bot.conn)[0].id
+
+
+def test_la_confirmacion_sin_hora_dice_hora_por_defecto(bot):
+    bot.say("mañana comprar pan")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    assert "domingo 4 de octubre, 9:00 am (hora por defecto)" in bot.question[0]
+
+
+def test_la_confirmacion_con_hora_no_dice_hora_por_defecto(bot):
+    confirmed(bot)
+    assert "hora por defecto" not in bot.question[0]
