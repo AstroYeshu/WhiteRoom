@@ -90,7 +90,8 @@ def set_due(
         )
         reminders.cancel_for_task(conn, task_id)
     task = get_task(conn, task_id)
-    if due_at_utc is not None and task is not None and task.status == "open":
+    # Abierta o pospuesta: una tarea pospuesta con fecha nueva también necesita sus avisos (M7).
+    if due_at_utc is not None and task is not None and task.status in ("open", "postponed"):
         reminders.create_preparation_reminders(
             conn, task.id, task.title, task.area_id, due_at_utc, now
         )
