@@ -149,9 +149,10 @@ def test_rendirse_tras_24_horas_tambien_deja_seguir_la_serie(conn, clock, engine
     )  # prioridad 2: el silencio nocturno no salta ticks
     channel.always_fail_with(TransientChannelError("telegram_down"))
     clock.current = SUNDAY_8PM
-    for _ in range(reminders.TRANSIENT_ATTEMPT_LIMIT):
+    while not row(conn, first.id).stopped:
         tick(engine)
         clock.advance(seconds=reminders.BACKOFF_CAP_SECONDS)
+        assert clock() < SUNDAY_8PM + timedelta(hours=25)
     assert row(conn, first.id).stopped is True
     pending = [r for r in all_rows(conn) if r.status == "pending" and not r.stopped]
     assert [r.fire_at_utc for r in pending] == [to_utc_iso(SUNDAY_8PM + timedelta(weeks=1))]

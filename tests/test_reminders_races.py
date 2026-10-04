@@ -9,7 +9,7 @@ from datetime import timedelta
 import pytest
 
 from asistente.core import reminders
-from asistente.core.reminders import ReminderEngine
+from asistente.core.reminders import Delivery, ReminderEngine
 from asistente.timeutil import to_utc_iso
 from tests.fakes import ScriptedChannel
 
@@ -106,5 +106,5 @@ def test_la_fila_cambiada_antes_de_enviar_no_se_envia(conn, clock, engine, chann
     assert [r.id for r in due] == [created.id]
     reminders.cancel(conn, created.id)  # entre la consulta y el envío
 
-    assert asyncio.run(engine._deliver(due[0], clock())) is False
+    assert asyncio.run(engine._deliver(due[0], clock())) is Delivery.SKIPPED
     assert channel.attempts == []

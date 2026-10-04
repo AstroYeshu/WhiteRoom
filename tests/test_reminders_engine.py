@@ -188,14 +188,13 @@ def test_silencio_retiene_y_libera_en_orden_con_retrasado(conn, clock, engine, c
 
 
 def test_backoff_crece_y_se_topa():
-    assert [reminders.backoff_seconds(n) for n in range(1, 8)] == [30, 60, 120, 240, 480, 900, 900]
+    assert [reminders.backoff_seconds(n) for n in range(1, 8)] == [30, 60, 120, 240, 300, 300, 300]
 
 
-def test_el_limite_transitorio_equivale_a_24_horas():
-    total = lambda n: sum(reminders.backoff_seconds(i) for i in range(1, n + 1))  # noqa: E731
-    day = 24 * 3600
-    assert total(reminders.TRANSIENT_ATTEMPT_LIMIT) >= day
-    assert total(reminders.TRANSIENT_ATTEMPT_LIMIT - 1) < day
+def test_el_tope_de_espera_es_de_5_minutos_y_el_horizonte_de_24_horas():
+    assert reminders.BACKOFF_CAP_SECONDS == 300
+    assert reminders.GIVE_UP_AFTER == timedelta(hours=24)
+    assert not hasattr(reminders, "TRANSIENT_ATTEMPT_LIMIT")
 
 
 def test_canal_caido_10_minutos_no_pierde_ninguno_y_salen_retrasados(conn, clock, engine, channel):
@@ -214,10 +213,12 @@ def test_canal_caido_10_minutos_no_pierde_ninguno_y_salen_retrasados(conn, clock
             )
         clock.advance(seconds=30)
     assert not channel.sent_anything
-    assert all(row(conn, i).status == "pending" and row(conn, i).attempts >= 1 for i in ids)
+    assert all(row(conn, i).status == "pending" for i in ids)
+    assert all(row(conn, i).first_failed_at is not None for i in ids)  # todos esperan al canal
+    assert row(conn, ids[0]).attempts >= 1
 
     channel.always_fail_with(None)  # vuelve la red
-    for _ in range(40):  # hasta 20 min de ticks: el tope de espera es de 15 min
+    for _ in range(11):  # el tope de espera es de 5 min: en 5,5 min ya salieron todos
         tick(engine)
         clock.advance(seconds=30)
     assert sorted(sent_texts(channel)) == [
@@ -226,6 +227,7 @@ def test_canal_caido_10_minutos_no_pierde_ninguno_y_salen_retrasados(conn, clock
         "⏰ r2 (retrasado)",
     ]
     assert all(row(conn, i).status == "sent" and row(conn, i).attempts == 0 for i in ids)
+    assert all(row(conn, i).first_failed_at is None for i in ids)  # el éxito borra el horizonte
 
 
 def test_tras_un_fallo_espera_antes_de_reintentar(conn, clock, engine, channel):
@@ -269,21 +271,6 @@ def test_error_permanente_detiene_ese_recordatorio_y_los_demas_siguen(conn, cloc
     clock.advance(hours=3)
     tick(engine)
     assert channel.attempts.count("⏰ malo (retrasado)") + channel.attempts.count("⏰ malo") == 1
-
-
-def test_tras_24_horas_de_canal_caido_se_detiene(conn, clock, engine, channel):
-    start = clock()
-    # Prioridad 2: el silencio nocturno no la retiene, así los ticks no se saltan durante las 24 h.
-    created = reminders.create_reminder(conn, "x", start + timedelta(minutes=1), clock, priority=2)
-    channel.always_fail_with(TransientChannelError("telegram_down"))
-    clock.advance(minutes=1)
-    for _ in range(reminders.TRANSIENT_ATTEMPT_LIMIT - 1):
-        tick(engine)
-        clock.advance(seconds=reminders.BACKOFF_CAP_SECONDS)
-        assert row(conn, created.id).stopped is False
-    tick(engine)
-    assert row(conn, created.id).stopped is True
-    assert clock() - start >= timedelta(hours=24)
 
 
 def test_reiniciar_el_proceso_reintenta_de_inmediato(conn, clock, channel):
