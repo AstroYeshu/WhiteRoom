@@ -202,3 +202,6 @@ Se compararon las 30 pruebas quitadas de `test_commands.py` con `test_vistas.py`
 
 ## Kit de despliegue: /estado y BOT_ENV
 `/estado` solo lee: `RuntimeStatus` (entorno, base, hora de arranque, hora del último tick) vive en memoria y el motor la actualiza al inicio de cada tick (también cuando el canal está en espera); la base solo se consulta (SELECT) para pendientes, detenidos, `MAX(last_fired_at)`, `MAX(version)` de migraciones y el tamaño del archivo (+ `-wal`). Nada del usuario (textos, áreas, títulos) aparece ni va al log. `BOT_ENV` es `dev` o `prod` (por defecto `dev`; otro valor es error de configuración); no cambia el comportamiento, solo se muestra. `core/runtime.py` no importa `core/reminders.py` (el motor lo importa solo para el tipo, bajo `TYPE_CHECKING`). `formato.py` sigue sin importar `core/`: el armado de la pantalla está en `commands.status`. Se añadió `/estado` a `/ayuda` (grupo Otros).
+
+## Kit de despliegue: README
+El README asume Raspberry Pi OS Bookworm (Python 3.11) y el usuario `pi`; los ejemplos usan `/home/pi/WhiteRoom`. Restaurar mueve la base y sus `-wal`/`-shm` a `data/descartado/` (no se borra nada) antes de copiar el respaldo. La checklist de aceptación en la Pi es manual y NO se ha ejecutado: no hay Pi disponible en esta sesión.
