@@ -64,6 +64,18 @@ def build_engine(settings: Settings, conn: sqlite3.Connection, channel: Channel)
     return ReminderEngine(conn, channel, str(settings.allowed_user_id), settings.tz_name, now)
 
 
+def _choice_handler(settings: Settings, conn: sqlite3.Connection, channel: Channel):
+    """`handle_choice` con la base, el reloj real y la zona del dueño ya conectados."""
+    return partial(
+        handle_choice,
+        channel=channel,
+        allowed_user_id=settings.allowed_user_id,
+        conn=conn,
+        now=now,
+        tz_name=settings.tz_name,
+    )
+
+
 def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
     from asistente.channels.console import ConsoleChannel
 
@@ -75,7 +87,7 @@ def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
     asyncio.run(
         channel.serve(
             partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
-            partial(handle_choice, channel=channel, allowed_user_id=settings.allowed_user_id),
+            _choice_handler(settings, conn, channel),
             engine.tick,
         )
     )
@@ -89,7 +101,7 @@ def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
     engine = build_engine(settings, conn, channel)
     channel.run_polling(
         partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
-        partial(handle_choice, channel=channel, allowed_user_id=settings.allowed_user_id),
+        _choice_handler(settings, conn, channel),
         engine.tick,  # Telegram lo corre cada 30 s y una vez al arrancar (first=0)
     )
 

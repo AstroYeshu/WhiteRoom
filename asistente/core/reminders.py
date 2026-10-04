@@ -55,6 +55,10 @@ ACTION_SNOOZE = "rem_snooze"
 ACTION_TOMORROW = "rem_tomorrow"
 SNOOZE_SHORT_MINUTES = 10
 SNOOZE_LONG_MINUTES = 60
+LABEL_TOMORROW = "🌅 Mañana"
+LABEL_TOMORROW_TODAY = (
+    "🌅 Hoy"  # antes de las 05:00 locales: se le añade la hora, p. ej. "Hoy 9:00"
+)
 EARLY_MORNING_CUTOFF = time(5, 0)  # antes de esto, "mañana" es hoy (M5)
 
 NAG_INTERVAL = timedelta(minutes=15)  # insistencia (priority=2): cada cuánto se reenvía
@@ -309,8 +313,15 @@ def snooze_until_tomorrow(
     Antes de las 05:00 locales "mañana" casi siempre significa "cuando me levante", o sea HOY:
     se ofrece hoy a esa hora, siempre que todavía no haya pasado (M5).
     """
+    return _snooze_to(conn, reminder_id, tomorrow_target(conn, now(), tz_name))
+
+
+def tomorrow_target(conn: sqlite3.Connection, moment: datetime, tz_name: str) -> datetime:
+    """Adónde va 🌅 Mañana: `default_morning_time` de mañana, o de HOY si es antes de las 05:00.
+
+    Es la ÚNICA fuente: la etiqueta del botón y la acción salen de aquí y no pueden discrepar.
+    """
     morning = get_time_setting(conn, "default_morning_time")
-    moment = now()
     local_now = to_local(moment, tz_name)
     day = local_now.date()
     if local_now.time() >= EARLY_MORNING_CUTOFF:
@@ -318,7 +329,15 @@ def snooze_until_tomorrow(
     target = local_to_utc(datetime.combine(day, morning), tz_name)
     if target <= moment:  # la hora de hoy ya pasó: mañana
         target = local_to_utc(datetime.combine(day + timedelta(days=1), morning), tz_name)
-    return _snooze_to(conn, reminder_id, target)
+    return target
+
+
+def tomorrow_label(conn: sqlite3.Connection, moment: datetime, tz_name: str) -> str:
+    """ "🌅 Mañana", o "🌅 Hoy 9:00" cuando la hora local es anterior a las 05:00."""
+    target = to_local(tomorrow_target(conn, moment, tz_name), tz_name)
+    if target.date() == to_local(moment, tz_name).date():
+        return f"{LABEL_TOMORROW_TODAY} {target.hour}:{target.minute:02d}"
+    return LABEL_TOMORROW
 
 
 def _snooze_to(conn: sqlite3.Connection, reminder_id: int, target: datetime) -> datetime | None:
@@ -335,12 +354,12 @@ def _snooze_to(conn: sqlite3.Connection, reminder_id: int, target: datetime) -> 
 # --- Mensaje -------------------------------------------------------------------------------
 
 
-def reminder_choices(reminder_id: int) -> list[Choice]:
+def reminder_choices(reminder_id: int, tomorrow: str = LABEL_TOMORROW) -> list[Choice]:
     return [
         Choice(encode_choice_id(ACTION_DONE, reminder_id), "✅ Hecho"),
         Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_SHORT_MINUTES), "⏱ +10 min"),
         Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_LONG_MINUTES), "⏱ +1 h"),
-        Choice(encode_choice_id(ACTION_TOMORROW, reminder_id), "🌅 Mañana"),
+        Choice(encode_choice_id(ACTION_TOMORROW, reminder_id), tomorrow),
     ]
 
 
@@ -488,9 +507,10 @@ class ReminderEngine:
         started = self._now()
         delayed = not is_resend and started - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
         text = format_reminder_text(reminder.text, self._area_name(reminder.area_id), delayed)
+        tomorrow = tomorrow_label(self._conn, started, self._tz_name)
         try:
             await self._channel.send_choices(
-                self._user_ref, text, reminder_choices(reminder.id), kind="reminder"
+                self._user_ref, text, reminder_choices(reminder.id, tomorrow), kind="reminder"
             )
         except PermanentChannelError as error:
             self._stop(reminder, f"permanent:{error.reason}")

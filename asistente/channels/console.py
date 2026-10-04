@@ -50,6 +50,10 @@ class ConsoleChannel:
         for number, choice in enumerate(choices, start=1):
             self._output(f"  {number}) {choice.label}")
 
+    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+        """La consola no puede reescribir lo ya impreso: muestra el texto nuevo marcado."""
+        self._output(f"[editado] {text}")
+
     def _parse(self, line: str) -> IncomingMessage | IncomingChoice:
         """Un número válido con opciones pendientes es una elección; lo demás, un mensaje."""
         if line.isdigit() and 1 <= int(line) <= len(self._pending):

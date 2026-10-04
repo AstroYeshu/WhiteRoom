@@ -9,6 +9,7 @@ from asistente.channels.base import IncomingChoice, IncomingMessage
 from tests.fakes import FakeChannel
 
 OWNER = 12345
+TZ = "America/Mexico_City"
 
 
 def send(text: str, user_ref: str = str(OWNER)) -> FakeChannel:
@@ -42,17 +43,17 @@ def test_usuario_no_autorizado_no_recibe_nada(text: str):
     assert channel.sent_anything is False
 
 
-def test_choice_de_no_autorizado_no_recibe_nada():
+def test_choice_de_no_autorizado_no_recibe_nada(conn, clock):
     channel = FakeChannel()
     event = IncomingChoice("fake", "99999", "done:1")
-    asyncio.run(handlers.handle_choice(event, channel, OWNER))
+    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ))
     assert channel.sent_anything is False
 
 
-def test_choice_del_dueno_recibe_aviso_amable():
+def test_choice_del_dueno_recibe_aviso_amable(conn, clock):
     channel = FakeChannel()
     event = IncomingChoice("fake", str(OWNER), "done:1")
-    asyncio.run(handlers.handle_choice(event, channel, OWNER))
+    asyncio.run(handlers.handle_choice(event, channel, OWNER, conn, clock, TZ))
     assert channel.texts[0][1] == handlers.STALE_CHOICE_TEXT
 
 

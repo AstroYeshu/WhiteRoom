@@ -33,6 +33,7 @@ class IncomingChoice:
     channel: str
     user_ref: str
     choice_id: str
+    message_ref: str | None = None  # el mensaje que llevaba el botón (None si el canal no edita)
 
 
 class ChannelError(Exception):
@@ -82,6 +83,11 @@ class Channel(Protocol):
     async def send_choices(
         self, to: str, text: str, choices: list[Choice], kind: str = "reply"
     ) -> None: ...
+
+    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+        """Cambia el texto de un mensaje ya enviado y le quita los botones. Es cosmético:
+        no debe lanzar errores (la acción del usuario ya se hizo)."""
+        ...
 
 
 MessageCallback = Callable[[IncomingMessage], Awaitable[None]]

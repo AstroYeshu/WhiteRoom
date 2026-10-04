@@ -13,6 +13,7 @@ from asistente.channels.base import Choice
 class FakeChannel:
     texts: list[tuple[str, str, str]] = field(default_factory=list)  # (to, text, kind)
     choices: list[tuple[str, str, list[Choice], str]] = field(default_factory=list)
+    edits: list[tuple[str, str, str]] = field(default_factory=list)  # (to, message_ref, text)
 
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
         self.texts.append((to, text, kind))
@@ -21,6 +22,9 @@ class FakeChannel:
         self, to: str, text: str, choices: list[Choice], kind: str = "reply"
     ) -> None:
         self.choices.append((to, text, choices, kind))
+
+    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+        self.edits.append((to, message_ref, text))
 
     @property
     def sent_anything(self) -> bool:

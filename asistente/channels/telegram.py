@@ -138,6 +138,23 @@ class TelegramChannel:
             )
         )
 
+    async def edit_text(self, to: str, message_ref: str, text: str) -> None:
+        """Edita el mensaje y le quita el teclado (sin `reply_markup`, Telegram lo quita).
+
+        Es cosmético: "message is not modified" (mismo texto) no es un error y cualquier otro
+        fallo se registra por tipo, nunca con el texto, sin propagarse.
+        """
+        try:
+            await self._application.bot.edit_message_text(
+                chat_id=int(to), message_id=int(message_ref), text=text
+            )
+        except tg_error.BadRequest as error:
+            if "message is not modified" in str(error).lower():
+                return
+            logger.warning("No se pudo editar el mensaje: %s", type(error).__name__)
+        except tg_error.TelegramError as error:
+            logger.warning("No se pudo editar el mensaje: %s", type(error).__name__)
+
     # --- Entrada -------------------------------------------------------------------
 
     def run_polling(
@@ -168,8 +185,14 @@ class TelegramChannel:
             if not is_allowed(user_ref, self._allowed_user_id):
                 logger.info("Update ignorado de usuario no autorizado: user_ref=%s", user_ref)
                 return  # sin query.answer(): silencio total
-            await query.answer()  # quita el relojito del botón
-            await on_choice(IncomingChoice(CHANNEL_NAME, user_ref, query.data or ""))
+            try:
+                await query.answer()  # siempre al dueño: quita el relojito del botón
+            except tg_error.TelegramError as error:
+                # Cosmético: la pulsación del dueño no se pierde por no poder responderla.
+                logger.warning("No se pudo responder a la pulsación: %s", type(error).__name__)
+            message = getattr(query, "message", None)
+            message_ref = None if message is None else str(message.message_id)
+            await on_choice(IncomingChoice(CHANNEL_NAME, user_ref, query.data or "", message_ref))
 
         async def _on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             # Solo el tipo de error: el texto del mensaje del usuario nunca se registra.
