@@ -7,14 +7,15 @@ Aprobado por el dueño. Marcar cada bloque al completarlo. **Corte principal de 
 - `core/reminders.py` no importa `llm/`, `classify/`, `anthropic` ni `telegram` (test AST transitivo).
 - Entrega "al menos una vez": un aviso puede duplicarse si el proceso muere entre enviar y marcar `sent`, nunca perderse.
 - **Reintentos de envío**
-  - Errores transitorios (red, timeout, Telegram caído): reintento con espera creciente calculada desde `attempts`
-    (`min(30 s · 2^attempts, 15 min)`), SIN tocar `fire_at`, sin rendirse durante 24 h. Al volver el canal salen
-    todos con "(retrasado)".
+  - Errores transitorios (red, timeout, Telegram caído): espera creciente a nivel de CANAL
+    (`min(30 s · 2^(fallos−1), 5 min)`), corta-circuito al primer fallo del tick, SIN tocar `fire_at`, horizonte de
+    24 h desde `first_failed_at`. Al volver el canal salen todos con "(retrasado)".
   - Errores permanentes (bot bloqueado, chat no encontrado): se detiene, se registra el tipo (nunca el texto) y se
     marca en `/recordatorios`.
   - El canal traduce sus errores a `TransientChannelError` / `PermanentChannelError` (en `channels/base.py`);
     el motor no conoce la librería de Telegram.
-  - Parado = `attempts >= STOPPED_ATTEMPTS` (centinela; evita otra migración). La espera entre intentos vive en memoria.
+  - Parado = `stop_reason` no nulo (migración 004; ya no hay centinela). La espera entre intentos vive en memoria;
+    el horizonte, en la base.
 - **rrule**: marcar `sent` e insertar la siguiente en UNA transacción. Re-disparar una fila pospuesta o reenviada NO
   crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa.
 - Hacer/descartar/posponer una tarea cancela sus recordatorios pendientes (incluidos los de preparación).
@@ -101,18 +102,26 @@ Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación
 ## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 526 passed; `ruff check .`: limpio
 Además: regla 3 nueva (migración 003 con `meridiem_ask_range`), corrección de "Domingo" y verbo inicial del título.
 Pendientes: 6, 7 y 8.
+Revisión de robustez (commits M1-M10, antes del bloque 6): hechos M2, migración 004, M3/M6/M13 y códigos de detención;
+el resto (M7, M8, M9, M10, M5) se marca abajo al completarse.
 
 ## Decisiones de implementación (a revisar)
-2. **Estado "detenido" = `attempts = 1000`** (`STOPPED_ATTEMPTS`), un valor centinela, para no añadir otra migración.
+2. **Estado "detenido" = `stop_reason` no nulo** (migración 004; sustituye al centinela `attempts = 1000`).
    `Reminder.stopped` lo expone; el recordatorio sigue `pending` y `/recordatorios` lo marcará. Cubre error permanente
-   y agotar las 24 h. Si es de una serie, la siguiente ocurrencia se crea igual.
-3. **Reintentos**: espera `min(30 s · 2^(n−1), 900 s)` → 30, 60, 120, 240, 480, 900, 900… **Tope máximo: 15 min**.
-   Se rinde tras 100 intentos fallidos seguidos (≈ 25 h de espera acumulada). La espera cuenta intentos, no horas de
-   reloj: el silencio nocturno (que salta ticks de prioridad 1) puede alargar algo ese plazo; se prefiere eso a rendirse antes.
-   La espera entre intentos vive en memoria: al reiniciar el proceso se reintenta de inmediato.
-4. **Bandeja → recordatorio**: el recordatorio se crea con `task_id = NULL` y la tarea de bandeja pasa a `dropped`
-   (así no se duplica y la cascada no lo cancela). En la Fase 3, `/papelera` mostrará esas tareas descartadas por
-   conversión; habrá que decidir cómo distinguirlas (no hay columna para marcarlas).
+   y agotar las 24 h. `stop_reason` es un CÓDIGO estable (`permanent:bot_blocked`, `horizon:telegram_down`, `legacy`);
+   el texto para el usuario lo pone la UI en el bloque 7. `stopped_at` no nulo = "ya se generó la siguiente de la serie"
+   (se crea en la misma transacción que la parada) y se conserva al reactivar (`reactivate`, función del motor sin UI
+   aún), así reactivar no crea otra siguiente (M13).
+3. **Reintentos (M3/M6)**: la espera es del CANAL: `min(30 s · 2^(fallos−1), 300 s)` → 30, 60, 120, 240, 300, 300…
+   **Tope máximo: 5 min**; al primer fallo pasajero del tick no se intentan los demás. El **horizonte de 24 h** cuenta
+   desde `reminders.first_failed_at` (en la base): reiniciar el proceso no lo reinicia; se borra al enviar bien o al
+   posponer. Los que esperaban turno lo empiezan cuando el canal falla; los futuros y los de prioridad 1 retenidos por
+   el silencio (no se intentaron enviar) no lo gastan. Lo único en memoria es la espera del canal: al reiniciar se
+   reintenta de inmediato. `attempts` cuenta los fallos seguidos de esa fila (informativo).
+4. **Bandeja → recordatorio/nota**: el recordatorio se crea con `task_id = NULL` y la tarea de bandeja se cierra con
+   `tasks.close_as_converted`: `status='dropped'` + `closed_reason='converted_to_reminder'|'converted_to_note'` (no
+   `done`: falsearía los conteos de hechas). `/papelera` y los reportes filtran `closed_reason='discarded'`, así las
+   conversiones no aparecen como descartadas. La cascada no cancela el recordatorio (no lleva `task_id`).
 5. **Mayúsculas en días de la semana** (regla 10 del parser): "llamar a Domingo" se toma como nombre propio. Ver el DEFECTO CONOCIDO de la regla 10: hoy también descarta "el Domingo" / "este Domingo" / "para el Domingo".
 6. **Entrega "al menos una vez"**: si el proceso muere entre enviar y marcar `sent`, un aviso puede repetirse al reiniciar;
    nunca se pierde. Si falla registrar el envío (p. ej. el cálculo de la siguiente ocurrencia), se revierte todo y el
@@ -132,6 +141,22 @@ Pendientes: 6, 7 y 8.
 - [x] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`
 - **— CORTE PRINCIPAL —**
 - [ ] 6. Scheduler (`on_tick`, tick al arrancar) y botones de recordatorio — `Fase 1: scheduler y botones de recordatorio`
+  **Empieza por M1** (traducción de errores en `channels/telegram.py`): `Forbidden` o texto demasiado largo →
+  `PermanentChannelError`; `RetryAfter` → `TransientChannelError` con la espera indicada por Telegram.
 - [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar; botones de `ambiguous_meridiem` (dos opciones)
   y "Cambiar a am/pm" cuando `meridiem_inferred` — `Fase 1: bandeja y comandos`
 - [ ] 8. README, verificación final y manual en `--dry-run` — `Fase 1: documentación y verificación`
+
+## Deuda conocida (no se arregla en la Fase 1)
+- **M4 — deriva permanente por horario de verano (media; baja en zonas sin él).** Una serie diaria a las 02:30 en una
+  zona con horario de verano pasa a las 03:30 el día del adelanto y se queda ahí, porque el ancla de `_spawn_next` es el
+  `fire_at` de la fila anterior, ya corrido. Prueba futura: `FREQ=DAILY` a las 02:30 en `America/New_York` del 6 al 10 de
+  marzo; el 9 y el 10 deben salir a las 02:30 locales. Arreglar antes de ofrecerlo en zonas con horario de verano.
+- **M11 (baja).** 🌅 Mañana en una serie diaria de las 8:00 hace que mañana suenen dos avisos: el de la serie y el
+  pospuesto a las 9:00.
+- **M12 (baja).** +10 min pulsado a las 21:55 sale a las 07:00 con "(retrasado)"; defendible, pero no se avisa.
+- **M14 (baja).** Si Telegram aceptó el mensaje pero la respuesta no llegó a tiempo, se reintenta y llega dos veces;
+  coherente con "al menos una vez".
+- **M15 (baja).** Las comparaciones de horas son de texto: exigen que toda hora se escriba con `to_utc_iso`; una fila con
+  `Z` o microsegundos se ordenaría mal. Defensa futura posible: `CHECK (fire_at_utc LIKE '____-__-__T__:__:__+00:00')` en
+  una migración.

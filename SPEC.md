@@ -169,6 +169,7 @@ CREATE TABLE tasks (
   created_at          TEXT NOT NULL,
   updated_at          TEXT NOT NULL,
   closed_at           TEXT
+  -- closed_reason TEXT se añade en la migración 004 (ver nota bajo la tabla)
 );
 
 CREATE TABLE reminders (
@@ -182,12 +183,26 @@ CREATE TABLE reminders (
   status        TEXT NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending','sent','done','cancelled')),
   snooze_count  INTEGER NOT NULL DEFAULT 0,
-  attempts      INTEGER NOT NULL DEFAULT 0,           -- fallos de envío (ver 8.3)
+  attempts      INTEGER NOT NULL DEFAULT 0,           -- fallos de envío seguidos de ESTA fila (ver 8.3)
   created_at    TEXT NOT NULL,
   last_fired_at TEXT
   -- nag_count INTEGER NOT NULL DEFAULT 0 se añade en la migración 002 (reenvíos de priority=2)
+  -- first_failed_at, stopped_at, stop_reason (TEXT, NULL) se añaden en la migración 004
 );
 CREATE INDEX idx_reminders_due ON reminders(status, fire_at_utc);
+
+-- Migración 004 (hacia adelante):
+--   reminders.first_failed_at  inicio de la racha de fallos pasajeros (horizonte de 24 h, ver 8.3);
+--                              se borra al enviar bien o al posponer.
+--   reminders.stopped_at       cuándo se detuvo el envío. NO NULO significa "ya se generó la siguiente
+--                              ocurrencia de la serie" (se crea en la misma transacción que la
+--                              parada); se CONSERVA al reactivar, para no generar otra.
+--   reminders.stop_reason      código estable: 'permanent:<motivo>', 'horizon:<motivo>' o 'legacy'.
+--                              NULL = no detenido. Un detenido es el que tiene stop_reason no nulo.
+--   tasks.closed_reason        'discarded' | 'converted_to_reminder' | 'converted_to_note'.
+--                              Las conversiones de bandeja son status='dropped' (no 'done', para no
+--                              inflar las hechas); /papelera y los reportes filtran por 'discarded'.
+--   Se elimina el centinela attempts=1000: las filas con ese valor pasan a stop_reason='legacy'.
 
 CREATE TABLE notes (
   id         INTEGER PRIMARY KEY,
@@ -344,16 +359,29 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 - **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
   el silencio salen en orden, con la etiqueta "(retrasado)".
 - **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
-- **Tras enviar**: marcar `sent` y `last_fired_at`.
+- **Antes de enviar**: se relee la fila; si ya no sigue `pending` (o `sent`, en una insistencia) con la misma
+  `fire_at_utc`, no se envía.
+- **Tras enviar**: marcar `sent` y `last_fired_at` solo si la fila sigue `pending` con la misma `fire_at_utc`
+  (se comprueban las filas afectadas). Si el usuario canceló o pospuso mientras se enviaba, no se pisa su acción:
+  sin siguiente de serie y sin insistencia.
 - **Fallos de envío**: el canal distingue dos clases de error.
-  - *Transitorios* (red, timeout, Telegram caído): reintento con espera creciente calculada desde `attempts`
-    (`min(30 s · 2^attempts, 15 min)`), sin tocar `fire_at`, sin rendirse durante 24 h. Al volver el canal
-    salen con "(retrasado)" y ninguno se pierde.
-  - *Permanentes* (bot bloqueado, chat no encontrado): se detiene, se registra el tipo de error (nunca el texto)
-    y se marca en `/recordatorios`. Un recordatorio detenido queda `pending` con `attempts` en un valor centinela.
+  - *Transitorios* (red, timeout, Telegram caído): la espera es del CANAL, no de cada fila:
+    `min(30 s · 2^(fallos−1), 5 min)` (30, 60, 120, 240, 300, 300…), en memoria. Al primer fallo transitorio
+    de un tick no se intenta ninguno más (corta-circuito). Sin tocar `fire_at`. El **horizonte es de 24 h
+    desde `first_failed_at`** (en la base: reiniciar el proceso no lo reinicia; se borra al enviar bien o
+    al posponer). Los que esperaban turno empiezan su horizonte cuando el canal falla; los futuros y los de
+    prioridad 1 retenidos por el silencio (que no se intentaron enviar) no lo gastan. Agotado, se detiene con
+    `horizon:<motivo>`. Al volver el canal salen con "(retrasado)" y ninguno se pierde.
+  - *Permanentes* (bot bloqueado, chat no encontrado): se detiene esa fila (los demás siguen) con
+    `permanent:<motivo>`, el log registra el tipo de error (nunca el texto) y se marca en `/recordatorios`.
+  - Un detenido queda `pending` con `stop_reason`, `stopped_at` y `stopped` verdadero; no sale solo. Se puede
+    reactivar (función del motor `reactivate`; la UI llega en el bloque 7): limpia motivo, intentos y horizonte
+    y, si su hora pasó, sale "(retrasado)". Reactivar una fila de serie NO crea otra siguiente: `stopped_at`
+    no nulo ya significa que se generó.
 - **Repetición**: si hay `rrule`, calcular la siguiente ocurrencia **a partir de la hora programada, no de
   `now()`** (evita deriva). Marcar `sent` e insertar la siguiente fila es UNA sola transacción. Re-disparar una
-  fila pospuesta o reenviada NO crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa.
+  fila pospuesta o reenviada NO crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa:
+  detener la fila e insertar la siguiente también es UNA transacción.
 - **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces (`nag_count`), si no se pulsa ✅ Hecho.
 - **Tareas**: hacer, descartar o posponer una tarea cancela sus recordatorios pendientes (también los de preparación).
 - **Fechas pasadas**: nunca se crea un recordatorio en el pasado; se pregunta.
