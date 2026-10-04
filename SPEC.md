@@ -63,7 +63,7 @@ class Channel(Protocol):
   `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
   que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
   EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
-- **Formato de los textos.** Un solo módulo, `bot/format.py`, con funciones puras genera los textos y la
+- **Formato de los textos.** Un solo módulo, `formato.py`, con funciones puras genera los textos y la
   distribución de botones. Marcado mínimo, un subconjunto de HTML: solo `<b>` (contenido principal y estados),
   `<i>` (estados secundarios, p. ej. "(retrasado)") y `<code>`. El texto del usuario SIEMPRE se escapa con `esc()`
   (`html.escape` sin comillas: `&`, `<`, `>`). `Html` es un `str` marcado como "ya seguro"; los canales aplican
@@ -111,14 +111,15 @@ asistente/
 │  ├─ db.py                   # conexión SQLite + runner de migraciones
 │  ├─ migrations/001_init.sql
 │  ├─ timeutil.py             # UTC <-> zona local, horas de silencio, reloj inyectable
+│  ├─ formato.py              # presentación pura (HTML mínimo, fechas, botones); NO importa bot/ ni core/
+│  ├─ choices.py              # ids de opciones como datos (`accion:parte:parte`, máx. 64 bytes); módulo neutral
 │  ├─ channels/
 │  │  ├─ base.py              # Protocol Channel, Choice, IncomingMessage, IncomingChoice
 │  │  ├─ console.py           # canal de consola (--dry-run y pruebas)
 │  │  └─ telegram.py          # ÚNICO módulo que importa la librería de Telegram
 │  ├─ bot/                    # conversación independiente de la plataforma
 │  │  ├─ auth.py              # filtro ALLOWED_USER_ID
-│  │  ├─ handlers.py          # handle_message / handle_choice (comandos y mensajes libres)
-│  │  └─ choices.py           # opciones como datos (Choice), no como botones de una plataforma
+│  │  └─ handlers.py          # handle_message / handle_choice (comandos y mensajes libres)
 │  ├─ core/
 │  │  ├─ capture.py           # pipeline de captura de mensajes libres
 │  │  ├─ tasks.py

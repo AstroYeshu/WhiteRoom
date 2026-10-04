@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 from collections.abc import Callable, Sequence
 
-from asistente.bot.format import plain
 from asistente.channels.base import (
     TICK_INTERVAL_SECONDS,
     Choice,
@@ -17,6 +16,7 @@ from asistente.channels.base import (
     TickCallback,
     run_tick_safely,
 )
+from asistente.formato import plain
 
 CHANNEL_NAME = "console"
 EXIT_COMMANDS = {"/salir", "/exit"}

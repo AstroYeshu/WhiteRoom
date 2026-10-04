@@ -15,8 +15,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, time
 
-from asistente.bot import format as fmt
-from asistente.bot.choices import encode_choice_id
+from asistente import formato as fmt
 from asistente.bot.conversation import (
     STEP_AREA,
     STEP_AREA_DESC,
@@ -31,6 +30,7 @@ from asistente.bot.conversation import (
 )
 from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Channel, Choice, IncomingChoice
+from asistente.choices import encode_choice_id
 from asistente.core import areas, notes, reminders, tasks
 from asistente.core.settings import get_meridiem_ask_range, get_time_setting
 from asistente.parsing.dates import (

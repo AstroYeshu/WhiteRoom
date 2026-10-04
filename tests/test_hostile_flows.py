@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from asistente.bot import format as fmt
+from asistente import formato as fmt
 from asistente.bot import handlers
 from asistente.bot.conversation import Conversation
 from asistente.channels import telegram as tg

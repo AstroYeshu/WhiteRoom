@@ -23,7 +23,6 @@ from telegram.ext import (
 )
 
 from asistente.bot.auth import is_allowed
-from asistente.bot.format import plain, to_html
 from asistente.channels.base import (
     TICK_INTERVAL_SECONDS,
     Choice,
@@ -37,6 +36,7 @@ from asistente.channels.base import (
     UnclassifiedChannelError,
     run_tick_safely,
 )
+from asistente.formato import plain, to_html
 
 logger = logging.getLogger(__name__)
 

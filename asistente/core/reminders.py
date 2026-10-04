@@ -20,8 +20,6 @@ from enum import Enum
 
 from dateutil.rrule import rrulestr
 
-from asistente.bot.choices import encode_choice_id
-from asistente.bot.format import REMINDER_LAYOUT, reminder_notice
 from asistente.channels.base import (
     Channel,
     Choice,
@@ -29,7 +27,9 @@ from asistente.channels.base import (
     TransientChannelError,
     UnclassifiedChannelError,
 )
+from asistente.choices import encode_choice_id
 from asistente.core.settings import get_time_setting
+from asistente.formato import REMINDER_LAYOUT, reminder_notice
 from asistente.parsing.recurrence import next_occurrence
 from asistente.timeutil import (
     Clock,
@@ -382,7 +382,7 @@ def reminder_choices(reminder_id: int, tomorrow: str = LABEL_TOMORROW) -> list[C
 
 
 def format_reminder_text(text: str, area_name: str | None, delayed: bool) -> str:
-    """El aviso (HTML): contenido en negrita y "Recordatorio · área"; lo arma `bot/format.py`."""
+    """El aviso (HTML): contenido en negrita y "Recordatorio · área"; lo arma `formato.py`."""
     return reminder_notice(text, area_name, delayed)
 
 

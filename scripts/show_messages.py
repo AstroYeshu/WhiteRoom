@@ -23,10 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from asistente import db  # noqa: E402
 from asistente.bot import handlers  # noqa: E402
 from asistente.bot.conversation import Conversation  # noqa: E402
-from asistente.bot.format import to_html  # noqa: E402
 from asistente.channels.base import Choice, IncomingChoice, IncomingMessage  # noqa: E402
 from asistente.core import areas, reminders, tasks  # noqa: E402
 from asistente.core.reminders import ReminderEngine  # noqa: E402
+from asistente.formato import to_html  # noqa: E402
 from asistente.timeutil import local_to_utc  # noqa: E402
 
 TZ = "America/Mexico_City"

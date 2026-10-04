@@ -6,9 +6,9 @@ import pytest
 
 from asistente import db
 from asistente.bot import handlers
-from asistente.bot.choices import MAX_CHOICE_ID_BYTES, decode_choice_id, encode_choice_id
 from asistente.bot.conversation import Conversation
 from asistente.channels.base import IncomingChoice, IncomingMessage
+from asistente.choices import MAX_CHOICE_ID_BYTES, decode_choice_id, encode_choice_id
 from tests.fakes import FakeChannel, FakeClock
 
 OWNER = 12345

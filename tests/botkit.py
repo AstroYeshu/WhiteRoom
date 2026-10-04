@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 import pytest
 
 from asistente.bot import handlers
-from asistente.bot.choices import MAX_CHOICE_ID_BYTES
 from asistente.bot.conversation import Conversation
 from asistente.channels.base import Choice, IncomingChoice, IncomingMessage
+from asistente.choices import MAX_CHOICE_ID_BYTES
 from tests.fakes import FakeChannel
 
 TZ = "America/Mexico_City"

@@ -8,7 +8,7 @@ import logging
 import pytest
 from telegram import error as tg_error
 
-from asistente.bot import format as fmt
+from asistente import formato as fmt
 from asistente.channels import telegram as tg
 from asistente.channels.base import Choice, PermanentChannelError, TransientChannelError
 from asistente.channels.console import ConsoleChannel

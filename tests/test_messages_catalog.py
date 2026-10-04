@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from asistente.bot.format import MAX_LABEL
+from asistente.formato import MAX_LABEL
 from tests.htmlcheck import html_problems
 
 ROOT = Path(__file__).resolve().parent.parent

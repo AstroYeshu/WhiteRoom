@@ -19,7 +19,7 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `bot/ui.py`), preguntas del parser como botones, Deshacer/Cambiar (`tasks.convert_to_reminder`,
   `undo_reminder_conversion`, `reopen_converted`). Ver DECISIONS.md.
 
-- Rediseño de mensajes (en pausa el 7c): corte 1 HECHO (`bot/format.py`, HTML con reintento en texto plano, aviso de
+- Rediseño de mensajes (en pausa el 7c): corte 1 HECHO (`formato.py`, HTML con reintento en texto plano, aviso de
   recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Siguen el corte 2 (captura en un solo mensaje que
   evoluciona; `edit_text` con botones) y el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
 

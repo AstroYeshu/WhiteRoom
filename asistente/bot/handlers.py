@@ -12,13 +12,13 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 
+from asistente import formato as fmt
 from asistente.bot import commands, inbox
-from asistente.bot import format as fmt
 from asistente.bot.auth import is_allowed
-from asistente.bot.choices import decode_choice_id
 from asistente.bot.conversation import Conversation
 from asistente.bot.ui import STALE_CHOICE_TEXT, show
 from asistente.channels.base import Channel, IncomingChoice, IncomingMessage
+from asistente.choices import decode_choice_id
 from asistente.core import reminders
 from asistente.timeutil import Clock, to_local
 

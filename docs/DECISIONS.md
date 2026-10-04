@@ -124,8 +124,8 @@ Solo `/tarea` (no el texto libre ni `/nota`): si `parse_when` devuelve una fecha
 `tasks.set_due` (crea los avisos de preparación) y `source_text` conserva lo escrito. No: la tarea queda con el texto
 completo y sin fecha. Si el parser duda (am/pm, "el N", etc.) o no hay fecha, no se pregunta nada: no se adivina.
 
-## Rediseño de mensajes, corte 1: `bot/format.py`, HTML y reintento en texto plano
-`bot/format.py` (funciones puras) arma textos y distribución de botones. Marcado mínimo: `<b>`, `<i>`, `<code>`. `Html` es un
+## Rediseño de mensajes, corte 1: `formato.py`, HTML y reintento en texto plano
+`formato.py` (funciones puras) arma textos y distribución de botones. Marcado mínimo: `<b>`, `<i>`, `<code>`. `Html` es un
 `str` "ya seguro"; los constructores (`bold`, `italic`, `code`, `block`, `paragraphs`, `state_line`, `aviso`) escapan todo lo
 que no sea `Html`, así que olvidarse de `esc()` no es posible por esa vía. Los canales aplican `to_html` al enviar: un `str`
 plano (los flujos que aún no migran a `format.py`) se escapa y se ve literal; un `Html` pasa tal cual. La consola usa `plain`.
@@ -137,8 +137,15 @@ los botones: línea de estado («Hecho · texto», «Pospuesto · texto · hoy, 
 avisos generales con un solo formato («Aviso · …»). Fechas: `fecha_corta` en botones (los candidatos del parser ya la usan) y
 `fecha_larga` solo en confirmaciones. Etiquetas de botón de 22 caracteres como máximo (`label()` corta con «…»; «Es una cita»
 y «Es un nombre» sin «(sin fecha)»). Presentación en el motor: `core/reminders.py` importa `reminder_notice` y `REMINDER_LAYOUT`
-de `bot/format.py` (módulo hoja, sin dependencias de la conversación); la lógica del motor no cambió, solo `format_reminder_text`
+de `formato.py` (módulo hoja, sin dependencias de la conversación); la lógica del motor no cambió, solo `format_reminder_text`
 (ahora delega) y un argumento `layout` en el envío. `docs/MENSAJES.md` se regenera con `scripts/show_messages.py` y una
 prueba de instantánea (`tests/test_messages_catalog.py`) falla si se desactualiza; esa prueba también hace cumplir 22 caracteres
 por etiqueta, HTML válido y filas de a lo sumo 2 botones. Descartado: escapar a mano en cada manejador (se olvida) y bloquear
 el HTML por completo (perdería la jerarquía).
+
+## `formato.py` y `choices.py` son módulos neutrales (capas)
+`bot/format.py` pasó a `asistente/formato.py` y `bot/choices.py` a `asistente/choices.py`: `core/` ya no importa nada de
+`bot/` (la conversación depende del núcleo, no al revés). Ambos módulos no importan, ni de forma transitiva, `bot/`, `core/`,
+`classify/`, `llm/`, `anthropic` ni `telegram`; lo verifica `tests/test_arquitectura_capas.py` (AST transitivo, también para
+cada archivo de `core/`). El test de `reminders.py` sin LLM sigue igual. Reemplaza lo dicho sobre la importación hacia arriba
+en el corte 1.

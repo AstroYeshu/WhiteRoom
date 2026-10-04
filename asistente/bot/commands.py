@@ -10,10 +10,10 @@ import logging
 from datetime import datetime, time, timedelta
 
 from asistente.bot import inbox
-from asistente.bot.choices import encode_choice_id
 from asistente.bot.inbox import Ctx
 from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Choice, IncomingChoice
+from asistente.choices import encode_choice_id
 from asistente.core import areas, reminders, tasks
 from asistente.parsing.dates import format_when
 from asistente.timeutil import from_utc_iso, local_to_utc, to_local

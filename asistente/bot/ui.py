@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from asistente.bot.format import STALE_CHOICE
 from asistente.channels.base import Channel, IncomingChoice
+from asistente.formato import STALE_CHOICE
 
 STALE_CHOICE_TEXT = STALE_CHOICE
 MAX_SHOWN_CHARS = 120  # cuánto del texto del usuario se repite en un mensaje

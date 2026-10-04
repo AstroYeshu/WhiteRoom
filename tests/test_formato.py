@@ -1,4 +1,4 @@
-"""Corte 1 del rediseño: `bot/format.py` (funciones puras de presentación).
+"""Corte 1 del rediseño: `formato.py` (funciones puras de presentación).
 
 Reloj: sábado 2026-10-03 15:30 en México. Principios: marcado mínimo (<b>, <i>, <code>), el
 texto del usuario SIEMPRE escapado, fechas corta (botones y listas) y larga (confirmaciones),
@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from asistente.bot import format as fmt
-from asistente.bot.format import Html
+from asistente import formato as fmt
+from asistente.formato import Html
 from asistente.timeutil import local_to_utc
 from tests.botkit import TZ
 from tests.htmlcheck import html_problems
