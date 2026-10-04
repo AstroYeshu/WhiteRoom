@@ -45,17 +45,30 @@ def find_area_by_name(conn: sqlite3.Connection, name: str) -> Area | None:
     return next((area for area in list_areas(conn) if fold(area.name) == wanted), None)
 
 
-def create_area(conn: sqlite3.Connection, name: str, description: str, now: Clock) -> Area:
+def validate_new_name(conn: sqlite3.Connection, name: str) -> str:
+    """El nombre normalizado de un área nueva, o `AreaError` (vacío, largo o repetido).
+
+    Es único sin distinguir mayúsculas ni acentos, y las áreas archivadas también reservan su
+    nombre (si no, habría dos «Viajes» y no se sabría a cuál se refiere el usuario).
+    """
     name = " ".join(name.split())
-    description = " ".join(description.split())
     if not name:
         raise AreaError("El área necesita un nombre.")
     if len(name) > MAX_NAME_LENGTH:
         raise AreaError(f"El nombre es demasiado largo (máximo {MAX_NAME_LENGTH} caracteres).")
-    if not description:
-        raise AreaError("El área necesita una descripción corta de qué cubre.")
-    if find_area_by_name(conn, name) is not None:
-        raise AreaError(f"Ya existe un área llamada «{name}».")
+    wanted = fold(name)
+    for existing in list_areas(conn, include_archived=True):
+        if fold(existing.name) == wanted:
+            archived = " (archivada)" if existing.archived else ""
+            raise AreaError(f"Ya existe un área llamada «{existing.name}»{archived}.")
+    return name
+
+
+def create_area(conn: sqlite3.Connection, name: str, description: str, now: Clock) -> Area:
+    """Crea un área. La descripción puede quedar vacía ("sin descripción"): el clasificador la
+    ignora hasta que tenga una."""
+    name = validate_new_name(conn, name)
+    description = " ".join(description.split())
     with conn:
         cursor = conn.execute(
             "INSERT INTO areas (name, description, created_at) VALUES (?, ?, ?)",

@@ -102,3 +102,18 @@ Ningún texto al usuario (botones, mensajes, confirmaciones, consola) lleva emoj
 `ast` las constantes de texto de `asistente/` y `scripts/` (docstrings y f-strings incluidos) y falla ante símbolos
 (So/Sm/Sk), selectores de variación, ZWJ o marcos de teclado; permite tildes, eñe, `¿ ¡ « » …` y el grado `°`.
 Descartado: una lista fija de emojis (se le escaparía el siguiente).
+
+## Comandos del bloque 7b
+`bot/commands.py` (un `Ctx` y el texto tras el comando). `/hoy [área]`: tareas abiertas vencidas o de hoy y recordatorios
+pendientes de hoy; el día termina a las 00:00 LOCALES de mañana (no a medianoche UTC); la línea «N en bandeja sin área»
+solo sale sin filtro y con N > 0. `/pendientes [área]`: un mensaje por tarea (hasta 10) con [Hecha] [Descartar] (`tk_done:ID`,
+`tk_drop:ID`); pulsar dos veces o sobre una tarea ya cerrada edita con «Esta tarea ya no está abierta», sin error.
+`/recordatorios`: todos los pendientes (hasta 20), con área, repetición y, si están detenidos, el motivo en lenguaje claro;
+un código que no conocemos se muestra como «motivo desconocido» y el código crudo va solo al log (nivel WARNING, con el id
+del recordatorio, nunca el texto). `/recordar` guarda primero en la bandeja y SIEMPRE muestra la interpretación y la próxima
+fecha con [Guardar] [Cancelar] antes de crear el recordatorio (el texto libre, en cambio, guarda y ofrece Cambiar/Deshacer).
+`/tarea` y `/nota` solo preguntan el área (no interpretan fechas). `/nuevaarea` valida el nombre ANTES de preguntar la
+descripción ([Omitir] la deja vacía) y `/areas` marca «(sin descripción)». Las áreas pueden tener descripción vacía
+(`create_area` ya no la exige); el nombre es único sin distinguir mayúsculas ni acentos y las áreas archivadas también
+reservan el suyo. Un texto que llega mientras se espera la descripción del área SIEMPRE es la descripción (los comandos
+no); si pasan 10 minutos se vuelve a tratar como captura nueva.

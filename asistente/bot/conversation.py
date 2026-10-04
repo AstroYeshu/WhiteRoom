@@ -12,7 +12,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from asistente.parsing.recurrence import RecurrenceResult
 from asistente.timeutil import Clock
 
 FLOW_TTL = timedelta(minutes=10)  # sin actividad durante este tiempo, el flujo caduca
@@ -20,13 +19,23 @@ FLOW_TTL = timedelta(minutes=10)  # sin actividad durante este tiempo, el flujo 
 STEP_KIND = "kind"  # ¿tarea, recordatorio o nota?
 STEP_AREA = "area"  # ¿en qué área?
 STEP_WHEN = "when"  # ¿cuándo? (botones o un texto con la fecha)
-STEP_SERIES = "series"  # vista previa de una repetición: guardar o cancelar
+STEP_SERIES = "series"  # vista previa de un recordatorio (o repetición): guardar o cancelar
+STEP_AREA_DESC = "area_desc"  # /nuevaarea: se espera la descripción (o Omitir)
+
+
+@dataclass(frozen=True)
+class Pending:
+    """Un recordatorio ya interpretado que espera el «Guardar» del usuario."""
+
+    when_utc: datetime
+    rrule: str | None
+    has_time: bool
 
 
 @dataclass
 class Flow:
     id: int
-    task_id: int  # la tarea de bandeja en la que se guardó el mensaje
+    task_id: int  # la tarea de bandeja en la que se guardó el mensaje (0 = ninguna)
     text: str  # el mensaje original (nunca va al log)
     expires_at: datetime
     step: str = STEP_KIND
@@ -34,7 +43,8 @@ class Flow:
     area_id: int | None = None
     title: str = ""  # texto del recordatorio
     candidates: tuple[datetime, ...] = ()  # opciones de fecha ya resueltas (UTC)
-    series: RecurrenceResult | None = None
+    preview: bool = False  # /recordar: SIEMPRE se muestra la interpretación antes de guardar
+    pending: Pending | None = None
 
 
 class Conversation:

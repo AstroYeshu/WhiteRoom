@@ -263,3 +263,9 @@ def list_due_before(
         params.append(area_id)
     sql += " ORDER BY due_at_utc, id"
     return [_from_row(row) for row in conn.execute(sql, params)]
+
+
+def count_inbox(conn: sqlite3.Connection) -> int:
+    """Tareas abiertas sin área: la bandeja que espera ser clasificada."""
+    row = conn.execute("SELECT count(*) FROM tasks WHERE status = 'open' AND area_id IS NULL")
+    return row.fetchone()[0]

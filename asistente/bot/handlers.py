@@ -12,7 +12,7 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 
-from asistente.bot import inbox
+from asistente.bot import commands, inbox
 from asistente.bot.auth import is_allowed
 from asistente.bot.choices import decode_choice_id
 from asistente.bot.conversation import Conversation
@@ -26,10 +26,22 @@ logger = logging.getLogger(__name__)
 
 START_TEXT = (
     "¡Hola! Soy tu asistente personal.\n"
-    "Todavía estoy en construcción: por ahora solo respondo a comandos básicos.\n"
-    "Escribe /ayuda para verlos."
+    "Escribe lo que quieras anotar y te pregunto qué es. /ayuda muestra los comandos."
 )
-HELP_TEXT = "Comandos disponibles:\n/start - saludo\n/ayuda - esta lista"
+HELP_TEXT = (
+    "Comandos disponibles:\n"
+    "/hoy [área] - lo que vence hoy\n"
+    "/pendientes [área] - tus tareas abiertas\n"
+    "/recordatorios - avisos pendientes y detenidos\n"
+    "/recordar texto - crear un recordatorio\n"
+    "/tarea texto - guardar una tarea\n"
+    "/nota texto - guardar una nota\n"
+    "/areas - ver las áreas\n"
+    "/nuevaarea nombre - crear un área\n"
+    "/start - saludo\n"
+    "/ayuda - esta lista\n"
+    "Cualquier otro mensaje lo guardo en tu bandeja y te pregunto qué es."
+)
 UNKNOWN_COMMAND_TEXT = "No conozco ese comando. Escribe /ayuda para ver los disponibles."
 NOT_ACTIVE_TEXT = "Este recordatorio ya no está activo."
 SNOOZE_CHOICES_MINUTES = (reminders.SNOOZE_SHORT_MINUTES, reminders.SNOOZE_LONG_MINUTES)
@@ -41,6 +53,12 @@ def _command_name(text: str) -> str | None:
     if not stripped.startswith("/"):
         return None
     return stripped.split()[0][1:].split("@")[0].lower()
+
+
+def _command_args(text: str) -> str:
+    """Lo que sigue al comando: `/hoy universidad` -> `universidad`."""
+    parts = text.strip().split(maxsplit=1)
+    return parts[1].strip() if len(parts) > 1 else ""
 
 
 def _reject(user_ref: str) -> None:
@@ -61,18 +79,18 @@ async def handle_message(
         _reject(msg.user_ref)
         return
 
+    ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, msg.user_ref)
     command = _command_name(msg.text)
     if command is None:  # un mensaje libre: va a la bandeja
-        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, msg.user_ref)
         await inbox.capture(ctx, msg.text)
-        return
-    if command == "start":
-        reply = START_TEXT
+    elif command in commands.COMMANDS:
+        await commands.COMMANDS[command](ctx, _command_args(msg.text))
+    elif command == "start":
+        await channel.send_text(msg.user_ref, START_TEXT)
     elif command == "ayuda":
-        reply = HELP_TEXT
+        await channel.send_text(msg.user_ref, HELP_TEXT)
     else:
-        reply = UNKNOWN_COMMAND_TEXT
-    await channel.send_text(msg.user_ref, reply)
+        await channel.send_text(msg.user_ref, UNKNOWN_COMMAND_TEXT)
 
 
 def _is_id(part: str) -> bool:
@@ -155,6 +173,10 @@ async def handle_choice(
             await inbox.handle_flow_choice(ctx, choice, parts)
         else:
             await inbox.handle_conversion_choice(ctx, choice, action, parts)
+        return
+    if action in (commands.ACTION_TASK_DONE, commands.ACTION_TASK_DROP):
+        ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
+        await commands.handle_task_choice(ctx, choice, action, parts)
         return
     request = _parse_reminder_choice(choice.choice_id)
     if request is None:

@@ -18,11 +18,13 @@ from datetime import datetime, time
 from asistente.bot.choices import encode_choice_id
 from asistente.bot.conversation import (
     STEP_AREA,
+    STEP_AREA_DESC,
     STEP_KIND,
     STEP_SERIES,
     STEP_WHEN,
     Conversation,
     Flow,
+    Pending,
 )
 from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Channel, Choice, IncomingChoice
@@ -45,7 +47,10 @@ REMINDER_VERBS = frozenset({"recordar", "recordarme", "recuerdame", "recuerdenme
 EVENING = time(18, 0)  # la opción "Hoy 18:00" de la pregunta ¿cuándo?
 
 ABANDONED_TEXT = "Dejé sin terminar lo anterior; sigue en tu bandeja como tarea."
+ABANDONED_AREA_TEXT = "Dejé sin terminar la creación del área."
 CANCELLED_TEXT = "Cancelado. «{text}» sigue en tu bandeja como tarea."
+CANCELLED_AREA_TEXT = "Cancelado. No se creó el área."
+AREA_DESCRIPTION_PROMPT = "¿Qué cubre «{name}»? Escribe una descripción corta u omítela."
 WHEN_PROMPT = (
     '¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".'
 )
@@ -175,25 +180,49 @@ def _is_date_answer(result: ScheduleResult) -> bool:
 
 
 async def capture(ctx: Ctx, text: str) -> None:
-    """Un mensaje libre: respuesta a ¿cuándo? si es una fecha; si no, una captura nueva."""
+    """Un mensaje libre: descripción del área, respuesta a ¿cuándo? o una captura nueva."""
     text = text.strip()
     if not text:
         return
     flow = ctx.conversation.current(ctx.now)
+    if flow is not None and flow.step == STEP_AREA_DESC:  # todo lo que no es comando
+        await _finish_area(ctx, flow, text, None)
+        return
     if flow is not None and flow.step == STEP_WHEN:
         result = _parse(ctx, text)
         if _is_date_answer(result):
             await _apply_schedule(ctx, flow, result, None)
             return
-    if flow is not None:  # había algo a medias: la tarea ya está guardada, solo se suelta
+    await _start_capture(ctx, text, None, False)
+
+
+async def capture_as(ctx: Ctx, text: str, kind: str, preview: bool = False) -> None:
+    """/tarea, /nota, /recordar: el tipo ya está dicho; solo falta el área (y la fecha)."""
+    text = text.strip()
+    if text:
+        await _start_capture(ctx, text, kind, preview)
+
+
+async def _drop_current_flow(ctx: Ctx) -> None:
+    """Suelta lo que hubiera a medias, avisando (la tarea ya está guardada en la bandeja)."""
+    flow = ctx.conversation.current(ctx.now)
+    if flow is not None:
         ctx.conversation.clear()
-        await ctx.channel.send_text(ctx.user_ref, ABANDONED_TEXT)
+        notice = ABANDONED_AREA_TEXT if flow.step == STEP_AREA_DESC else ABANDONED_TEXT
+        await ctx.channel.send_text(ctx.user_ref, notice)
+
+
+async def _start_capture(ctx: Ctx, text: str, kind: str | None, preview: bool) -> None:
+    """Guarda el texto en la bandeja y pregunta lo que falte. `kind` None = preguntar el tipo."""
+    await _drop_current_flow(ctx)
     task = tasks.create_task(ctx.conn, text, ctx.now, source_text=text)
     logger.info("Bandeja: tarea guardada id=%s", task.id)
     flow = ctx.conversation.start(task.id, text, ctx.now)
     header = f"Guardado en tu bandeja: «{shown(text)}»\n"
-    if starts_with_reminder_verb(text):  # ya dijo qué es: no se pregunta
-        flow.kind = KIND_REMINDER
+    if kind is None and starts_with_reminder_verb(text):  # ya dijo qué es: no se pregunta
+        kind = KIND_REMINDER
+    if kind is not None:
+        flow.kind, flow.preview = kind, preview
         await _ask_area(ctx, flow, None, header)
         return
     buttons: list[Button] = [(KIND_ACTION, kind, label) for kind, label in KIND_LABELS.items()]
@@ -295,21 +324,46 @@ async def _apply_schedule(
 ) -> None:
     """Qué hacer con lo que entendió el parser: guardar, previsualizar, preguntar o pedir fecha."""
     if result.kind == "once" and result.when is not None and result.when.when_utc is not None:
-        await _create(ctx, flow, choice, result.when.when_utc, None, result.when.has_time)
+        await _propose(ctx, flow, choice, result.when.when_utc, None, result.when.has_time)
     elif result.kind == "series" and result.series is not None:
-        flow.series = result.series
         series = result.series
         assert series.first_at_utc is not None and series.rrule is not None
-        when = format_when(series.first_at_utc, ctx.tz_name, ctx.now)
-        text = (
-            f"Repetición: {describe_rrule(series.rrule)}: «{shown(flow.title)}»\n"
-            f"Próxima: {when}\n¿La guardo?"
-        )
-        await _send_question(ctx, flow, STEP_SERIES, text, [("s", None, "Guardar"), CANCEL])
+        await _propose(ctx, flow, choice, series.first_at_utc, series.rrule, series.has_time)
     elif result.kind == "ask":
         await _ask_when_question(ctx, flow, result)
     else:
         await _ask_when(ctx, flow, WHEN_PROMPT)
+
+
+async def _propose(
+    ctx: Ctx,
+    flow: Flow,
+    choice: IncomingChoice | None,
+    when_utc: datetime,
+    rrule: str | None,
+    has_time: bool,
+) -> None:
+    """Una fecha ya resuelta: se guarda y se confirma (con Cambiar/Deshacer), salvo una repetición
+    o un /recordar, que muestran primero la interpretación y esperan «Guardar»."""
+    if rrule is None and not flow.preview:
+        await _create(ctx, flow, choice, when_utc, rrule, has_time)
+        return
+    flow.pending = Pending(when_utc, rrule, has_time)
+    when = format_when(when_utc, ctx.tz_name, ctx.now)
+    await _ack(ctx, choice, f"Elegido: {when}")
+    if rrule is not None:
+        text = (
+            f"Repetición: {describe_rrule(rrule)}: «{shown(flow.title)}»\n"
+            f"Próxima: {when}\n¿La guardo?"
+        )
+    else:
+        lines = [f"Recordatorio: «{shown(flow.title)}»"]
+        lines.append(f"Cuándo: {when}{'' if has_time else ' (hora por defecto)'}")
+        area = _area_name(ctx, flow.area_id)
+        if area:
+            lines.append(f"Área: {area}")
+        text = "\n".join([*lines, "¿Lo guardo?"])
+    await _send_question(ctx, flow, STEP_SERIES, text, [("s", None, "Guardar"), CANCEL])
 
 
 async def _create(
@@ -357,6 +411,31 @@ async def _create(
     )
 
 
+# --- Área nueva (/nuevaarea) -------------------------------------------------------------------
+
+
+async def start_new_area(ctx: Ctx, name: str) -> None:
+    """El nombre ya está validado: se pregunta la descripción (se puede omitir)."""
+    await _drop_current_flow(ctx)
+    flow = ctx.conversation.start(0, name, ctx.now, STEP_AREA_DESC)
+    text = AREA_DESCRIPTION_PROMPT.format(name=shown(name))
+    await _send_question(ctx, flow, STEP_AREA_DESC, text, [("d", None, "Omitir"), CANCEL])
+
+
+async def _finish_area(
+    ctx: Ctx, flow: Flow, description: str, choice: IncomingChoice | None
+) -> None:
+    ctx.conversation.clear()
+    try:
+        area = areas.create_area(ctx.conn, flow.text, description, ctx.now)
+    except areas.AreaError as error:  # p. ej. alguien creó el mismo nombre mientras tanto
+        await _say(ctx, choice, str(error))
+        return
+    logger.info("Área creada id=%s", area.id)
+    note = "" if area.description else " (sin descripción)"
+    await _say(ctx, choice, f"Área creada: {area.name}{note}")
+
+
 # --- Botones del flujo -----------------------------------------------------------------------
 
 
@@ -384,7 +463,7 @@ async def _on_area(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
 async def _on_candidate(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if len(args) != 1 or not _is_id(args[0]) or int(args[0]) >= len(flow.candidates):
         return False
-    await _create(ctx, flow, choice, flow.candidates[int(args[0])], None, True)
+    await _propose(ctx, flow, choice, flow.candidates[int(args[0])], None, True)
     return True
 
 
@@ -398,7 +477,7 @@ async def _on_quick(
         await _ack(ctx, choice, "Esa hora ya pasó.")
         await _ask_when(ctx, flow, PAST_PROMPT)
         return True
-    await _create(ctx, flow, choice, target[0], None, True)
+    await _propose(ctx, flow, choice, target[0], None, True)
     return True
 
 
@@ -419,11 +498,20 @@ async def _on_no_date(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[s
     return True
 
 
-async def _on_save_series(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
-    series = flow.series
-    if args or series is None or series.first_at_utc is None:
+async def _on_save(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
+    pending = flow.pending
+    if args or pending is None:
         return False
-    await _create(ctx, flow, choice, series.first_at_utc, series.rrule, series.has_time)
+    await _create(ctx, flow, choice, pending.when_utc, pending.rrule, pending.has_time)
+    return True
+
+
+async def _on_skip_description(
+    ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
+) -> bool:
+    if args:
+        return False
+    await _finish_area(ctx, flow, "", choice)
     return True
 
 
@@ -443,7 +531,8 @@ async def _on_cancel(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[st
     if args:
         return False
     ctx.conversation.clear()
-    await show(ctx.channel, choice, CANCELLED_TEXT.format(text=shown(flow.text)))
+    text = CANCELLED_AREA_TEXT if flow.step == STEP_AREA_DESC else CANCELLED_TEXT
+    await show(ctx.channel, choice, text.format(text=shown(flow.text)))
     return True
 
 
@@ -459,7 +548,8 @@ _FLOW_ACTIONS = {
     "o": (STEP_WHEN, _on_write_other),
     "n": (STEP_WHEN, _on_no_date),
     "t": (STEP_WHEN, _on_better_as_task),
-    "s": (STEP_SERIES, _on_save_series),
+    "s": (STEP_SERIES, _on_save),
+    "d": (STEP_AREA_DESC, _on_skip_description),
     "x": (None, _on_cancel),
 }
 

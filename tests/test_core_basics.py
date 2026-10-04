@@ -44,7 +44,7 @@ def test_crear_area_nueva_aparece_en_la_lista(conn, clock):
 
 @pytest.mark.parametrize(
     ("name", "description"),
-    [("", "algo"), ("   ", "algo"), ("x" * 41, "algo"), ("Nueva", " "), ("Iglesia", "repetida")],
+    [("", "algo"), ("   ", "algo"), ("x" * 41, "algo"), ("Iglesia", "repetida")],
 )
 def test_area_invalida_se_rechaza(conn, clock, name, description):
     with pytest.raises(areas.AreaError):

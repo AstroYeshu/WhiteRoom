@@ -3,7 +3,7 @@
 **Norte:** un recordatorio creado desde Telegram suena a su hora en la Raspberry Pi.
 
 ## Fase y bloque
-Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; bloque 7 en curso: 7a (bandeja) HECHO, siguen 7b (comandos) y 7c (am/pm y aviso de recuperación).
+Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; bloque 7 en curso: 7a (bandeja) y 7b (comandos) HECHOS; sigue 7c (am/pm, "el N" y aviso de recuperación).
 Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas aparcadas: `docs/BACKLOG.md`.
 
 ## Hecho
@@ -20,7 +20,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `undo_reminder_conversion`, `reopen_converted`). Ver DECISIONS.md.
 
 ## Siguiente (3 pasos)
-1. Bloque 7b: `/hoy`, `/pendientes` (Hecha/Descartar), `/recordatorios`, `/recordar`, `/tarea`, `/nota`, `/areas`, `/nuevaarea`.
+1. Bloque 7b HECHO (comandos `/hoy`, `/pendientes`, `/recordatorios`, `/recordar`, `/tarea`, `/nota`, `/areas`,
+   `/nuevaarea`, `/ayuda`; `/papelera` queda para la Fase 3). Falta el commit prescindible de `/tarea` con fecha límite.
 2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 005 `stop_notified_at`).
 3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
 
