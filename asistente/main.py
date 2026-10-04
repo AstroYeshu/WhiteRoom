@@ -46,7 +46,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def setup_logging(level: str) -> None:
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     # httpx registra las URLs completas a nivel INFO y la de Telegram lleva el token del bot.
-    for noisy in ("httpx", "httpcore"):
+    # apscheduler (el reloj del tick) cuenta cada ejecución a nivel INFO: con un tick de 30 s serían
+    # miles de líneas al día en la Raspberry. Nuestros propios errores no se tocan.
+    for noisy in ("httpx", "httpcore", "apscheduler"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -88,7 +90,7 @@ def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
     channel = ConsoleChannel(user_ref=str(settings.allowed_user_id))
     engine = build_engine(settings, conn, channel)
     on_message, on_choice = _handlers(settings, conn, channel)
-    asyncio.run(channel.serve(on_message, on_choice, engine.tick))
+    asyncio.run(channel.serve(on_message, on_choice, engine.tick, settings.tick_seconds))
 
 
 def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
@@ -98,8 +100,8 @@ def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
     channel = TelegramChannel(settings.telegram_bot_token, settings.allowed_user_id)
     engine = build_engine(settings, conn, channel)
     on_message, on_choice = _handlers(settings, conn, channel)
-    # El tick de Telegram corre cada 30 s y una vez al arrancar (first=0)
-    channel.run_polling(on_message, on_choice, engine.tick)
+    # El tick de Telegram corre cada TICK_SECONDS y una vez al arrancar (first=0)
+    channel.run_polling(on_message, on_choice, engine.tick, settings.tick_seconds)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -158,11 +158,15 @@ class TelegramChannel:
     # --- Entrada -------------------------------------------------------------------
 
     def run_polling(
-        self, on_message: MessageCallback, on_choice: ChoiceCallback, on_tick: TickCallback
+        self,
+        on_message: MessageCallback,
+        on_choice: ChoiceCallback,
+        on_tick: TickCallback,
+        tick_seconds: float = TICK_INTERVAL_SECONDS,
     ) -> None:
         """Arranca el long polling (bloqueante). No abre puertos.
 
-        `on_tick` corre cada 30 s (y al arrancar) en el `job_queue` de la librería.
+        `on_tick` corre cada `tick_seconds` (y al arrancar) en el `job_queue` de la librería.
         """
 
         async def _tick_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -206,7 +210,7 @@ class TelegramChannel:
             raise RuntimeError("python-telegram-bot sin el extra job-queue")
         job_queue.run_repeating(
             _tick_job,
-            interval=TICK_INTERVAL_SECONDS,
+            interval=tick_seconds,
             first=0,  # un tick al arrancar: recupera lo vencido durante una caída
             name="reminder_tick",
             # Una sola instancia a la vez; los disparos atrasados se funden en uno.

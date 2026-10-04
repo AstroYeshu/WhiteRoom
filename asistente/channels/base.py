@@ -10,6 +10,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from asistente.config import DEFAULT_TICK_SECONDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,7 +96,9 @@ MessageCallback = Callable[[IncomingMessage], Awaitable[None]]
 ChoiceCallback = Callable[[IncomingChoice], Awaitable[None]]
 TickCallback = Callable[[], Awaitable[object]]  # el tick de recordatorios (cada 30 s)
 
-TICK_INTERVAL_SECONDS = 30  # cada cuánto revisa el motor lo vencido (SPEC 8.3)
+TICK_INTERVAL_SECONDS = (
+    DEFAULT_TICK_SECONDS  # por defecto; el real viene de TICK_SECONDS (SPEC 8.3)
+)
 
 
 async def run_tick_safely(on_tick: TickCallback) -> None:

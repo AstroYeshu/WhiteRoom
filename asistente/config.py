@@ -15,6 +15,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 VALID_CLASSIFIERS = ("rules+jev", "rules+haiku")
 VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 
+# Cada cuánto revisa el motor lo vencido. Un aviso llega entre 0 y TICK_SECONDS s tarde.
+DEFAULT_TICK_SECONDS = 30
+MIN_TICK_SECONDS = 5
+MAX_TICK_SECONDS = 60
+
 # En --dry-run no hay ID real de Telegram: la consola actúa como este usuario.
 DRY_RUN_USER_ID = 1
 
@@ -38,10 +43,23 @@ class Settings:
     monthly_api_budget_cents: int  # dinero siempre en enteros, nunca float
     dry_run: bool
     log_level: str
+    tick_seconds: int = DEFAULT_TICK_SECONDS
 
 
 def _is_true(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "si", "sí"}
+
+
+def _tick_seconds(raw: str) -> int:
+    try:
+        seconds = int(raw)
+    except ValueError:
+        seconds = 0
+    if not MIN_TICK_SECONDS <= seconds <= MAX_TICK_SECONDS:
+        raise ConfigError(
+            f"TICK_SECONDS debe ser un entero entre {MIN_TICK_SECONDS} y {MAX_TICK_SECONDS}"
+        )
+    return seconds
 
 
 def _budget_to_cents(raw: str) -> int:
@@ -106,4 +124,5 @@ def load_settings(env: Mapping[str, str], dry_run: bool = False) -> Settings:
         monthly_api_budget_cents=_budget_to_cents(get("MONTHLY_API_BUDGET_USD", "8")),
         dry_run=dry_run,
         log_level=log_level,
+        tick_seconds=_tick_seconds(get("TICK_SECONDS", str(DEFAULT_TICK_SECONDS))),
     )

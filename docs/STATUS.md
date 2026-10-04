@@ -30,7 +30,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - Aviso de recuperación (bloque 7): una sola vez (clave en `settings`), con el siguiente mensaje del dueño, botón
   "Reenviar" que llama a `reminders.reactivate`.
 - `ambiguous_meridiem`: dos botones; `meridiem_inferred`: botón "Cambiar a am/pm".
-- Un aviso llega entre 0 y 30 s después de su hora (tick de 30 s).
+- Un aviso llega entre 0 y `TICK_SECONDS` s después de su hora (`.env`, por defecto 30, entre 5 y 60). La espera de
+  reintentos y el umbral de «(retrasado)» (2 min) están en segundos: no cambian con el ritmo del tick.
+- `apscheduler` registra solo WARNING o más; nuestros propios errores no se filtran.
 
 ## Cómo verificar el estado
 - `venv\Scripts\python -m pytest -q` (si se cuelga en Windows, repetir una vez) y `venv\Scripts\python -m ruff check .`

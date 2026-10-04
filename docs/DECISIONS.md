@@ -88,3 +88,9 @@ resto de `format_when`). Regla de respuesta: un texto es respuesta a «¿cuándo
 `series` o `ask` salvo `name_or_day`/`time_or_verse`); `none` es captura nueva y avisa. Se usa `parse_schedule` y no
 `parse_when` a secas para que «todos los lunes…» también cuente como respuesta.
 
+## `TICK_SECONDS` configurable (5-60, por defecto 30)
+El ritmo del tick sale de `.env` (`Settings.tick_seconds`) y llega a `run_polling` / `serve`. Fuera de 5-60 o no entero:
+`ConfigError` (no se adivina). El motor no conoce el ritmo: la espera entre reintentos (30, 60, 120, 240, 300 s) y el
+umbral de «(retrasado)» (2 min) son tiempos, no vueltas; pruebas con ticks de 10 y de 30 s dan los mismos instantes.
+El logger `apscheduler` sube a WARNING (con un tick de 30 s eran dos líneas INFO por tick); `asistente.*` no se toca.
+Descartado: subir todo el registro a WARNING (ocultaría nuestros errores y avisos útiles).
