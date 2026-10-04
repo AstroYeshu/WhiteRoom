@@ -74,3 +74,13 @@ def next_quiet_end(moment: datetime, quiet_end: time, tz_name: str) -> datetime:
             tzinfo=ZoneInfo(tz_name)
         )
     return candidate.astimezone(UTC)
+
+
+def local_day_bounds(moment: datetime, tz_name: str) -> tuple[datetime, datetime]:
+    """Inicio (inclusivo) y fin (exclusivo) del día LOCAL de `moment`, en UTC."""
+    local = to_local(moment, tz_name)
+    start_naive = local.replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+    return (
+        local_to_utc(start_naive, tz_name),
+        local_to_utc(start_naive + timedelta(days=1), tz_name),
+    )

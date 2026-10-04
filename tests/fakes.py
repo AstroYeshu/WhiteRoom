@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 from asistente.channels.base import Choice
 
@@ -23,3 +24,16 @@ class FakeChannel:
     @property
     def sent_anything(self) -> bool:
         return bool(self.texts or self.choices)
+
+
+@dataclass
+class FakeClock:
+    """Reloj falso: se llama como `now()` y se adelanta a mano."""
+
+    current: datetime
+
+    def __call__(self) -> datetime:
+        return self.current
+
+    def advance(self, **delta: float) -> None:
+        self.current += timedelta(**delta)
