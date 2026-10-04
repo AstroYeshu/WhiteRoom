@@ -19,9 +19,14 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `bot/ui.py`), preguntas del parser como botones, Deshacer/Cambiar (`tasks.convert_to_reminder`,
   `undo_reminder_conversion`, `reopen_converted`). Ver DECISIONS.md.
 
+- Rediseño de mensajes (en pausa el 7c): corte 1 HECHO (`bot/format.py`, HTML con reintento en texto plano, aviso de
+  recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Siguen el corte 2 (captura en un solo mensaje que
+  evoluciona; `edit_text` con botones) y el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
+
 ## Siguiente (3 pasos)
-1. Bloque 7b HECHO (comandos `/hoy`, `/pendientes`, `/recordatorios`, `/recordar`, `/tarea`, `/nota`, `/areas`,
-   `/nuevaarea`, `/ayuda`; `/papelera` queda para la Fase 3). Falta el commit prescindible de `/tarea` con fecha límite.
+1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
+   `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
+   para la Fase 3).
 2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 005 `stop_notified_at`).
 3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
 

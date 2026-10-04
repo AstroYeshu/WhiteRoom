@@ -15,6 +15,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, time
 
+from asistente.bot import format as fmt
 from asistente.bot.choices import encode_choice_id
 from asistente.bot.conversation import (
     STEP_AREA,
@@ -89,8 +90,8 @@ GENERIC_QUESTION_TEXT = "No pude entender la fecha o la hora; escríbela de otra
 # Respuestas del parser que no son sobre la fecha sino sobre el texto: no cuentan como respuesta.
 NOT_A_DATE_ANSWER = frozenset({"name_or_day", "time_or_verse"})
 NO_DATE_BUTTONS = {
-    "time_or_verse": "Es una cita (sin fecha)",
-    "name_or_day": "Es un nombre (sin fecha)",
+    "time_or_verse": "Es una cita",
+    "name_or_day": "Es un nombre",
     "unrecognized_recurrence": "Solo una vez…",
 }
 
@@ -255,7 +256,7 @@ async def _ask_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, header:
         flow.area_id = None
         await _after_area(ctx, flow, choice, KIND_LABELS[flow.kind or KIND_TASK])
         return
-    buttons: list[Button] = [("a", area.id, area.name) for area in available]
+    buttons: list[Button] = [("a", area.id, fmt.label(area.name)) for area in available]
     buttons += [("a", 0, "Sin área"), CANCEL]
     await _send_question(ctx, flow, STEP_AREA, header + "¿En qué área va?", buttons)
 
@@ -385,7 +386,7 @@ async def _ask_when_question(ctx: Ctx, flow: Flow, result: ScheduleResult) -> No
     candidates = result.when.candidates if result.when is not None else ()
     text = _question_text(ctx, result.reason, candidates)
     buttons: list[Button] = [
-        ("w", index, format_when(moment, ctx.tz_name, ctx.now))
+        ("w", index, fmt.fecha_corta(moment, ctx.tz_name, ctx.now))
         for index, moment in enumerate(candidates)
     ]
     if result.reason in NO_DATE_BUTTONS:

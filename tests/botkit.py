@@ -50,11 +50,11 @@ class LoggingChannel(FakeChannel):
         self.log.append(("text", text, []))
         await super().send_text(to, text, kind)
 
-    async def send_choices(self, to, text, choices, kind="reply"):
+    async def send_choices(self, to, text, choices, kind="reply", layout=None):
         for choice in choices:
             assert len(choice.id.encode("utf-8")) <= MAX_CHOICE_ID_BYTES, choice.id
         self.log.append(("choices", text, list(choices)))
-        await super().send_choices(to, text, choices, kind)
+        await super().send_choices(to, text, choices, kind, layout)
 
     async def edit_text(self, to, message_ref, text):
         self.log.append(("edit", text, []))

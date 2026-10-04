@@ -225,7 +225,9 @@ def test_prioridad_1_retenida_por_el_silencio_no_consume_el_horizonte(conn, cloc
         tick(engine)
         clock.advance(seconds=30)
     assert row(conn, normal.id).status == "sent"
-    assert "Recordatorio: p1 (retrasado)" in [text for _, text, _, _ in channel.choices]
+    assert "<b>p1</b>\n\nRecordatorio <i>(retrasado)</i>" in [
+        text for _, text, _, _ in channel.choices
+    ]
     assert row(conn, normal.id).first_failed_at is None
 
 
@@ -277,7 +279,9 @@ def test_reactivar_un_detenido_lo_envia_retrasado(conn, clock, engine, channel):
     )
     assert reactivated.stopped_at == stopped_at  # la marca histórica se conserva
     assert tick(engine) == 1
-    assert [text for _, text, _, _ in channel.choices] == ["Recordatorio: x (retrasado)"]
+    assert [text for _, text, _, _ in channel.choices] == [
+        "<b>x</b>\n\nRecordatorio <i>(retrasado)</i>"
+    ]
 
 
 def test_reactivar_lo_que_no_esta_detenido_no_hace_nada(conn, clock):

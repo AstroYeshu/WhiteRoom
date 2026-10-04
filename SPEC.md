@@ -44,7 +44,13 @@ class Choice:
 class Channel(Protocol):
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...
     async def send_choices(
-        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+        self,
+        to: str,
+        text: str,
+        choices: list[Choice],
+        kind: str = "reply",
+        layout: Sequence[int]
+        | None = None,  # botones por fila, p. ej. (2, 2, 1); sin él, uno por fila
     ) -> None: ...
     async def edit_text(self, to: str, message_ref: str, text: str) -> None: ...  # sin botones
 ```
@@ -57,6 +63,16 @@ class Channel(Protocol):
   `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
   que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
   EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
+- **Formato de los textos.** Un solo módulo, `bot/format.py`, con funciones puras genera los textos y la
+  distribución de botones. Marcado mínimo, un subconjunto de HTML: solo `<b>` (contenido principal y estados),
+  `<i>` (estados secundarios, p. ej. "(retrasado)") y `<code>`. El texto del usuario SIEMPRE se escapa con `esc()`
+  (`html.escape` sin comillas: `&`, `<`, `>`). `Html` es un `str` marcado como "ya seguro"; los canales aplican
+  `to_html` al enviar (un `str` plano se escapa, un `Html` pasa tal cual) y la consola `plain` (quita las
+  etiquetas). Telegram envía con `parse_mode=HTML`; ante `cant_parse_entities` reintenta UNA vez en texto plano
+  antes de tratarlo como permanente (un recordatorio no se pierde por formato). Fechas: `fecha_corta` ("sáb 3 oct,
+  6:00 pm", "hoy, 6:00 pm", "mañana, 8:00 am") en botones y listas; `fecha_larga` ("sábado 3 de octubre, 6:00 pm")
+  solo en confirmaciones. Botones: filas de 2 como máximo, acción principal primero, Cancelar al final y etiquetas
+  de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal.
 - **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal
   decide cómo adornar, y WhatsApp o una consola sin fuentes no deben depender de ellos. Etiquetas en texto:
   `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00`, `Cancelar`. Lo vigila `tests/test_no_pictograms.py` (AST).

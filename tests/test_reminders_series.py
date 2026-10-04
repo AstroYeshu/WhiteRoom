@@ -140,7 +140,7 @@ def test_si_un_recordatorio_repetido_se_rinde_la_serie_continua(conn, clock, eng
     channel.always_fail_with(None)  # el dueño desbloquea el bot
     clock.current = SUNDAY_8PM + timedelta(weeks=1)
     assert tick(engine) == 1
-    assert texts(channel) == ["Recordatorio: iglesia"]  # la del domingo siguiente sí suena
+    assert texts(channel) == ["<b>iglesia</b>\n\nRecordatorio"]  # la del domingo siguiente sí suena
 
 
 def test_rendirse_tras_24_horas_tambien_deja_seguir_la_serie(conn, clock, engine, channel):
@@ -173,9 +173,9 @@ def test_tras_una_caida_salen_todos_los_vencidos_retrasados_y_en_orden(
     fresh_engine = ReminderEngine(conn, channel, USER, TZ, clock)  # "arranque"
     assert tick(fresh_engine) == 3
     assert texts(channel) == [
-        "Recordatorio: hace 3 días (retrasado)",
-        "Recordatorio: hace 1 día (retrasado)",
-        "Recordatorio: hace 1 hora (retrasado)",
+        "<b>hace 3 días</b>\n\nRecordatorio <i>(retrasado)</i>",
+        "<b>hace 1 día</b>\n\nRecordatorio <i>(retrasado)</i>",
+        "<b>hace 1 hora</b>\n\nRecordatorio <i>(retrasado)</i>",
     ]
     assert {r.status for r in all_rows(conn)} == {"sent"}
 
@@ -187,7 +187,7 @@ def test_semanal_vencido_hace_tres_semanas_envia_uno_y_deja_la_siguiente_en_el_f
     clock.current = SUNDAY_8PM + timedelta(weeks=3, hours=1)  # tras la caída: domingo 21:00
     fresh_engine = ReminderEngine(conn, channel, USER, TZ, clock)
     assert tick(fresh_engine) == 1
-    assert texts(channel) == ["Recordatorio: iglesia (retrasado)"]
+    assert texts(channel) == ["<b>iglesia</b>\n\nRecordatorio <i>(retrasado)</i>"]
     rows = all_rows(conn)
     assert len(rows) == 2  # sin ráfaga de las 3 que se perdieron
     assert rows[1].fire_at_utc == to_utc_iso(SUNDAY_8PM + timedelta(weeks=4))  # sin deriva
@@ -200,7 +200,7 @@ def test_recuperacion_dentro_del_silencio_espera_a_que_termine(conn, clock, chan
     assert tick(fresh_engine) == 0
     clock.current = local("2026-10-04 07:00")
     assert tick(fresh_engine) == 1
-    assert texts(channel) == ["Recordatorio: x (retrasado)"]
+    assert texts(channel) == ["<b>x</b>\n\nRecordatorio <i>(retrasado)</i>"]
 
 
 # --- 7. Insistencia (priority=2) ------------------------------------------------------------
@@ -220,7 +220,7 @@ def test_insistencia_cada_15_minutos_hasta_3_reenvios(conn, clock, engine, chann
     clock.advance(hours=2)
     assert tick(engine) == 0  # ya no insiste
     assert (
-        texts(channel) == ["Recordatorio: urgente"] * 4
+        texts(channel) == ["<b>urgente</b>\n\nRecordatorio"] * 4
     )  # el reenvío no se etiqueta "(retrasado)"
     assert row(conn, created.id).nag_count == 3
 
@@ -304,8 +304,8 @@ def test_preparacion_textos_area_y_envio(conn, clock, engine, channel):
     clock.current = due - timedelta(hours=1)
     assert tick(engine) == 1
     assert texts(channel) == [
-        "Recordatorio: Mañana vence: entregar proyecto [universidad]",
-        "Recordatorio: En 1 hora vence: entregar proyecto [universidad]",
+        "<b>Mañana vence: entregar proyecto</b>\n\nRecordatorio · universidad",
+        "<b>En 1 hora vence: entregar proyecto</b>\n\nRecordatorio · universidad",
     ]
 
 

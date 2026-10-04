@@ -118,7 +118,7 @@ def test_nunca_se_descarta_una_cita_en_una_repeticion():
     assert result.status == "ok" and result.has_time is False
 
 
-# --- Familia 2: marcadores a. m. / p. m. y horas en palabras (reglas 2 y 3) -----------------------
+# --- Familia 2: marcadores a. m. / p. m. y horas en palabras (reglas 2 y 3) ----------------------
 MARKERS_AND_WORDS = [
     ("mañana a las 3 a. m.", SAT_1530, ("ok", "2026-10-04 03:00", True)),
     ("mañana a las 3 a.m.", SAT_1530, ("ok", "2026-10-04 03:00", True)),

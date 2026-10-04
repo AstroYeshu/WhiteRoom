@@ -6,7 +6,7 @@ El resto del sistema solo conoce estos tipos; nunca sabe en qué plataforma corr
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -83,8 +83,16 @@ class Channel(Protocol):
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...
 
     async def send_choices(
-        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
-    ) -> None: ...
+        self,
+        to: str,
+        text: str,
+        choices: list[Choice],
+        kind: str = "reply",
+        layout: Sequence[int] | None = None,
+    ) -> None:
+        """`layout` = cuántos botones lleva cada fila (p. ej. `(2, 2, 1)`); debe sumar
+        `len(choices)`. Sin `layout`, un botón por fila. Un canal sin filas (consola) lo ignora."""
+        ...
 
     async def edit_text(self, to: str, message_ref: str, text: str) -> None:
         """Cambia el texto de un mensaje ya enviado y le quita los botones. Es cosmético:

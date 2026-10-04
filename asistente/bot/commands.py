@@ -221,7 +221,7 @@ async def reminders_list(ctx: Ctx, args: str) -> None:
     await ctx.channel.send_text(ctx.user_ref, text)
 
 
-# --- /recordar, /tarea, /nota ---------------------------------------------------------------------
+# --- /recordar, /tarea, /nota --------------------------------------------------------------------
 
 REMIND_USAGE = (
     "Escribe /recordar seguido de qué y cuándo, por ejemplo: /recordar mañana 8 am llevar tarea"

@@ -13,13 +13,13 @@ import sqlite3
 from datetime import datetime, timedelta
 
 from asistente.bot import commands, inbox
+from asistente.bot import format as fmt
 from asistente.bot.auth import is_allowed
 from asistente.bot.choices import decode_choice_id
 from asistente.bot.conversation import Conversation
 from asistente.bot.ui import STALE_CHOICE_TEXT, show
 from asistente.channels.base import Channel, IncomingChoice, IncomingMessage
 from asistente.core import reminders
-from asistente.parsing.dates import format_when
 from asistente.timeutil import Clock, to_local
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,8 @@ HELP_TEXT = (
     "/ayuda - esta lista\n"
     "Cualquier otro mensaje lo guardo en tu bandeja y te pregunto qué es."
 )
-UNKNOWN_COMMAND_TEXT = "No conozco ese comando. Escribe /ayuda para ver los disponibles."
-NOT_ACTIVE_TEXT = "Este recordatorio ya no está activo."
+UNKNOWN_COMMAND_TEXT = fmt.UNKNOWN_COMMAND
+NOT_ACTIVE_TEXT = fmt.REMINDER_NOT_ACTIVE
 SNOOZE_CHOICES_MINUTES = (reminders.SNOOZE_SHORT_MINUTES, reminders.SNOOZE_LONG_MINUTES)
 
 
@@ -116,7 +116,7 @@ def _parse_reminder_choice(choice_id: str) -> tuple[str, int, int | None] | None
 
 def _when_text(target: datetime, tz_name: str, now: Clock) -> str:
     """ "hoy, 3:40 pm" si es hoy; si no, el día completo ("domingo 4 de octubre, 9:00 am")."""
-    full = format_when(target, tz_name, now)
+    full = fmt.fecha_larga(target, tz_name, now)
     if to_local(target, tz_name).date() == to_local(now(), tz_name).date():
         return f"hoy, {full.rpartition(', ')[2]}"
     return full
@@ -138,7 +138,7 @@ async def _handle_reminder_choice(
 
     if action == reminders.ACTION_DONE:
         if reminders.mark_done(conn, reminder_id):
-            await show(channel, choice, f"Hecho: {reminder.text}")
+            await show(channel, choice, fmt.state_line("Hecho", reminder.text))
             return
     else:
         if action == reminders.ACTION_SNOOZE and minutes is not None:
@@ -147,11 +147,11 @@ async def _handle_reminder_choice(
             target = reminders.snooze_until_tomorrow(conn, reminder_id, now, tz_name)
         if target is not None:
             when = _when_text(target, tz_name, now)
-            await show(channel, choice, f"Pospuesto para {when}: {reminder.text}")
+            await show(channel, choice, fmt.state_line("Pospuesto", reminder.text, when))
             return
 
     # Pulsó dos veces, o el recordatorio ya se hizo, se canceló o se pospuso: sin error.
-    await show(channel, choice, f"Recordatorio: {reminder.text} (ya no está activo)")
+    await show(channel, choice, fmt.state_line("Ya no está activo", reminder.text))
 
 
 async def handle_choice(

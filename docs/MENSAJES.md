@@ -2,9 +2,11 @@
 
 Generado por `python scripts/show_messages.py` con los manejadores reales, una base en memoria
 y un reloj fijo: **sábado 3 de octubre de 2026, 3:30 pm** (México). Las áreas son las iniciales
-(universidad, proyectos, iglesia, personal). Cada botón va en su propia fila, como `[Etiqueta]`;
-`---` separa mensajes distintos de una misma respuesta. «(reemplaza el mensaje del botón)» es
-una edición: el texto sustituye al mensaje que llevaba los botones, sin teclado.
+(universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:
+HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones
+va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.
+«(reemplaza el mensaje del botón)» es una edición: el texto sustituye al mensaje que llevaba
+los botones, sin teclado.
 No incluye la salida de `scripts/dev_remind_me.py` ni los errores de configuración del arranque.
 
 ## Bandeja (mensaje libre)
@@ -211,7 +213,7 @@ _Botón de una pregunta vieja: se ignora._
 
 ```text
 (reemplaza el mensaje del botón)
-Esa opción ya no está disponible.
+<b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _La opción «Hoy 18:00» se pulsó cuando ya había pasado._
@@ -238,7 +240,7 @@ _Hora o cita bíblica (time_or_verse)._
 Área: ninguna
 ---
 ¿Eso es una hora o una cita bíblica?
-[Es una cita (sin fecha)]
+[Es una cita]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -250,7 +252,7 @@ _Persona o día (name_or_day)._
 Área: ninguna
 ---
 ¿«Domingo» es una persona o el día de la semana?
-[Es un nombre (sin fecha)]
+[Es un nombre]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -309,8 +311,8 @@ _Medianoche dudosa (ambiguous_time)._
 Área: ninguna
 ---
 ¿Medianoche de qué día?
-[domingo 4 de octubre, 12:00 am]
-[lunes 5 de octubre, 12:00 am]
+[mañana, 12:00 am]
+[lun 5 oct, 12:00 am]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -322,8 +324,8 @@ _Hora dudosa, dos lecturas (ambiguous_meridiem)._
 Área: ninguna
 ---
 ¿A las 9 am o pm?
-[domingo 4 de octubre, 9:00 am]
-[domingo 4 de octubre, 9:00 pm]
+[mañana, 9:00 am]
+[mañana, 9:00 pm]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -335,7 +337,7 @@ _Hora dudosa, un solo candidato futuro (ambiguous_meridiem)._
 Área: ninguna
 ---
 ¿A las 8:00 pm?
-[sábado 3 de octubre, 8:00 pm]
+[hoy, 8:00 pm]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -347,7 +349,7 @@ _Hora que ya pasó, con alternativa (past)._
 Área: ninguna
 ---
 Esa fecha ya pasó. ¿La dejo para domingo 4 de octubre, 10:00 am?
-[domingo 4 de octubre, 10:00 am]
+[mañana, 10:00 am]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -359,7 +361,7 @@ _Día igual al de hoy (same_weekday)._
 Área: ninguna
 ---
 Hoy es ese día: ¿hoy o en 7 días?
-[sábado 10 de octubre, 9:00 am]
+[sáb 10 oct, 9:00 am]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -371,8 +373,8 @@ _Pasada la medianoche, «mañana» dudoso (today_or_tomorrow)._
 Área: ninguna
 ---
 Ya pasó la medianoche: ¿«mañana» es hoy o mañana?
-[domingo 4 de octubre, 8:00 am]
-[lunes 5 de octubre, 8:00 am]
+[hoy, 8:00 am]
+[mañana, 8:00 am]
 [Escribir otra fecha]
 [Cancelar]
 ```
@@ -396,86 +398,86 @@ Lo que sale cuando el motor envía un recordatorio (tipo de envío `reminder`).
 _Aviso a su hora, con el área entre corchetes._
 
 ```text
-Recordatorio: llevar tarea [universidad]
-[Hecho]
-[+10 min]
-[+1 h]
-[Mañana 9:00]
+<b>llevar tarea</b>
+
+Recordatorio · universidad
+[Hecho][+10 min]
+[+1 h][Mañana 9:00]
 ```
 
 _Hecho._
 
 ```text
 (reemplaza el mensaje del botón)
-Hecho: llevar tarea
+<b>Hecho</b> · llevar tarea
 ```
 
 _+10 min: se reprograma para hoy._
 
 ```text
 (reemplaza el mensaje del botón)
-Pospuesto para hoy, 3:41 pm: llamar a mamá
+<b>Pospuesto</b> · llamar a mamá · hoy, 3:41 pm
 ```
 
 _Mañana 9:00: se reprograma para el día siguiente (día completo en la confirmación)._
 
 ```text
 (reemplaza el mensaje del botón)
-Pospuesto para domingo 4 de octubre, 9:00 am: llamar a mamá
+<b>Pospuesto</b> · llamar a mamá · domingo 4 de octubre, 9:00 am
 ```
 
 _Pulsar otra vez un botón de un aviso que ya no está activo._
 
 ```text
 (reemplaza el mensaje del botón)
-Hecho: llamar a mamá
+<b>Hecho</b> · llamar a mamá
 ```
 
 _Botón de un recordatorio que no existe._
 
 ```text
 (reemplaza el mensaje del botón)
-Este recordatorio ya no está activo.
+<b>Aviso</b> · Este recordatorio ya no está activo.
 ```
 
 _Aviso que salió tarde (caída, silencio o canal caído): «(retrasado)»._
 
 ```text
-Recordatorio: llamar a mamá (retrasado)
-[Hecho]
-[+10 min]
-[+1 h]
-[Mañana 9:00]
+<b>llamar a mamá</b>
+
+Recordatorio <i>(retrasado)</i>
+[Hecho][+10 min]
+[+1 h][Mañana 9:00]
 ```
 
 _De madrugada (antes de las 5:00) el botón dice «Hoy 9:00» en lugar de «Mañana 9:00»._
 
 ```text
-Recordatorio: revisar el horno
-[Hecho]
-[+10 min]
-[+1 h]
-[Hoy 9:00]
+<b>revisar el horno</b>
+
+Recordatorio
+[Hecho][+10 min]
+[+1 h][Hoy 9:00]
 ```
 
 _Aviso de preparación, un día antes de la fecha de una tarea._
 
 ```text
-Recordatorio: Mañana vence: entregar proyecto [universidad]
-[Hecho]
-[+10 min]
-[+1 h]
-[Mañana 9:00]
+<b>Mañana vence: entregar proyecto</b>
+
+Recordatorio · universidad
+[Hecho][+10 min]
+[+1 h][Mañana 9:00]
 ```
 
 _Aviso de preparación, una hora antes._
 
 ```text
-Recordatorio: En 1 hora vence: entregar proyecto [universidad]
-[Hecho]
-[+10 min]
-[+1 h]
-[Mañana 9:00]
+<b>En 1 hora vence: entregar proyecto</b>
+
+Recordatorio · universidad
+[Hecho][+10 min]
+[+1 h][Mañana 9:00]
 ```
 
 
@@ -940,27 +942,27 @@ Cualquier otro mensaje lo guardo en tu bandeja y te pregunto qué es.
 _Comando desconocido._
 
 ```text
-No conozco ese comando. Escribe /ayuda para ver los disponibles.
+<b>Aviso</b> · No conozco ese comando. Escribe /ayuda para ver los disponibles.
 ```
 
 _Botón desconocido o mal formado._
 
 ```text
-Esa opción ya no está disponible.
+<b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _Botón de la bandeja de un flujo que ya no existe._
 
 ```text
 (reemplaza el mensaje del botón)
-Esa opción ya no está disponible.
+<b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _Botón de tarea que no existe._
 
 ```text
 (reemplaza el mensaje del botón)
-Esa opción ya no está disponible.
+<b>Aviso</b> · Esa opción ya no está disponible.
 ```
 
 _Deshacer/Cambiar cuando el recordatorio ya no está pendiente._

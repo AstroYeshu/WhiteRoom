@@ -21,6 +21,7 @@ from enum import Enum
 from dateutil.rrule import rrulestr
 
 from asistente.bot.choices import encode_choice_id
+from asistente.bot.format import REMINDER_LAYOUT, reminder_notice
 from asistente.channels.base import (
     Channel,
     Choice,
@@ -381,13 +382,8 @@ def reminder_choices(reminder_id: int, tomorrow: str = LABEL_TOMORROW) -> list[C
 
 
 def format_reminder_text(text: str, area_name: str | None, delayed: bool) -> str:
-    """`Recordatorio: {texto} [{área}]`, con "(retrasado)" si salió tarde."""
-    message = f"Recordatorio: {text}"
-    if area_name:
-        message += f" [{area_name}]"
-    if delayed:
-        message += " (retrasado)"
-    return message
+    """El aviso (HTML): contenido en negrita y "Recordatorio · área"; lo arma `bot/format.py`."""
+    return reminder_notice(text, area_name, delayed)
 
 
 # --- Motor ---------------------------------------------------------------------------------
@@ -527,7 +523,11 @@ class ReminderEngine:
         tomorrow = tomorrow_label(self._conn, started, self._tz_name)
         try:
             await self._channel.send_choices(
-                self._user_ref, text, reminder_choices(reminder.id, tomorrow), kind="reminder"
+                self._user_ref,
+                text,
+                reminder_choices(reminder.id, tomorrow),
+                kind="reminder",
+                layout=REMINDER_LAYOUT,
             )
         except PermanentChannelError as error:
             self._stop(reminder, f"permanent:{error.reason}")

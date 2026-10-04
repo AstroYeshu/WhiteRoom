@@ -7,7 +7,7 @@ a cualquier usuario que no sea `ALLOWED_USER_ID` (ni siquiera responde al botón
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from datetime import timedelta
 from typing import TypeVar
 
@@ -23,6 +23,7 @@ from telegram.ext import (
 )
 
 from asistente.bot.auth import is_allowed
+from asistente.bot.format import plain, to_html
 from asistente.channels.base import (
     TICK_INTERVAL_SECONDS,
     Choice,
@@ -50,13 +51,23 @@ KNOWN_BAD_REQUESTS = (
     ("button_data_invalid", "bad_request:button_data_invalid"),
 )
 OTHER_BAD_REQUEST = "bad_request:other"
+CANT_PARSE_REASON = "bad_request:cant_parse_entities"
 
 T = TypeVar("T")
 
 
-def build_keyboard(choices: list[Choice]) -> InlineKeyboardMarkup:
-    """Un botón por fila; el `id` de la opción viaja como `callback_data`."""
-    rows = [[InlineKeyboardButton(c.label, callback_data=c.id)] for c in choices]
+def build_keyboard(
+    choices: list[Choice], layout: Sequence[int] | None = None
+) -> InlineKeyboardMarkup:
+    """Botones en filas según `layout` (uno por fila si no hay); el `id` va en `callback_data`."""
+    sizes = tuple(layout) if layout is not None else (1,) * len(choices)
+    if sum(sizes) != len(choices) or any(size < 1 for size in sizes):
+        raise ValueError("La distribución de botones no suma el número de botones")
+    buttons = [InlineKeyboardButton(c.label, callback_data=c.id) for c in choices]
+    rows, start = [], 0
+    for size in sizes:
+        rows.append(buttons[start : start + size])
+        start += size
     return InlineKeyboardMarkup(rows)
 
 
@@ -127,16 +138,33 @@ class TelegramChannel:
     # --- Salida (interfaz Channel) -------------------------------------------------
 
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
-        await _translated(self._application.bot.send_message(chat_id=int(to), text=text))
+        await self._send(chat_id=int(to), text=text)
 
     async def send_choices(
-        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+        self,
+        to: str,
+        text: str,
+        choices: list[Choice],
+        kind: str = "reply",
+        layout: Sequence[int] | None = None,
     ) -> None:
-        await _translated(
-            self._application.bot.send_message(
-                chat_id=int(to), text=text, reply_markup=build_keyboard(choices)
+        await self._send(chat_id=int(to), text=text, reply_markup=build_keyboard(choices, layout))
+
+    async def _send(self, text: str, **kwargs: object) -> None:
+        """Envía en HTML; si Telegram no puede leer el formato, UNA vez más en texto plano.
+
+        Un aviso no puede perderse por un problema de formato. Solo `cant_parse_entities` reintenta;
+        si el texto plano también falla, el error es permanente como cualquier otro BadRequest.
+        """
+        try:
+            await _translated(
+                self._application.bot.send_message(text=to_html(text), parse_mode="HTML", **kwargs)
             )
-        )
+        except PermanentChannelError as error:
+            if error.reason != CANT_PARSE_REASON:
+                raise
+            logger.warning("Telegram no leyó el formato: se reenvía en texto plano")
+            await _translated(self._application.bot.send_message(text=plain(text), **kwargs))
 
     async def edit_text(self, to: str, message_ref: str, text: str) -> None:
         """Edita el mensaje y le quita el teclado (sin `reply_markup`, Telegram lo quita).
@@ -144,10 +172,17 @@ class TelegramChannel:
         Es cosmético: "message is not modified" (mismo texto) no es un error y cualquier otro
         fallo se registra por tipo, nunca con el texto, sin propagarse.
         """
+        ids = {"chat_id": int(to), "message_id": int(message_ref)}
         try:
-            await self._application.bot.edit_message_text(
-                chat_id=int(to), message_id=int(message_ref), text=text
-            )
+            try:
+                await self._application.bot.edit_message_text(
+                    text=to_html(text), parse_mode="HTML", **ids
+                )
+            except tg_error.BadRequest as error:
+                if _bad_request_reason(error) != CANT_PARSE_REASON:
+                    raise
+                logger.warning("Telegram no leyó el formato: se edita en texto plano")
+                await self._application.bot.edit_message_text(text=plain(text), **ids)
         except tg_error.BadRequest as error:
             if "message is not modified" in str(error).lower():
                 return

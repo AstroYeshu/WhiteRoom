@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from asistente import db  # noqa: E402
 from asistente.bot import handlers  # noqa: E402
 from asistente.bot.conversation import Conversation  # noqa: E402
+from asistente.bot.format import to_html  # noqa: E402
 from asistente.channels.base import Choice, IncomingChoice, IncomingMessage  # noqa: E402
 from asistente.core import areas, reminders, tasks  # noqa: E402
 from asistente.core.reminders import ReminderEngine  # noqa: E402
@@ -58,20 +59,32 @@ class Clock:
 
 @dataclass
 class Recorder:
-    """Canal que solo anota lo que se enviaría: ("texto"|"botones"|"edicion", texto, etiquetas)."""
+    """Canal que solo anota lo que se enviaría, ya como lo recibiría Telegram (HTML):
+    ("texto"|"botones"|"edicion", texto, filas de etiquetas)."""
 
-    log: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    log: list[tuple[str, str, list[list[str]]]] = field(default_factory=list)
 
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
-        self.log.append(("texto", text, []))
+        self.log.append(("texto", to_html(text), []))
 
     async def send_choices(
-        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+        self,
+        to: str,
+        text: str,
+        choices: list[Choice],
+        kind: str = "reply",
+        layout: Sequence[int] | None = None,
     ) -> None:
-        self.log.append(("botones", text, [choice.label for choice in choices]))
+        sizes = tuple(layout) if layout is not None else (1,) * len(choices)
+        labels = [choice.label for choice in choices]
+        rows, start = [], 0
+        for size in sizes:
+            rows.append(labels[start : start + size])
+            start += size
+        self.log.append(("botones", to_html(text), rows))
 
     async def edit_text(self, to: str, message_ref: str, text: str) -> None:
-        self.log.append(("edicion", text, []))
+        self.log.append(("edicion", to_html(text), []))
 
 
 class Session:
@@ -137,9 +150,9 @@ class _Tee:
     async def send_text(self, to, text, kind="reply"):
         await self._recorder.send_text(to, text, kind)
 
-    async def send_choices(self, to, text, choices, kind="reply"):
+    async def send_choices(self, to, text, choices, kind="reply", layout=None):
         self._choices.append((text, list(choices)))
-        await self._recorder.send_choices(to, text, choices, kind)
+        await self._recorder.send_choices(to, text, choices, kind, layout)
 
     async def edit_text(self, to, message_ref, text):
         await self._recorder.edit_text(to, message_ref, text)
@@ -166,12 +179,12 @@ class Catalog:
         assert entries, f"sin respuesta: {comment}"
         self.render(comment, entries)
 
-    def render(self, comment: str, entries: list[tuple[str, str, list[str]]]) -> None:
+    def render(self, comment: str, entries: list[tuple[str, str, list[list[str]]]]) -> None:
         blocks = []
-        for kind, text, labels in entries:
+        for kind, text, rows in entries:
             parts = ["(reemplaza el mensaje del botón)"] if kind == "edicion" else []
             parts.append(text)
-            parts += [f"[{label}]" for label in labels]
+            parts += ["".join(f"[{label}]" for label in row) for row in rows]
             blocks.append("\n".join(parts))
         self.screens += 1
         self.lines += [f"_{comment}_", "", "```text", "\n---\n".join(blocks), "```", ""]
@@ -184,9 +197,11 @@ def build() -> Catalog:
         "",
         "Generado por `python scripts/show_messages.py` con los manejadores reales, una base en memoria",
         "y un reloj fijo: **sábado 3 de octubre de 2026, 3:30 pm** (México). Las áreas son las iniciales",
-        "(universidad, proyectos, iglesia, personal). Cada botón va en su propia fila, como `[Etiqueta]`;",
-        "`---` separa mensajes distintos de una misma respuesta. «(reemplaza el mensaje del botón)» es",
-        "una edición: el texto sustituye al mensaje que llevaba los botones, sin teclado.",
+        "(universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:",
+        "HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones",
+        "va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.",
+        "«(reemplaza el mensaje del botón)» es una edición: el texto sustituye al mensaje que llevaba",
+        "los botones, sin teclado.",
         "No incluye la salida de `scripts/dev_remind_me.py` ni los errores de configuración del arranque.",
     ]
     bandeja(cat)
@@ -646,6 +661,11 @@ def errores(cat: Catalog) -> None:
         "Un comando a mitad de otra pregunta no la descarta; otro flujo nuevo sí, y avisa.",
         lambda: s2.say("/tarea sacar copias"),
     )
+
+
+def render() -> str:
+    """El catálogo completo como texto Markdown (lo usa también la prueba de instantánea)."""
+    return "\n".join(build().lines).rstrip("\n") + "\n"
 
 
 def main() -> int:

@@ -218,7 +218,7 @@ def test_el_dry_run_envia_los_vencidos_al_arrancar(monkeypatch, tmp_path):
 
     sys.stdout.seek(0)
     output = sys.stdout.read()
-    assert "[reminder] Recordatorio: llevar tarea (retrasado)" in output
+    assert "[reminder] llevar tarea\n\nRecordatorio (retrasado)" in output  # sin etiquetas
     assert "1) Hecho" in output
 
 
@@ -242,7 +242,7 @@ def test_main_pasa_on_tick_a_telegram_y_el_tick_envia_los_vencidos(monkeypatch, 
         def __init__(self, token: str, allowed_user_id: int) -> None:
             captured["init"] = (token, allowed_user_id)
 
-        async def send_choices(self, to, text, choices, kind="reply") -> None:
+        async def send_choices(self, to, text, choices, kind="reply", layout=None) -> None:
             sent.append((to, text, kind))
 
         async def send_text(self, to, text, kind="reply") -> None:
@@ -258,4 +258,4 @@ def test_main_pasa_on_tick_a_telegram_y_el_tick_envia_los_vencidos(monkeypatch, 
     assert app.main([]) == 0
     assert captured["init"] == ("123456:token-falso", 7)
     assert captured["tick_seconds"] == 30  # el valor por defecto de TICK_SECONDS
-    assert sent == [("7", "Recordatorio: llevar tarea (retrasado)", "reminder")]
+    assert sent == [("7", "<b>llevar tarea</b>\n\nRecordatorio <i>(retrasado)</i>", "reminder")]

@@ -125,7 +125,7 @@ def test_el_motor_lo_envia_a_su_hora_de_punta_a_punta(script, env, clock):
         assert asyncio.run(engine.tick()) == 0  # aún no es la hora
         clock.advance(minutes=10)
         assert asyncio.run(engine.tick()) == 1
-        assert channel.choices[0][1] == "Recordatorio: prueba de punta a punta"
+        assert channel.choices[0][1] == "<b>prueba de punta a punta</b>\n\nRecordatorio"
     finally:
         conn.close()
 

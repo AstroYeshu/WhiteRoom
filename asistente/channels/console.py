@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
+from asistente.bot.format import plain
 from asistente.channels.base import (
     TICK_INTERVAL_SECONDS,
     Choice,
@@ -40,10 +41,15 @@ class ConsoleChannel:
 
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None:
         prefix = "" if kind == "reply" else f"[{kind}] "
-        self._output(f"{prefix}{text}")
+        self._output(f"{prefix}{plain(text)}")
 
     async def send_choices(
-        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+        self,
+        to: str,
+        text: str,
+        choices: list[Choice],
+        kind: str = "reply",
+        layout: Sequence[int] | None = None,
     ) -> None:
         await self.send_text(to, text, kind)
         self._pending = list(choices)
@@ -52,7 +58,7 @@ class ConsoleChannel:
 
     async def edit_text(self, to: str, message_ref: str, text: str) -> None:
         """La consola no puede reescribir lo ya impreso: muestra el texto nuevo marcado."""
-        self._output(f"[editado] {text}")
+        self._output(f"[editado] {plain(text)}")
 
     def _parse(self, line: str) -> IncomingMessage | IncomingChoice:
         """Un número válido con opciones pendientes es una elección; lo demás, un mensaje."""
