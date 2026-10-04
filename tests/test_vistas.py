@@ -520,3 +520,47 @@ def test_un_extrano_no_puede_pulsar_un_boton_de_pendientes(bot, conn, clock):
     before = len(bot.channel.log)
     assert bot.press(button, user=99999) is None
     assert len(bot.channel.log) == before
+
+
+# --- huecos detectados al comparar con las pruebas quitadas en el corte 3 -------------------------
+
+
+def test_hoy_con_avisos_pero_sin_bandeja_no_menciona_la_bandeja(bot, conn, clock):
+    add_reminder(conn, clock, "llamar", "2026-10-03 18:00")
+    assert "bandeja" not in screen(bot, "/hoy")
+
+
+def test_las_vistas_escapan_el_texto_del_usuario(bot, conn, clock):
+    hostile = "<i>x</i> & <b>"
+    add_task(conn, clock, hostile, "2026-10-03 17:00")
+    add_reminder(conn, clock, hostile, "2026-10-03 18:00")
+    for command in ("/hoy", "/recordatorios"):
+        bot.say(command)
+        html = bot.messages()[-1]
+        assert "<i>x</i>" not in html, command
+        assert "&lt;i&gt;x&lt;/i&gt; &amp; &lt;b&gt;" in html, command
+
+
+def test_los_botones_de_pendientes_no_registran_el_texto_del_usuario(bot, conn, clock, caplog):
+    secret = "secretoultraprivado"
+    add_task(conn, clock, secret + " uno")
+    add_task(conn, clock, secret + " dos")
+    with caplog.at_level(logging.DEBUG):
+        bot.say("/pendientes")
+        bot.tap("1")
+        bot.tap("Hecha")
+        bot.tap("1")
+        bot.tap("Descartar")
+        bot.say("/areas")
+        bot.say("/hoy")
+        bot.say("/recordatorios")
+    assert secret not in caplog.text
+
+
+def test_hoy_un_aviso_a_las_00_00_exactas_ya_es_de_manana(bot, conn, clock):
+    clock.current = local("2026-10-03 23:50")
+    add_reminder(conn, clock, "justo a medianoche", "2026-10-04 00:00")
+    add_reminder(conn, clock, "un minuto antes", "2026-10-03 23:59")
+    text = screen(bot, "/hoy")
+    assert "un minuto antes" in text
+    assert "justo a medianoche" not in text

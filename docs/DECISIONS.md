@@ -187,3 +187,6 @@ octubre» (+ área), secciones en negrita «Tareas» y «Recordatorios» con `fe
 línea «N en bandeja sin área» solo sin filtro. `/recordatorios`: «Pendientes (n)» y, aparte, «Detenidos (m)» con «Motivo: …» en lenguaje
 claro; un código desconocido sale como «motivo desconocido» y el crudo solo al log. `/areas` marca «sin descripción»; `/ayuda` está agrupada
 (Anotar, Consultar, Áreas, Otros). Se quitaron `tk_done`/`tk_drop` (un mensaje por tarea).
+
+## Cobertura del corte 3
+Se compararon las 30 pruebas quitadas de `test_commands.py` con `test_vistas.py` (`docs/COBERTURA_CORTE3.md`). Huecos reales cerrados: aviso a las 00:00 exactas en /hoy, escape de texto en /hoy y /recordatorios, y privacidad en logs de los botones de /pendientes. Las pruebas de uso de /tarea, /nota y /nuevaarea solo verifican el prefijo «Aviso · Escribe /comando», no el ejemplo completo (decisión: el ejemplo cambia a menudo).

@@ -24,6 +24,25 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   evoluciona; `edit_text` con botones y distribución). Corte 3 HECHO (`/pendientes` en un solo mensaje numerado, `/hoy`, `/recordatorios`
   con detenidos aparte, `/areas`, `/ayuda` agrupada; aviso breve para botones viejos). El 7c sigue en pausa.
 
+## Pruebas del corte 3 (rediseño de mensajes)
+- `tests/test_vistas.py` (nuevo, 74 pruebas): /hoy, /pendientes (un solo mensaje, números, Hecha/Descartar/Volver, reinicio, tarea cerrada),
+  /recordatorios, /areas, /ayuda, extraños, escape de texto y privacidad en logs. La tabla de lo que se quitó de `test_commands.py` y quién lo
+  cubre está en `docs/COBERTURA_CORTE3.md`.
+- `/ayuda`: `test_ayuda_esta_agrupada_por_tipo_de_comando` compara el texto exacto (Anotar, Consultar, Áreas, Otros) y que no aparezca /papelera.
+- `tests/test_formato.py` (+57 líneas): `screen`, `section`, `bullet`, `numbered`, `pending_list`, `HELP`.
+- Mutaciones sobre `commands.py` (pruebas: test_vistas + test_commands + test_formato), fallos por mutación:
+  | Mutación | Fallos |
+  |---|---|
+  | /hoy: `fire > day_end` (aviso a las 00:00 exactas cuenta como hoy) | 1 (tras añadir la prueba; antes 0) |
+  | /hoy: «vencida» también para hoy | 3 |
+  | /pendientes: 11 tareas en vez de 10 | 1 |
+  | botón: pierde el filtro de área | 1 |
+  | botón: acepta una tarea ya cerrada | 1 |
+  | /hoy: bandeja también con filtro | 1 |
+  | /hoy: no marca detenidos | 1 |
+  | tarea cerrada: sin aviso breve | 3 |
+  Esta tabla la rehice yo en una sesión nueva; la original del corte 3 nunca llegó a STATUS.md.
+
 ## Pruebas del corte 2 (rediseño de mensajes), una línea por archivo
 - `tests/test_card.py` (nuevo, 29 pruebas): un solo mensaje por captura (tarea, nota, recordatorio, Cambiar, pregunta del parser, los tres
   comandos, vista previa, repetición, fecha límite, /nuevaarea), dos capturas = dos mensajes, Cancelar, Mejor como tarea, «Sin terminar»,
