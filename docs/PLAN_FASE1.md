@@ -53,7 +53,9 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
      si ninguna es futura, se pregunta por el pasado (`past`) con la alternativa de mañana.
    - Combinada con "el sábado" siendo sábado: primero se pregunta el día (`same_weekday`) y la hora después.
    - `H:MM` suelto (sin "a las"/am/pm) solo cuenta si el texto trae también un día ("Juan 3:16" no es hora).
-   - "a las 8 y media / y cuarto" se entienden; "menos cuarto", "medianoche" → pregunta.
+   - Horas en palabras y minutos hablados (regla 12): "a las 8 y media / y cuarto / y 15 / y cinco",
+     "menos cuarto / menos 10", "la una", "las dos…las doce", "mediodía / medio día". "12 am" y "medianoche"
+     preguntan (`ambiguous_time`) con las dos medianoches futuras como candidatos.
    - El texto ya está en la bandeja cuando se pregunta, así que no se pierde nada.
    - **Para el bloque 7:** mostrar `ambiguous_meridiem` como dos botones (las dos opciones) y, cuando `meridiem_inferred`,
      el botón "Cambiar a am/pm" en la confirmación.
@@ -65,22 +67,85 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
 7. Dos fechas, dos horas, hora dudosa o con restos sin entender ("8:30 menos cuarto") → pregunta.
 8. Sin hora → `default_morning_time` (`has_time=False`, para avisar "hora por defecto").
 9. "en N minutos/horas" (instante exacto), "en N días/semanas" (día a `default_morning_time`). "estudiar 2 horas" no es fecha.
-10. **"Domingo" como nombre propio (CORREGIDO 2026-10-03).** La heurística aplica SOLO a "Domingo": los otros seis
-    días con mayúscula (el Viernes, Martes a las 5...) siguen siendo fecha. "Domingo" es nombre si va con mayúscula
-    a mitad de frase y SIN `el / este / esta / próximo / que viene` ("llamar a Domingo", "salir con Domingo",
-    "regalo para Domingo"). Con determinante es fecha con cualquier capitalización ("el Domingo", "este DOMINGO",
-    "Domingo que viene"). Al inicio del texto es fecha. Si todo el texto está en mayúsculas, la capitalización no
-    informa y también es fecha. Si se descarta un "Domingo" como nombre y queda una hora ("llamar a Domingo a las 5"),
-    se PREGUNTA (`name_or_day`); nunca se asume "hoy". Si hay otro día ("llamar a Domingo mañana a las 5 pm"), manda ese día.
+10. **"Domingo" como nombre propio (REVISADA 2026-10-03, regla 5 del segundo encargo).** Solo aplica a "domingo": los
+    otros seis días nunca son nombres. Sin determinante (`el / este / esta / próximo / que viene / para el`) se PREGUNTA
+    (`name_or_day`) SOLO si: (a) va precedido de "a" o "con", con cualquier capitalización ("llamar a domingo",
+    "cenar con Domingo"); (b) tiene mayúscula inicial a mitad de frase ("regalo para Domingo"); (c) está al inicio
+    seguido de me / te / le / nos / les / se ("Domingo me presta el carro"). En cualquier otro caso es fecha
+    ("ensayo domingo 5pm", "domingo 20:00", "Domingo ensayo 5pm"). Un texto todo en mayúsculas se evalúa como si
+    fuera minúscula ("LLAMAR A DOMINGO" pregunta por (a); "MISA DOMINGO 10 AM" es fecha). Con determinante es fecha
+    con cualquier capitalización. Nunca se asume "hoy". Si hay otro día claro ("llamar a Domingo mañana a las 5 pm"),
+    manda ese día y el título conserva "Domingo".
 11. **Título**: se quita el verbo inicial `recordar / recordarme / recuérdame` (y un `que`/`de` que lo siga) solo si hay
     fecha y queda algo más: "recordar mañana 8am llevar tarea de cálculo" → "llevar tarea de cálculo". Sin fecha el título
     no se toca ("recordar mi contraseña").
+12. **Horas en palabras y marcadores (2º encargo, regla 2-3).** Marcadores `a. m.`, `p. m.`, `a.m.`, `a m`, `AM` (con
+    espacios y puntos); "la una", "las dos…las doce", "mediodía", "medio día", "medianoche"; "y cuarto / y media / y N",
+    "menos cuarto / menos N". Una sola expresión regular para toda hora (`_RE_CLOCK`); un número suelto sin "a las",
+    sin `:` y sin marcador NO es hora.
+13. **Citas bíblicas (regla 1).** Lista cerrada: los 66 libros en español (con numerados: `1 Juan`, `2 Corintios`,
+    `Salmo/Salmos`) y abreviaturas habituales (Jn, Mt, Lc, Ro, 1Co…). "Libro cap:vers" (también "3:16-18") no es hora,
+    con o sin día, y se queda en el título. Se pregunta `time_or_verse` ("¿hora o cita?") cuando: el nombre es uno de
+    Juan, Mateo, Marcos, Lucas, Santiago, Daniel, Samuel, Tito, Timoteo, Josué, va precedido de "a" o "con" y sigue un
+    `H:MM` ("llamar a Juan 3:30"); es una abreviatura que coincide con una palabra común (Mi, Mal, Os, Is, Am, Ex,
+    Sal, Rey); o es `H:MM` suelto tras una palabra con mayúscula a mitad de frase ("reunión con Pedro 3:30 mañana").
+14. **Números sueltos (reglas 4 y 6).** "7.30" pregunta (`dotted_time`) si hay día o "a las"; un número pegado tras un
+    día ("mañana 7 dentista", "el domingo 11 cumpleaños de mamá") pregunta (`number_after_day`). No aplica si el número
+    es parte de una hora o de "N de mes", ni si va tras la hora ("el viernes a las 5 pm 2 cosas").
+15. **Fechas con aspecto de fecha (regla 7).** Se soporta "el N" (siguiente ocurrencia, hoy cuenta; solo si lo que
+    sigue es fin de texto, puntuación, "a las" u hora), "N de mes" y "en N días/semanas". Preguntan
+    `unsupported_date`: "el 20 de este mes", "1ro/1º/1er/primero de noviembre", "en N meses/años", "próximo mes",
+    "fin de mes", "la semana que viene", "esta semana", y "el N" seguido de una palabra ("el 5 dentista",
+    "el 3 de espadas"). `el 40` → `invalid_date`.
+16. **Candidatos am/pm sin día (regla 9).** Sin día y sin marcador, se calcula la próxima ocurrencia futura de CADA
+    lectura (am y pm). Si la am llega antes que la pm, o la hora es de 5 a 11, se pregunta con las dos (ordenadas)
+    aunque la hora sea de 1 a 4 ("a las 4" a las 23:00 → 04:00 y 16:00). Si la pm llega primero y la hora es de 1 a 4,
+    queda la tarde con `meridiem_inferred`. Con día explícito rige la regla 3; un candidato único ("hoy a las 8" a las
+    15:30) sigue siendo `ask` con ese candidato, nunca `ok`.
+17. **"Mañana" de madrugada (regla 10).** Entre las 00:00 y las 05:00 locales (05:00 ya no), "mañana" pregunta
+    `today_or_tomorrow` con los dos candidatos futuros ("mañana a las 8 am" a las 00:40 → hoy 08:00 o mañana 08:00); con una
+    hora am/pm dudosa se pregunta primero el día y no hay candidatos. Si la lectura de hoy ya pasó, no hay duda. No aplica
+    a "pasado mañana". "mañana por la mañana" no se reconoce como hora y sigue preguntando `unrecognized_time`.
+18. **29 de febrero (regla 11).** Siempre la siguiente fecha bisiesta REAL (2028 → 2032; 2096 → 2104, porque 2100 no
+    es bisiesto). Si el 29/02 de hoy ya pasó a la hora por defecto, se pregunta `past` con el candidato 2032-02-29.
 Pruebas: tablas con reloj fijo (sáb 2026-10-03 15:30, México): frases con falsos positivos, horas 1–12 con y sin
-marcador y `H:MM` suelto, y la matriz 7 días × 3 capitalizaciones × 5 contextos para "Domingo".
+marcador y `H:MM` suelto, la matriz 7 días × 3 capitalizaciones × 5 contextos para "Domingo", la tabla adversarial
+(`tests/test_dates_adversarial.py`, ~250 casos) y el barrido de reloj (`tests/test_dates_sweep.py`).
+`python scripts/show_parse_table.py` imprime frase / reloj / resultado real de la tabla adversarial.
 
-Recurrencia (`parsing/recurrence.py`, lista cerrada): "todos los días [hora]", "cada <día> [hora]", "de lunes a viernes [hora]".
+Recurrencia (`parsing/recurrence.py`, lista cerrada): "todos los días [hora]", "cada día [hora]", "diario/diaria [hora]",
+"cada <día> [hora]", "todos los <días> [hora]" (lunes…domingos) y "de lunes a viernes [hora]".
 Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación y próxima fecha antes de guardar.
 `next_occurrence(rrule, scheduled, after, tz)` calcula desde la hora programada (la usa también el motor, sin deriva, DST-seguro).
+**Regla 8:** si aparece `todos los / todas las / cada / diario / semanal / mensual / quincenal / anual` y no se entiende
+como serie, se pregunta `unrecognized_recurrence`; NUNCA se guarda un aviso único. La constante compartida
+(`RE_RECURRENCE_KEYWORD`, `has_recurrence_keyword`) vive en `dates.py` y la usan `dates.py` y `recurrence.py`. "diario"
+precedido de mi/mis/el/un/del/su/tu es un sustantivo y no cuenta ("escribir en mi diario mañana"). El flujo del handler
+es `parse_schedule` (en `recurrence.py`): PRIMERO la repetición, LUEGO la fecha suelta; devuelve `none / once / series / ask`.
+
+### Preguntas del parser → texto y botones (para el bloque 7)
+`WhenResult.reason` / `ScheduleResult.reason`. Los candidatos vienen ya resueltos (UTC); el handler solo los formatea
+con `format_when`. Un botón por candidato más [✏ Escribir otra fecha] [↩ Cancelar]. El texto original ya está en la bandeja.
+| Código | Texto al usuario | Botones |
+|---|---|---|
+| `time_or_verse` | «¿"{H:MM}" es una hora o una cita bíblica?» | [🕒 Es una hora] [📖 Es una cita (sin fecha)] |
+| `name_or_day` | «¿"Domingo" es una persona o el día de la semana?» | [📅 El domingo ({fecha})] [👤 Es un nombre (sin fecha)] |
+| `dotted_time` | «¿"{7.30}" es la hora 7:30? Escríbela con dos puntos.» | [{7:30 am}] [{7:30 pm}] [✏ Otra hora] |
+| `number_after_day` | «¿"{7}" es la hora o forma parte del texto?» | [🕒 Es la hora: {7:00 am} / {7:00 pm}] [📝 Es parte del texto ({día} a las {09:00})] |
+| `unsupported_date` | «No entiendo "{expresión}". ¿Qué día quieres?» | **Si es "el N": el candidato ya resuelto** [{fecha del próximo día N}] + [✏ Escribir otra fecha]; si no, [Hoy] [Mañana] [✏ Elegir fecha] |
+| `unrecognized_recurrence` | «"{expresión}" no está entre las repeticiones que sé hacer (todos los días, cada lunes, de lunes a viernes).» | [🔁 Todos los días] [🔁 Cada {día}] [1️⃣ Solo una vez…] [✏ Escribirlo de nuevo] |
+| `ambiguous_time` | «¿Medianoche de {hoy/mañana} o de {día siguiente}?» | un botón por candidato: [{lun 5 oct 00:00}] [{mar 6 oct 00:00}] |
+| `ambiguous_meridiem` | «¿A las {8} de la mañana o de la noche?» (con 1 solo candidato: «¿A las 8 pm?» y [✏ Otra hora]) | un botón por candidato: [{8:00 am}] [{8:00 pm}] |
+| `past` | «Esa fecha ya pasó. ¿La dejo para {alternativa}?» | [{candidato}] (si lo hay) [✏ Otra fecha] [↩ Cancelar] |
+| `today_or_tomorrow` | «Ya pasó la medianoche: ¿"mañana" es hoy ({fecha}) o mañana ({fecha})?» | [Hoy {fecha}] [Mañana {fecha}] (sin candidatos: el handler arma los dos días y luego pregunta la hora) |
+| `same_weekday` | «Hoy es {día}: ¿hoy o en 7 días?» | [Hoy {fecha}] [En 7 días {fecha}] |
+| `two_dates`, `unrecognized_time`, `invalid_date`, `invalid_time` | «No pude entender la fecha/hora; escríbela de otra forma.» | [✏ Escribir otra fecha] [↩ Cancelar] |
+
+Notas para el bloque 7:
+- Las preguntas de "el N" (`unsupported_date`, `past`) **deben traer el candidato ya resuelto** (próximo día N del mes), no
+  pedirle la fecha completa al usuario. Hoy `unsupported_date` no calcula candidatos; es trabajo del handler/parser en ese bloque.
+- **Mejora menor pendiente:** "1ro / 1º / 1er / primero de noviembre" hoy pregunta (`unsupported_date`); soportarlos es trivial
+  (ordinal + "de mes") y se deja para después.
 
 ## Plan de pruebas del motor (FakeClock + FakeChannel + SQLite en memoria)
 1. Único: a T−1 s no sale; a T sale una vez (`kind="reminder"`, 4 botones); `sent` + `last_fired_at`; no se repite.
@@ -105,6 +170,11 @@ Pendientes: 6, 7 y 8.
 Revisión de robustez (antes del bloque 6) HECHA: M2, migración 004, M3/M6/M13, códigos de detención, M7, M8, M9, M10 y M5
 (un commit cada uno, con la prueba escrita antes; `pytest -q`: 584 passed; `ruff check .`: limpio). Pendiente: M1 (inicio del
 bloque 6) y la deuda conocida de abajo.
+Endurecimiento del parser (2º encargo, antes del bloque 6; reglas 12-18 y la regla 8 de repeticiones) HECHO en commits
+pequeños con la prueba escrita antes: citas bíblicas, marcadores y horas en palabras, "7.30" y números sueltos, "domingo"
+(dos veces), fechas no soportadas / "el N" / 29 de febrero, repeticiones + `parse_schedule`, "diario" sustantivo, candidatos
+am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de verano. `pytest -q`: 880 passed, 2 xfailed;
+`ruff check .`: limpio. Tabla de frases ejecutadas: `python scripts/show_parse_table.py`.
 
 ## Decisiones de implementación (a revisar)
 2. **Estado "detenido" = `stop_reason` no nulo** (migración 004; sustituye al centinela `attempts = 1000`).
@@ -123,7 +193,9 @@ bloque 6) y la deuda conocida de abajo.
    `tasks.close_as_converted`: `status='dropped'` + `closed_reason='converted_to_reminder'|'converted_to_note'` (no
    `done`: falsearía los conteos de hechas). `/papelera` y los reportes filtran `closed_reason='discarded'`, así las
    conversiones no aparecen como descartadas. La cascada no cancela el recordatorio (no lleva `task_id`).
-5. **Mayúsculas en días de la semana** (regla 10 del parser): "llamar a Domingo" se toma como nombre propio. Ver el DEFECTO CONOCIDO de la regla 10: hoy también descarta "el Domingo" / "este Domingo" / "para el Domingo".
+5. **"Domingo" como posible nombre propio** (regla 10 del parser, revisada): pregunta `name_or_day` solo tras "a"/"con", con
+   mayúscula a mitad de frase o al inicio seguido de me/te/le/nos/les/se; con determinante siempre es fecha (el defecto
+   anterior, que descartaba "el Domingo", ya no existe).
 6. **Entrega "al menos una vez"**: si el proceso muere entre enviar y marcar `sent`, un aviso puede repetirse al reiniciar;
    nunca se pierde. Si falla registrar el envío (p. ej. el cálculo de la siguiente ocurrencia), se revierte todo y el
    siguiente tick lo reintenta entero (una sola transacción).
@@ -149,6 +221,15 @@ bloque 6) y la deuda conocida de abajo.
 - [ ] 8. README, verificación final y manual en `--dry-run` — `Fase 1: documentación y verificación`
 
 ## Deuda conocida (no se arregla en la Fase 1)
+- **Parser y horario de verano (media; baja en zonas sin él).** Una hora que no existe (14 de marzo de 2027 a las 2:30 am en
+  Nueva York, salto de 02:00 a 03:00) o que ocurre dos veces (1 de noviembre de 2026 a la 1:30 am) se acepta en silencio; lo
+  correcto es preguntar. Dos pruebas `xfail(strict=True)` en `tests/test_dst_known_debt.py` (cuando se arregle fallarán por
+  XPASS y habrá que quitar la marca). El barrido de reloj no lanza excepciones en esas horas pero omite la invariante de la
+  hora escrita en los días de cambio.
+- **Parser: "1ro/1º/1er/primero de noviembre"** pregunta (`unsupported_date`); soportarlo es una mejora menor.
+- **Entorno de pruebas en Windows (no es del parser).** Una de cada ~6 corridas de `pytest -q` se queda colgada creando el bucle
+  de asyncio (`_fallback_socketpair`/`socket.accept`) en `tests/test_reminders_outage.py`; `faulthandler_timeout = 60`
+  vuelca la pila. Si ocurre, repetir la corrida; investigar al empezar el bloque 6.
 - **M4 — deriva permanente por horario de verano (media; baja en zonas sin él).** Una serie diaria a las 02:30 en una
   zona con horario de verano pasa a las 03:30 el día del adelanto y se queda ahí, porque el ancla de `_spawn_next` es el
   `fire_at` de la fila anterior, ya corrido. Prueba futura: `FREQ=DAILY` a las 02:30 en `America/New_York` del 6 al 10 de

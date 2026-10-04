@@ -288,9 +288,20 @@ Todo mensaje que no sea comando entra a este pipeline:
 
 1. Normalizar (minúsculas, sin acentos, espacios). **Guardar siempre primero** el texto original en
    una bandeja de entrada (tarea sin área) para que nada se pierda si algo falla después.
-2. Extraer fecha/hora con `parsing/dates.py` (gramática cerrada, zona `TZ_NAME`). Si hay 0 fechas → sin fecha.
-   Si hay más de una, la hora es dudosa, la fecha ya pasó o es ambigua ("el viernes" siendo viernes) → preguntar.
+2. Interpretar fecha/hora con `parsing/recurrence.py::parse_schedule` (gramática cerrada, zona `TZ_NAME`): PRIMERO la
+   repetición ("todos los lunes a las 7 pm", "cada día", "diario", "de lunes a viernes"), LUEGO la fecha suelta
+   (`parsing/dates.py`). Si hay 0 fechas → sin fecha. **Principio: lo que parece fecha u hora y no se entendió se
+   pregunta; nunca se descarta en silencio, y un recordatorio con la hora equivocada es peor que ninguno.**
+   Se pregunta (con candidatos ya resueltos cuando los hay) si: hay más de una fecha u hora; la hora es dudosa
+   (am/pm sin marcador de 5 a 11, o sin día cuando la lectura am llega antes que la pm; "12 am", "medianoche"; "7.30";
+   un número suelto tras un día); la fecha ya pasó o es ambigua ("el viernes" siendo viernes, "mañana" entre las 00:00
+   y las 05:00); la fecha no está soportada ("el 20 de este mes", "en 3 meses", "1ro de noviembre"); una palabra de
+   repetición no encaja en la lista ("cada mes", "semanal": nunca se guarda un aviso único); "Juan 3:30" podría ser
+   una hora o una cita; "domingo" podría ser un nombre ("llamar a Domingo"). Las citas bíblicas ("Juan 3:16") nunca
+   son hora. El 29 de febrero va al siguiente año bisiesto real. Los códigos de pregunta y sus botones están en
+   `docs/PLAN_FASE1.md` (bloque 7).
    La confirmación muestra siempre la fecha resuelta con día de la semana y botones [✏ Cambiar] [↩ Deshacer].
+   Deuda conocida: horas inexistentes o repetidas por el horario de verano (ver el plan).
 3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
 4. Clasificar (8.2).
 5. Crear la entidad (tarea, recordatorio, nota o gasto) y responder compacto:
