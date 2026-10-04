@@ -158,7 +158,7 @@ asistente/
 │     └─ amounts.py           # regex de montos
 ├─ scripts/
 │  ├─ eval_classifier.py
-│  └─ backup_db.sh
+│  └─ backup_db.py          # respaldo con la API de sqlite3 (sin el binario), también en Windows
 ├─ deploy/asistente.service   # unidad systemd
 ├─ data/                      # (ignorado por git) asistente.db, backups/
 └─ tests/
@@ -572,6 +572,8 @@ acceso a shell, interfaz web, múltiples usuarios, notas de voz.
   `EnvironmentFile=` apuntando al `.env` con `chmod 600`, y `After=network-online.target`.
   Activar con `sudo systemctl enable --now asistente`; logs con `journalctl -u asistente -f`.
 - Sin puertos abiertos (long polling). SSH solo con llave.
-- `scripts/backup_db.sh`: `sqlite3 data/asistente.db ".backup 'data/backups/asistente-$(date +%F).db'"`
-  diario por cron y conservar 14 días. Copiar periódicamente fuera de la tarjeta SD.
+- `scripts/backup_db.py` (API de respaldo del módulo `sqlite3`, no el binario `sqlite3`): guarda
+  `data/backups/asistente-AAAA-MM-DD.db`, verifica la copia, conserva 14 días y termina con código
+  distinto de 0 si falla. Diario por cron, p. ej. `15 3 * * * cd <RUTA_PROYECTO> && venv/bin/python scripts/backup_db.py`.
+  Copiar periódicamente fuera de la tarjeta SD.
 - NTP activo; la hora del sistema debe ser correcta (los recordatorios dependen de ella).

@@ -60,7 +60,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 
 ## Kit de despliegue (bloque 8 adelantado; el 7c sigue en pausa)
 - 2a HECHO: `deploy/asistente.service`, `.gitattributes` (`*.sh`, `*.service`, `*.sql` con LF) y `.env.example` sin comentarios al final de
-  línea (systemd no los admite). Pruebas en `tests/test_deploy_files.py`. Pendiente: 2b respaldo, 2c check_env, 2d /estado, 2e README.
+  línea (systemd no los admite). Pruebas en `tests/test_deploy_files.py`. 
+- 2b HECHO: `scripts/backup_db.py` (API `sqlite3.backup`, 14 días, código de salida) con `tests/test_backup_db.py` (17 pruebas); SPEC actualizado.
+  Pendiente: 2c check_env, 2d /estado, 2e README.
 
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,

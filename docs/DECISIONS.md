@@ -193,3 +193,6 @@ Se compararon las 30 pruebas quitadas de `test_commands.py` con `test_vistas.py`
 
 ## Kit de despliegue: unidad systemd
 `deploy/asistente.service` usa `EnvironmentFile` (lo pidió el dueño) con marcadores `<USUARIO>` y `<RUTA_PROYECTO>`. Como systemd no quita comentarios al final de línea, el `.env.example` los lleva en líneas propias y una prueba lo vigila. `.gitattributes` fuerza LF en `*.sh`, `*.service` y `*.sql`; `git add --renormalize .` no cambió nada (el índice ya era LF).
+
+## Kit de despliegue: respaldo
+`scripts/backup_db.py` usa `Connection.backup` (copia consistente aunque el bot escriba; abre la base en solo lectura y nunca crea una vacía), copia a un `.tmp`, verifica `PRAGMA integrity_check` y solo entonces lo mueve a `asistente-AAAA-MM-DD.db` con `os.replace` (un respaldo bueno nunca se pisa con uno malo). Retención: se borran los de 14 días o más (se conservan hoy y los 13 anteriores = 14 archivos); solo se poda si el respaldo salió bien y solo nombres con ese patrón exacto. La fecha es la del sistema (hora local de la Pi). Para respaldar fuera de la SD, `--dir`. Es la única excepción a «nada se borra»: son copias, no datos del usuario; requiere tu visto bueno.
