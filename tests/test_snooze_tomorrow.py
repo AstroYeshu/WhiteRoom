@@ -1,4 +1,4 @@
-"""M5: "🌅 Mañana" antes de las 05:00 locales ofrece HOY a la hora por defecto.
+"""M5: "Mañana 9:00" antes de las 05:00 locales ofrece HOY a la hora por defecto.
 
 A las 02:30 "mañana" casi siempre significa "cuando me levante", o sea hoy. Zona: México.
 """
@@ -18,7 +18,7 @@ def local(text: str) -> datetime:
 
 
 def sent_reminder(conn, clock) -> int:
-    """Un recordatorio ya avisado (el botón 🌅 solo aplica a esos)."""
+    """Un recordatorio ya avisado (el botón solo aplica a esos)."""
     created = reminders.create_reminder(conn, "x", clock() + timedelta(minutes=1), clock)
     with conn:
         conn.execute("UPDATE reminders SET status = 'sent' WHERE id = ?", (created.id,))

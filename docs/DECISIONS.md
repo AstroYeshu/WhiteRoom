@@ -82,7 +82,7 @@ con [Guardar][Cancelar] antes de guardar. «¿Cuándo?» ofrece [Hoy 18:00 (solo
 
 ## «¿Cuándo?» invita a escribir y ofrece «Mejor como tarea»
 La pregunta «¿Cuándo?» (y la de «hora pasada») dice «o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5"» y trae
-[📝 Mejor como tarea]: deja la entrada como tarea con el área ya elegida, sin recordatorio. Solo en «¿Cuándo?», no en las
+[Mejor como tarea]: deja la entrada como tarea con el área ya elegida, sin recordatorio. Solo en «¿Cuándo?», no en las
 preguntas con candidatos. La confirmación de una fecha sin hora dice «9:00 am (hora por defecto)» (con am/pm, como el
 resto de `format_when`). Regla de respuesta: un texto es respuesta a «¿cuándo?» si `parse_schedule` lo entiende (`once`,
 `series` o `ask` salvo `name_or_day`/`time_or_verse`); `none` es captura nueva y avisa. Se usa `parse_schedule` y no
@@ -94,3 +94,11 @@ El ritmo del tick sale de `.env` (`Settings.tick_seconds`) y llega a `run_pollin
 umbral de «(retrasado)» (2 min) son tiempos, no vueltas; pruebas con ticks de 10 y de 30 s dan los mismos instantes.
 El logger `apscheduler` sube a WARNING (con un tick de 30 s eran dos líneas INFO por tick); `asistente.*` no se toca.
 Descartado: subir todo el registro a WARNING (ocultaría nuestros errores y avisos útiles).
+
+## Mensajes sin emojis ni pictogramas
+Ningún texto al usuario (botones, mensajes, confirmaciones, consola) lleva emojis ni pictogramas: etiquetas `Hecho`,
+`+10 min`, `+1 h`, `Mañana 9:00` (o `Hoy 9:00` antes de las 05:00; la etiqueta lleva SIEMPRE la hora), mensajes
+`Recordatorio: {texto}`, `Hecho: {texto}`, `Pospuesto para {día hora}: {texto}`. `tests/test_no_pictograms.py` recorre con
+`ast` las constantes de texto de `asistente/` y `scripts/` (docstrings y f-strings incluidos) y falla ante símbolos
+(So/Sm/Sk), selectores de variación, ZWJ o marcos de teclado; permite tildes, eñe, `¿ ¡ « » …` y el grado `°`.
+Descartado: una lista fija de emojis (se le escaparía el siguiente).

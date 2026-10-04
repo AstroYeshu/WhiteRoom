@@ -145,7 +145,7 @@ def test_un_mensaje_libre_se_guarda_primero_como_tarea_sin_area(bot, conn):
         "open",
         "comprar leche",
     )
-    assert bot.labels() == ["📝 Tarea", "⏰ Recordatorio", "🗒 Nota", "↩ Cancelar"]
+    assert bot.labels() == ["Tarea", "Recordatorio", "Nota", "Cancelar"]
 
 
 def test_un_extrano_no_recibe_nada_ni_se_guarda_nada(bot, conn):
@@ -172,7 +172,7 @@ def test_tarea_pregunta_el_area_y_la_asigna(bot, conn):
         "iglesia",
         "personal",
         "Sin área",
-        "↩ Cancelar",
+        "Cancelar",
     ]
     bot.tap("universidad")
     [task] = all_tasks(conn)
@@ -220,7 +220,7 @@ def test_recordatorio_con_fecha_clara_confirma_con_dia_de_la_semana_y_botones(bo
     assert reminder.area_id == areas.find_area_by_name(conn, "universidad").id
     text, _ = bot.question
     assert "domingo 4 de octubre, 8:00 am" in text and "llevar tarea" in text
-    assert bot.labels() == ["✏ Cambiar", "↩ Deshacer"]
+    assert bot.labels() == ["Cambiar", "Deshacer"]
     task = all_tasks(conn)[0]
     assert (task.status, task.closed_reason) == ("dropped", "converted_to_reminder")
 
@@ -259,7 +259,7 @@ def test_recordar_con_fecha_va_directo_a_recordatorio(bot, conn):
 
 def test_una_palabra_parecida_no_salta_la_pregunta_de_tipo(bot):
     bot.say("recordatorio de la junta")
-    assert bot.labels()[0] == "📝 Tarea"
+    assert bot.labels()[0] == "Tarea"
 
 
 def test_sin_fecha_pregunta_cuando_con_hoy_y_manana(bot, conn):
@@ -268,7 +268,7 @@ def test_sin_fecha_pregunta_cuando_con_hoy_y_manana(bot, conn):
     bot.tap("Sin área")
     text, _ = bot.question
     assert "¿Cuándo?" in text
-    assert bot.labels() == ["Hoy 18:00", "Mañana 9:00", "📝 Mejor como tarea", "↩ Cancelar"]
+    assert bot.labels() == ["Hoy 18:00", "Mañana 9:00", "Mejor como tarea", "Cancelar"]
     bot.tap("Mañana 9:00")
     [reminder] = pending(conn)
     assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-04 09:00"
@@ -279,7 +279,7 @@ def test_hoy_18_solo_se_ofrece_si_es_futuro(bot, clock):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    assert bot.labels() == ["Mañana 9:00", "📝 Mejor como tarea", "↩ Cancelar"]
+    assert bot.labels() == ["Mañana 9:00", "Mejor como tarea", "Cancelar"]
 
 
 def test_hoy_18_pulsado_cuando_ya_paso_no_crea_nada(bot, conn, clock):
@@ -354,7 +354,7 @@ def test_cada_pregunta_lleva_cancelar_y_la_tarea_sigue_en_la_bandeja(bot, conn):
     bot.say("pagar la renta próximo mes")
     bot.tap("Recordatorio")
     bot.tap("Sin área")
-    assert bot.labels()[-1] == "↩ Cancelar"
+    assert bot.labels()[-1] == "Cancelar"
     bot.tap("Cancelar")
     assert pending(conn) == []
     [task] = all_tasks(conn)
@@ -383,11 +383,11 @@ def test_serie_muestra_la_interpretacion_y_no_guarda_hasta_confirmar(bot, conn):
     assert pending(conn) == []
     text, _ = bot.question
     assert "lunes" in text and "lunes 5 de octubre, 7:00 pm" in text
-    assert bot.labels() == ["✅ Guardar", "↩ Cancelar"]
+    assert bot.labels() == ["Guardar", "Cancelar"]
     bot.tap("Guardar")
     [reminder] = pending(conn)
     assert reminder.rrule == "FREQ=WEEKLY;BYDAY=MO" and reminder.text == "regar plantas"
-    assert bot.labels() == ["✏ Cambiar", "↩ Deshacer"]
+    assert bot.labels() == ["Cambiar", "Deshacer"]
 
 
 def test_el_candidato_se_revisa_al_pulsar_si_ya_paso_no_se_crea(bot, conn, clock):
@@ -473,7 +473,9 @@ def test_un_mensaje_nuevo_a_mitad_de_pregunta_descarta_el_flujo_anterior_y_avisa
     assert all(t.status == "open" and t.area_id is None for t in all_tasks(conn))
     bot.press(old_button)  # botón viejo con un flujo nuevo: no toca nada
     assert handlers.STALE_CHOICE_TEXT in bot.last[1]
-    assert bot.question[0].startswith("📥")  # la pregunta vigente sigue siendo la nueva
+    assert bot.question[0].startswith(
+        "Guardado en tu bandeja"
+    )  # la pregunta vigente sigue siendo la nueva
     bot.tap("Nota")
     assert [n.text for n in notes.list_notes(conn)] == []  # aún falta el área
 
@@ -497,7 +499,7 @@ def test_un_texto_que_no_es_fecha_mientras_se_espera_la_fecha_es_captura_nueva(b
     assert pending(conn) == []
     assert [t.title for t in all_tasks(conn)] == ["llamar al dentista", "comprar leche"]
     assert all_tasks(conn)[0].status == "open"  # la primera sigue en la bandeja
-    assert bot.labels()[0] == "📝 Tarea"
+    assert bot.labels()[0] == "Tarea"
 
 
 def test_el_estado_caduca_a_los_10_minutos(bot, conn, clock):
@@ -616,7 +618,7 @@ def test_un_texto_sin_fecha_es_captura_nueva_y_avisa_que_se_descarto_la_pregunta
     assert [t.title for t in all_tasks(conn)] == ["llamar al dentista", "comprar leche"]
     assert tasks.get_task(conn, first_id).status == "open"  # la primera sigue en la bandeja
     assert pending(conn) == []
-    assert bot.labels()[0] == "📝 Tarea"  # y la captura nueva pregunta qué es
+    assert bot.labels()[0] == "Tarea"  # y la captura nueva pregunta qué es
 
 
 def test_hora_dudosa_en_cuando_cuenta_como_respuesta_no_como_captura(bot, conn):
@@ -661,7 +663,7 @@ def test_el_aviso_de_hora_pasada_tambien_invita_a_escribir(bot, clock):
     bot.press(hoy)
     assert "Esa hora ya pasó. ¿Cuándo?" in bot.question[0]
     assert "o escribe cuándo" in bot.question[0]
-    assert "📝 Mejor como tarea" in bot.labels()
+    assert "Mejor como tarea" in bot.labels()
 
 
 def test_mejor_como_tarea_conserva_el_area_y_no_crea_recordatorio(bot, conn):

@@ -40,12 +40,12 @@ ACTION_CHANGE = "ch"  # ch:RECORDATORIO:TAREA
 
 KIND_ACTION = "k"  # acción del botón de tipo; su argumento es uno de los KIND_*
 KIND_TASK, KIND_REMINDER, KIND_NOTE = "t", "r", "n"
-KIND_LABELS = {KIND_TASK: "📝 Tarea", KIND_REMINDER: "⏰ Recordatorio", KIND_NOTE: "🗒 Nota"}
+KIND_LABELS = {KIND_TASK: "Tarea", KIND_REMINDER: "Recordatorio", KIND_NOTE: "Nota"}
 REMINDER_VERBS = frozenset({"recordar", "recordarme", "recuerdame", "recuerdenme"})
 EVENING = time(18, 0)  # la opción "Hoy 18:00" de la pregunta ¿cuándo?
 
 ABANDONED_TEXT = "Dejé sin terminar lo anterior; sigue en tu bandeja como tarea."
-CANCELLED_TEXT = "↩ Cancelado. «{text}» sigue en tu bandeja como tarea."
+CANCELLED_TEXT = "Cancelado. «{text}» sigue en tu bandeja como tarea."
 WHEN_PROMPT = (
     '¿Cuándo? Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".'
 )
@@ -53,8 +53,8 @@ WRITE_WHEN_PROMPT = "Escribe la fecha y la hora, por ejemplo «mañana 8 pm»."
 PAST_PROMPT = f"Esa hora ya pasó. {WHEN_PROMPT}"
 NOT_UNDOABLE_TEXT = "Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente."
 
-CANCEL = ("x", None, "↩ Cancelar")
-AS_TASK = ("t", None, "📝 Mejor como tarea")
+CANCEL = ("x", None, "Cancelar")
+AS_TASK = ("t", None, "Mejor como tarea")
 Button = tuple[str, object | None, str]  # (acción, argumento, texto del botón)
 
 # Preguntas del parser (docs/PLAN_FASE1.md). Con candidatos, cada uno es un botón.
@@ -76,9 +76,9 @@ GENERIC_QUESTION_TEXT = "No pude entender la fecha o la hora; escríbela de otra
 # Respuestas del parser que no son sobre la fecha sino sobre el texto: no cuentan como respuesta.
 NOT_A_DATE_ANSWER = frozenset({"name_or_day", "time_or_verse"})
 NO_DATE_BUTTONS = {
-    "time_or_verse": "📖 Es una cita (sin fecha)",
-    "name_or_day": "👤 Es un nombre (sin fecha)",
-    "unrecognized_recurrence": "1️⃣ Solo una vez…",
+    "time_or_verse": "Es una cita (sin fecha)",
+    "name_or_day": "Es un nombre (sin fecha)",
+    "unrecognized_recurrence": "Solo una vez…",
 }
 
 
@@ -191,7 +191,7 @@ async def capture(ctx: Ctx, text: str) -> None:
     task = tasks.create_task(ctx.conn, text, ctx.now, source_text=text)
     logger.info("Bandeja: tarea guardada id=%s", task.id)
     flow = ctx.conversation.start(task.id, text, ctx.now)
-    header = f"📥 Guardado en tu bandeja: «{shown(text)}»\n"
+    header = f"Guardado en tu bandeja: «{shown(text)}»\n"
     if starts_with_reminder_verb(text):  # ya dijo qué es: no se pregunta
         flow.kind = KIND_REMINDER
         await _ask_area(ctx, flow, None, header)
@@ -221,12 +221,12 @@ async def _after_area(ctx: Ctx, flow: Flow, choice: IncomingChoice | None, ack: 
     if flow.kind == KIND_TASK:
         tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
         ctx.conversation.clear()
-        await _say(ctx, choice, f"📝 Tarea guardada{suffix}: «{shown(flow.text)}»")
+        await _say(ctx, choice, f"Tarea guardada{suffix}: «{shown(flow.text)}»")
     elif flow.kind == KIND_NOTE:
         notes.create_note(ctx.conn, flow.text, ctx.now, area_id=flow.area_id)
         tasks.close_as_converted(ctx.conn, flow.task_id, "converted_to_note", ctx.now)
         ctx.conversation.clear()
-        await _say(ctx, choice, f"🗒 Nota guardada{suffix}: «{shown(flow.text)}»")
+        await _say(ctx, choice, f"Nota guardada{suffix}: «{shown(flow.text)}»")
     else:
         await _ack(ctx, choice, ack)
         result = _parse(ctx, flow.text)
@@ -285,7 +285,7 @@ async def _ask_when_question(ctx: Ctx, flow: Flow, result: ScheduleResult) -> No
         buttons.append(("n", None, NO_DATE_BUTTONS[result.reason]))
     if result.reason == "unsupported_date" and not candidates:
         buttons += [(key, None, label) for key, (_, label) in _quick_targets(ctx).items()]
-    buttons += [("o", None, "✏ Escribir otra fecha"), CANCEL]
+    buttons += [("o", None, "Escribir otra fecha"), CANCEL]
     await _send_question(ctx, flow, STEP_WHEN, text, buttons)
     flow.candidates = candidates  # después de renovar el id; los botones llevan solo el índice
 
@@ -302,10 +302,10 @@ async def _apply_schedule(
         assert series.first_at_utc is not None and series.rrule is not None
         when = format_when(series.first_at_utc, ctx.tz_name, ctx.now)
         text = (
-            f"🔁 {describe_rrule(series.rrule)}: «{shown(flow.title)}»\n"
-            f"📅 Próxima: {when}\n¿La guardo?"
+            f"Repetición: {describe_rrule(series.rrule)}: «{shown(flow.title)}»\n"
+            f"Próxima: {when}\n¿La guardo?"
         )
-        await _send_question(ctx, flow, STEP_SERIES, text, [("s", None, "✅ Guardar"), CANCEL])
+        await _send_question(ctx, flow, STEP_SERIES, text, [("s", None, "Guardar"), CANCEL])
     elif result.kind == "ask":
         await _ask_when_question(ctx, flow, result)
     else:
@@ -326,7 +326,7 @@ async def _create(
             ctx.conn, flow.task_id, flow.title, when_utc, ctx.now, area_id=flow.area_id, rrule=rrule
         )
     except reminders.PastReminderError:  # la opción tardó tanto que ya pasó: jamás en el pasado
-        await _ack(ctx, choice, "⏱ Esa hora ya pasó.")
+        await _ack(ctx, choice, "Esa hora ya pasó.")
         await _ask_when(ctx, flow, PAST_PROMPT)
         return
     if reminder is None:  # la tarea ya no está abierta: no hay nada que convertir
@@ -336,23 +336,23 @@ async def _create(
     ctx.conversation.clear()
     logger.info("Bandeja: tarea %s convertida en el recordatorio %s", flow.task_id, reminder.id)
     when = format_when(when_utc, ctx.tz_name, ctx.now)
-    await _ack(ctx, choice, f"✔ {when}")
-    lines = [f"⏰ Listo: «{shown(reminder.text)}»"]
+    await _ack(ctx, choice, f"Listo: {when}")
+    lines = [f"Listo: «{shown(reminder.text)}»"]
     if rrule is not None:
-        lines.append(f"🔁 {describe_rrule(rrule)}")
+        lines.append(f"Repetición: {describe_rrule(rrule)}")
     lines.append(
-        f"📅 {'Próxima: ' if rrule else ''}{when}{'' if has_time else ' (hora por defecto)'}"
+        f"{'Próxima' if rrule else 'Cuándo'}: {when}{'' if has_time else ' (hora por defecto)'}"
     )
     area = _area_name(ctx, reminder.area_id)
     if area:
-        lines.append(f"📂 {area}")
+        lines.append(f"Área: {area}")
     ids = (reminder.id, flow.task_id)
     await ctx.channel.send_choices(
         ctx.user_ref,
         "\n".join(lines),
         [
-            Choice(encode_choice_id(ACTION_CHANGE, *ids), "✏ Cambiar"),
-            Choice(encode_choice_id(ACTION_UNDO, *ids), "↩ Deshacer"),
+            Choice(encode_choice_id(ACTION_CHANGE, *ids), "Cambiar"),
+            Choice(encode_choice_id(ACTION_UNDO, *ids), "Deshacer"),
         ],
     )
 
@@ -377,7 +377,7 @@ async def _on_area(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]
     if area_id and (area is None or area.archived):
         return False
     flow.area_id = area_id or None
-    await _after_area(ctx, flow, choice, f"📂 {area.name}" if area else "📂 Sin área")
+    await _after_area(ctx, flow, choice, f"Área: {area.name}" if area else "Área: ninguna")
     return True
 
 
@@ -395,7 +395,7 @@ async def _on_quick(
         return False
     target = _quick_targets(ctx).get(key)
     if target is None:  # "Hoy 18:00" que se pulsó cuando ya había pasado
-        await _ack(ctx, choice, "⏱ Esa hora ya pasó.")
+        await _ack(ctx, choice, "Esa hora ya pasó.")
         await _ask_when(ctx, flow, PAST_PROMPT)
         return True
     await _create(ctx, flow, choice, target[0], None, True)
@@ -405,7 +405,7 @@ async def _on_quick(
 async def _on_write_other(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if args:
         return False
-    await _ack(ctx, choice, "✏ Otra fecha")
+    await _ack(ctx, choice, "Otra fecha")
     await _ask_when(ctx, flow, WRITE_WHEN_PROMPT)
     return True
 
@@ -435,7 +435,7 @@ async def _on_better_as_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, args:
     ctx.conversation.clear()
     area = _area_name(ctx, flow.area_id)
     suffix = f" en {area}" if area else ""
-    await show(ctx.channel, choice, f"📝 Tarea guardada{suffix}: «{shown(flow.text)}»")
+    await show(ctx.channel, choice, f"Tarea guardada{suffix}: «{shown(flow.text)}»")
     return True
 
 
@@ -505,10 +505,10 @@ async def handle_conversion_choice(
         await show(
             ctx.channel,
             choice,
-            f"↩ Deshecho. «{shown(reminder.text)}» vuelve a tu bandeja como tarea.",
+            f"Deshecho. «{shown(reminder.text)}» vuelve a tu bandeja como tarea.",
         )
         return
-    await show(ctx.channel, choice, f"✏ Cambiando «{shown(reminder.text)}»")
+    await show(ctx.channel, choice, f"Cambiando «{shown(reminder.text)}»")
     flow = ctx.conversation.start(task_id, task.source_text or task.title, ctx.now, STEP_WHEN)
     flow.kind, flow.area_id, flow.title = KIND_REMINDER, reminder.area_id, reminder.text
     await _ask_when(ctx, flow, WHEN_PROMPT)

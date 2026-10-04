@@ -59,8 +59,8 @@ def test_unico_dispara_a_su_hora_una_sola_vez(conn, clock, engine, channel):
     clock.advance(seconds=1)  # exactamente a su hora
     assert tick(engine) == 1
     to, text, choices, kind = channel.choices[0]
-    assert (to, text, kind) == (USER, "⏰ llevar tarea de cálculo", "reminder")
-    assert [c.label for c in choices] == ["✅ Hecho", "⏱ +10 min", "⏱ +1 h", "🌅 Mañana"]
+    assert (to, text, kind) == (USER, "Recordatorio: llevar tarea de cálculo", "reminder")
+    assert [c.label for c in choices] == ["Hecho", "+10 min", "+1 h", "Mañana 9:00"]
     assert [c.id for c in choices] == [
         f"rem_done:{created.id}",
         f"rem_snooze:{created.id}:10",
@@ -82,14 +82,14 @@ def test_el_mensaje_lleva_el_area(conn, clock, engine, channel):
     )
     clock.advance(minutes=1)
     tick(engine)
-    assert sent_texts(channel) == ["⏰ estudiar [universidad]"]
+    assert sent_texts(channel) == ["Recordatorio: estudiar [universidad]"]
 
 
 def test_un_retraso_pequeno_no_se_etiqueta(conn, clock, engine, channel):
     reminders.create_reminder(conn, "a", clock() + timedelta(minutes=1), clock)
     clock.advance(minutes=1, seconds=30)  # un tick de 30 s llegó tarde, dentro de la gracia
     tick(engine)
-    assert sent_texts(channel) == ["⏰ a"]
+    assert sent_texts(channel) == ["Recordatorio: a"]
 
 
 # --- 2. +10 min / +1 h / mañana -------------------------------------------------------------
@@ -110,7 +110,10 @@ def test_posponer_10_minutos_reprograma_y_vuelve_a_sonar(conn, clock, engine, ch
     assert tick(engine) == 0
     clock.advance(seconds=1)
     assert tick(engine) == 1
-    assert sent_texts(channel) == ["⏰ x", "⏰ x"]  # el segundo salió a su hora: sin "(retrasado)"
+    assert sent_texts(channel) == [
+        "Recordatorio: x",
+        "Recordatorio: x",
+    ]  # el segundo salió a su hora: sin "(retrasado)"
 
 
 def test_posponer_1_hora(conn, clock, engine, channel):
@@ -172,15 +175,18 @@ def test_silencio_retiene_y_libera_en_orden_con_retrasado(conn, clock, engine, c
     clock.current = local("2026-10-03 22:50")
     clock.advance(seconds=30)
     assert tick(engine) == 1  # solo el prioritario atraviesa el silencio
-    assert sent_texts(channel) == ["⏰ urgente"]
+    assert sent_texts(channel) == ["Recordatorio: urgente"]
     assert row(conn, first.id).status == row(conn, second.id).status == "pending"
-    assert reminders.mark_done(conn, urgent.id)  # ✅ Hecho: sin esto insistiría cada 15 min
+    assert reminders.mark_done(conn, urgent.id)  # Hecho: sin esto insistiría cada 15 min
 
     clock.current = local("2026-10-04 06:59")
     assert tick(engine) == 0  # sigue en silencio
     clock.current = local("2026-10-04 07:00")  # el fin del silencio es exclusivo
     assert tick(engine) == 2
-    assert sent_texts(channel)[1:] == ["⏰ primero (retrasado)", "⏰ segundo (retrasado)"]
+    assert sent_texts(channel)[1:] == [
+        "Recordatorio: primero (retrasado)",
+        "Recordatorio: segundo (retrasado)",
+    ]
     assert row(conn, urgent.id).status == "done"
 
 
@@ -222,9 +228,9 @@ def test_canal_caido_10_minutos_no_pierde_ninguno_y_salen_retrasados(conn, clock
         tick(engine)
         clock.advance(seconds=30)
     assert sorted(sent_texts(channel)) == [
-        "⏰ r0 (retrasado)",
-        "⏰ r1 (retrasado)",
-        "⏰ r2 (retrasado)",
+        "Recordatorio: r0 (retrasado)",
+        "Recordatorio: r1 (retrasado)",
+        "Recordatorio: r2 (retrasado)",
     ]
     assert all(row(conn, i).status == "sent" and row(conn, i).attempts == 0 for i in ids)
     assert all(row(conn, i).first_failed_at is None for i in ids)  # el éxito borra el horizonte
@@ -262,7 +268,7 @@ def test_error_permanente_detiene_ese_recordatorio_y_los_demas_siguen(conn, cloc
     channel.fail_if = lambda text: PermanentChannelError("bot_blocked") if "malo" in text else None
     clock.advance(minutes=1)
     assert tick(engine) == 1
-    assert sent_texts(channel) == ["⏰ bueno"]
+    assert sent_texts(channel) == ["Recordatorio: bueno"]
     assert row(conn, good.id).status == "sent"
     stopped = row(conn, bad.id)
     assert stopped.status == "pending" and stopped.stopped is True  # marcado, no perdido
@@ -270,7 +276,11 @@ def test_error_permanente_detiene_ese_recordatorio_y_los_demas_siguen(conn, cloc
 
     clock.advance(hours=3)
     tick(engine)
-    assert channel.attempts.count("⏰ malo (retrasado)") + channel.attempts.count("⏰ malo") == 1
+    assert (
+        channel.attempts.count("Recordatorio: malo (retrasado)")
+        + channel.attempts.count("Recordatorio: malo")
+        == 1
+    )
 
 
 def test_reiniciar_el_proceso_reintenta_de_inmediato(conn, clock, channel):

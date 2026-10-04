@@ -34,7 +34,7 @@ Aprobado por el dueño. Marcar cada bloque al completarlo. **Corte principal de 
 5 de 18 frases de prueba no las resolvía ninguna. Ver la tabla de evidencia en la conversación del 2026-10-03.
 
 Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, nunca se adivina):
-1. La confirmación muestra siempre la fecha resuelta con día de la semana y botones [✏ Cambiar] [↩ Deshacer]
+1. La confirmación muestra siempre la fecha resuelta con día de la semana y botones [Cambiar] [Deshacer]
    (`format_when` aquí; los botones en el bloque 7).
 2. "mañana" es el día salvo que vaya precedido de `la / esta / cada / toda` ("de la mañana", "por la mañana").
    Un periodo sin hora ("mañana por la mañana") → pregunta.
@@ -125,21 +125,21 @@ es `parse_schedule` (en `recurrence.py`): PRIMERO la repetición, LUEGO la fecha
 
 ### Preguntas del parser → texto y botones (para el bloque 7)
 `WhenResult.reason` / `ScheduleResult.reason`. Los candidatos vienen ya resueltos (UTC); el handler solo los formatea
-con `format_when`. Un botón por candidato más [✏ Escribir otra fecha] [↩ Cancelar]. El texto original ya está en la bandeja.
+con `format_when`. Un botón por candidato más [Escribir otra fecha] [Cancelar]. El texto original ya está en la bandeja.
 | Código | Texto al usuario | Botones |
 |---|---|---|
-| `time_or_verse` | «¿"{H:MM}" es una hora o una cita bíblica?» | [🕒 Es una hora] [📖 Es una cita (sin fecha)] |
-| `name_or_day` | «¿"Domingo" es una persona o el día de la semana?» | [📅 El domingo ({fecha})] [👤 Es un nombre (sin fecha)] |
-| `dotted_time` | «¿"{7.30}" es la hora 7:30? Escríbela con dos puntos.» | [{7:30 am}] [{7:30 pm}] [✏ Otra hora] |
-| `number_after_day` | «¿"{7}" es la hora o forma parte del texto?» | [🕒 Es la hora: {7:00 am} / {7:00 pm}] [📝 Es parte del texto ({día} a las {09:00})] |
-| `unsupported_date` | «No entiendo "{expresión}". ¿Qué día quieres?» | **Si es "el N": el candidato ya resuelto** [{fecha del próximo día N}] + [✏ Escribir otra fecha]; si no, [Hoy] [Mañana] [✏ Elegir fecha] |
-| `unrecognized_recurrence` | «"{expresión}" no está entre las repeticiones que sé hacer (todos los días, cada lunes, de lunes a viernes).» | [🔁 Todos los días] [🔁 Cada {día}] [1️⃣ Solo una vez…] [✏ Escribirlo de nuevo] |
+| `time_or_verse` | «¿"{H:MM}" es una hora o una cita bíblica?» | [Es una hora] [Es una cita (sin fecha)] |
+| `name_or_day` | «¿"Domingo" es una persona o el día de la semana?» | [El domingo ({fecha})] [Es un nombre (sin fecha)] |
+| `dotted_time` | «¿"{7.30}" es la hora 7:30? Escríbela con dos puntos.» | [{7:30 am}] [{7:30 pm}] [Otra hora] |
+| `number_after_day` | «¿"{7}" es la hora o forma parte del texto?» | [Es la hora: {7:00 am} / {7:00 pm}] [Es parte del texto ({día} a las {09:00})] |
+| `unsupported_date` | «No entiendo "{expresión}". ¿Qué día quieres?» | **Si es "el N": el candidato ya resuelto** [{fecha del próximo día N}] + [Escribir otra fecha]; si no, [Hoy] [Mañana] [Elegir fecha] |
+| `unrecognized_recurrence` | «"{expresión}" no está entre las repeticiones que sé hacer (todos los días, cada lunes, de lunes a viernes).» | [Todos los días] [Cada {día}] [Solo una vez…] [Escribirlo de nuevo] |
 | `ambiguous_time` | «¿Medianoche de {hoy/mañana} o de {día siguiente}?» | un botón por candidato: [{lun 5 oct 00:00}] [{mar 6 oct 00:00}] |
-| `ambiguous_meridiem` | «¿A las {8} de la mañana o de la noche?» (con 1 solo candidato: «¿A las 8 pm?» y [✏ Otra hora]) | un botón por candidato: [{8:00 am}] [{8:00 pm}] |
-| `past` | «Esa fecha ya pasó. ¿La dejo para {alternativa}?» | [{candidato}] (si lo hay) [✏ Otra fecha] [↩ Cancelar] |
+| `ambiguous_meridiem` | «¿A las {8} de la mañana o de la noche?» (con 1 solo candidato: «¿A las 8 pm?» y [Otra hora]) | un botón por candidato: [{8:00 am}] [{8:00 pm}] |
+| `past` | «Esa fecha ya pasó. ¿La dejo para {alternativa}?» | [{candidato}] (si lo hay) [Otra fecha] [Cancelar] |
 | `today_or_tomorrow` | «Ya pasó la medianoche: ¿"mañana" es hoy ({fecha}) o mañana ({fecha})?» | [Hoy {fecha}] [Mañana {fecha}] (sin candidatos: el handler arma los dos días y luego pregunta la hora) |
 | `same_weekday` | «Hoy es {día}: ¿hoy o en 7 días?» | [Hoy {fecha}] [En 7 días {fecha}] |
-| `two_dates`, `unrecognized_time`, `invalid_date`, `invalid_time` | «No pude entender la fecha/hora; escríbela de otra forma.» | [✏ Escribir otra fecha] [↩ Cancelar] |
+| `two_dates`, `unrecognized_time`, `invalid_date`, `invalid_time` | «No pude entender la fecha/hora; escríbela de otra forma.» | [Escribir otra fecha] [Cancelar] |
 
 Notas para el bloque 7:
 - Las preguntas de "el N" (`unsupported_date`, `past`) **deben traer el candidato ya resuelto** (próximo día N del mes), no
@@ -155,7 +155,7 @@ Notas para el bloque 7:
 5. Recuperación tras caída: vencidos de 1 h, 1 día y 3 días salen todos "(retrasado)" en orden; semanal vencido 3 semanas envía uno.
 6. **Canal caído 10 min**: transitorio → reintentos con espera creciente sin tocar `fire_at`; al volver salen todos
    con "(retrasado)", ninguno se pierde. Permanente → se detiene, queda marcado, los demás siguen. Rendición a las 24 h.
-7. Insistencia `priority=2`: +15 min, +30 min, 3 veces máx., ✅ la detiene (`nag_count`).
+7. Insistencia `priority=2`: +15 min, +30 min, 3 veces máx., la detiene (`nag_count`).
 8. Preparación: 1 día / 1 h antes solo si no han pasado.
 9. AST: sin imports de `llm`/`classify`/`anthropic`/`telegram` (transitivo) + test del detector.
 10. rrule + snooze: sin duplicados ni deriva; re-disparo de fila pospuesta no crea otra; rendirse no corta la serie; atomicidad.
@@ -227,15 +227,15 @@ am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de 
   - **Botones.** `rem_done:ID`, `rem_snooze:ID:10|60`, `rem_tomorrow:ID`. `handle_choice(choice, channel,
     allowed_user_id, conn, now, tz_name)` valida el id (entero ASCII, minutos solo 10 o 60; un id mal formado se
     responde como opción vieja y no toca nada), edita el mensaje SIN teclado y conserva el texto del recordatorio:
-    `✅ Hecho: {texto}`, `⏱ Pospuesto para {hoy, 3:40 pm | domingo 4 de octubre, 9:00 am}: {texto}`,
-    `⏰ {texto} (ya no está activo)` (pulsar dos veces, cancelado, ya pospuesto) o «Este recordatorio ya no está
+    `Hecho: {texto}`, `Pospuesto para {hoy, 3:40 pm | domingo 4 de octubre, 9:00 am}: {texto}`,
+    `Recordatorio: {texto} (ya no está activo)` (pulsar dos veces, cancelado, ya pospuesto) o «Este recordatorio ya no está
     activo.» si el id no existe. Sin `message_ref` (consola) se manda un mensaje nuevo en vez de editar.
     «Activo» = `sent` para posponer (lo que ya exigía el motor) y `pending`/`sent` para Hecho.
   - **Canal.** `Channel.edit_text(to, message_ref, text)` (SPEC 3.1) e `IncomingChoice.message_ref`. En Telegram:
     "message is not modified" no es error; cualquier otro fallo al editar o al responder (`answer`) se registra por
     tipo y no impide la acción. El dueño SIEMPRE recibe `answer`; un extraño, nada.
   - **Etiqueta «Mañana».** `reminders.tomorrow_target` es la única fuente de la acción y de `tomorrow_label`
-    («🌅 Mañana» / «🌅 Hoy 9:00» antes de las 05:00 locales, con `default_morning_time`); hay una prueba que recorre
+    («Mañana 9:00» / «Hoy 9:00» antes de las 05:00 locales, con `default_morning_time`); hay una prueba que recorre
     el día entero y exige que etiqueta y acción nunca discrepen. La etiqueta se fija al ENVIAR: si se pulsa tras las
     05:00 con la etiqueta «Hoy 9:00», la acción manda a mañana y el texto de confirmación lo dice con el día completo.
   - **Cuelgue de pytest en Windows.** `tests/test_reminders_outage.py` usa un solo bucle por módulo (`asyncio.Runner`).
@@ -287,7 +287,7 @@ am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de 
   zona con horario de verano pasa a las 03:30 el día del adelanto y se queda ahí, porque el ancla de `_spawn_next` es el
   `fire_at` de la fila anterior, ya corrido. Prueba futura: `FREQ=DAILY` a las 02:30 en `America/New_York` del 6 al 10 de
   marzo; el 9 y el 10 deben salir a las 02:30 locales. Arreglar antes de ofrecerlo en zonas con horario de verano.
-- **M11 (baja).** 🌅 Mañana en una serie diaria de las 8:00 hace que mañana suenen dos avisos: el de la serie y el
+- **M11 (baja).** Mañana en una serie diaria de las 8:00 hace que mañana suenen dos avisos: el de la serie y el
   pospuesto a las 9:00.
 - **M12 (baja).** +10 min pulsado a las 21:55 sale a las 07:00 con "(retrasado)"; defendible, pero no se avisa.
 - **M14 (baja).** Si Telegram aceptó el mensaje pero la respuesta no llegó a tiempo, se reintenta y llega dos veces;

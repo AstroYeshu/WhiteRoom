@@ -77,7 +77,7 @@ class PermanentChannelError(ChannelError):
 class Channel(Protocol):
     """Todo lo que el sistema envía pasa por aquí.
 
-    `kind` ∈ `reply | reminder | briefing`: deja que cada canal decida CÓMO enviar.
+    `kind` es `reply`, `reminder` o `briefing`: deja que cada canal decida CÓMO enviar.
     """
 
     async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...

@@ -160,8 +160,8 @@ def test_el_umbral_de_retrasado_es_de_2_minutos_exactos(conn, clock, tick_second
     clock.current = due + LATE_GRACE  # exactamente 2 min después de «justo»
     run(engine.tick())
     texts = {text.split(" [")[0] for _, text, _, _ in channel.choices}
-    assert "⏰ justo" in texts  # 2 min exactos: todavía no es retraso
-    assert "⏰ tarde (retrasado)" in texts  # 2 min y 1 s: sí
+    assert "Recordatorio: justo" in texts  # 2 min exactos: todavía no es retraso
+    assert "Recordatorio: tarde (retrasado)" in texts  # 2 min y 1 s: sí
 
 
 # --- Registro ----------------------------------------------------------------------------------

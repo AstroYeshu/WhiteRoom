@@ -49,7 +49,7 @@ class Channel(Protocol):
     async def edit_text(self, to: str, message_ref: str, text: str) -> None: ...  # sin botones
 ```
 
-- `kind` ∈ `reply | reminder | briefing`: deja que cada canal decida CÓMO enviar (WhatsApp necesitará
+- `kind` es `reply`, `reminder` o `briefing`: deja que cada canal decida CÓMO enviar (WhatsApp necesitará
   plantillas aprobadas cuando esté fuera de su ventana de 24 h).
 - Los "botones" de este documento son `Choice`: Telegram los dibuja como botones inline, la consola como
   lista numerada y un futuro canal de WhatsApp como botones de respuesta (máx. 3) o lista.
@@ -57,6 +57,9 @@ class Channel(Protocol):
   `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
   que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
   EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
+- **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal
+  decide cómo adornar, y WhatsApp o una consola sin fuentes no deben depender de ellos. Etiquetas en texto:
+  `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00`, `Cancelar`. Lo vigila `tests/test_no_pictograms.py` (AST).
 - **Solo `channels/telegram.py` importa la librería de Telegram.** `core/` y `bot/` jamás.
 - `core/reminders.py` y `core/briefing.py` reciben el `Channel` por inyección (se prueban con un canal falso).
 - Para un futuro adaptador de WhatsApp (NO implementar ahora): requiere webhook HTTPS público con verificación
@@ -305,12 +308,12 @@ Todo mensaje que no sea comando entra a este pipeline:
    una hora o una cita; "domingo" podría ser un nombre ("llamar a Domingo"). Las citas bíblicas ("Juan 3:16") nunca
    son hora. El 29 de febrero va al siguiente año bisiesto real. Los códigos de pregunta y sus botones están en
    `docs/PLAN_FASE1.md` (bloque 7).
-   La confirmación muestra siempre la fecha resuelta con día de la semana y botones [✏ Cambiar] [↩ Deshacer].
+   La confirmación muestra siempre la fecha resuelta con día de la semana y botones [Cambiar] [Deshacer].
    Deuda conocida: horas inexistentes o repetidas por el horario de verano (ver el plan).
 3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
 4. Clasificar (8.2).
 5. Crear la entidad (tarea, recordatorio, nota o gasto) y responder compacto:
-   `✅ Tarea · universidad · vie 17:00   [✏ Cambiar] [↩ Deshacer]`.
+   `Tarea · universidad · vie 17:00   [Cambiar] [Deshacer]`.
 6. Si el tipo es recordatorio y no hay hora válida: preguntar "¿Cuándo?" con botones rápidos
    (Hoy 6 pm · Mañana {default_morning_time} · Elegir...).
 
@@ -374,9 +377,9 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 - Un job repetitivo cada 30 s consulta `reminders` con `status='pending' AND fire_at_utc <= now()`.
 - **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
   el silencio salen en orden, con la etiqueta "(retrasado)".
-- **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
-  `🌅 Mañana` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
-  (si todavía no pasó). En ese caso la etiqueta del botón es `🌅 Hoy 9:00` (la hora de `default_morning_time`).
+- **Mensaje**: `Recordatorio: {text} [{área}]` con botones `Hecho · +10 min · +1 h · Mañana 9:00`.
+  `Mañana 9:00` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
+  (si todavía no pasó). En ese caso la etiqueta del botón es `Hoy 9:00` (la hora de `default_morning_time`).
 - **Reloj**: el motor relee el reloj en cada envío; el silencio, el "(retrasado)" y las horas registradas
   usan la hora de ESE envío, no la del inicio del tick (un canal lento no los falsea).
 - **Antes de enviar**: se relee la fila; si ya no sigue `pending` (o `sent`, en una insistencia) con la misma
@@ -402,7 +405,7 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
   `now()`** (evita deriva). Marcar `sent` e insertar la siguiente fila es UNA sola transacción. Re-disparar una
   fila pospuesta o reenviada NO crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa:
   detener la fila e insertar la siguiente también es UNA transacción.
-- **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces (`nag_count`), si no se pulsa ✅ Hecho.
+- **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces (`nag_count`), si no se pulsa Hecho.
   Un reenvío solo toca la fila si sigue en `sent`: hecho, cancelado o pospuesto durante el envío no se pisa.
 - **Tareas**: hacer, descartar o posponer una tarea cancela sus recordatorios pendientes (también los de preparación).
   Crear una tarea con fecha, o cambiar su fecha, es UNA transacción con sus avisos de preparación (o se hace todo
@@ -421,7 +424,7 @@ A `briefing_time`:
 1. **Mensaje 1 — resumen por área**: vencidas, de hoy, recordatorios de hoy, y elementos de la bandeja
    con más de 2 días sin resolver.
 2. **Mensaje 2 — ¿Quitas alguna?**: hasta 10 tareas numeradas con botones por tarea
-   `✅ Hecha · ⏭ Posponer · 🗑 Descartar`. "Posponer" ofrece mañana / elegir fecha. "Descartar" es
+   `Hecha · Posponer · Descartar`. "Posponer" ofrece mañana / elegir fecha. "Descartar" es
    soft delete (`status='dropped'`).
 3. Si el usuario no responde, **silencio**: no se insiste.
 4. Referencias en texto libre: "quita la 2 y la 4" por regex de números; "ya hice lo de cálculo" por una
@@ -522,7 +525,7 @@ acceso a shell, interfaz web, múltiples usuarios, notas de voz.
 | Un servicio externo falla | Captura primero; clasificar después; fallback a Haiku o a preguntar |
 | Fatiga de notificaciones | Horas de silencio, tope de proactivos, sin insistencia en el resumen |
 | Saldo desfasado | Confirmación, `/deshacer`, `/ajuste` |
-| Clasificación errónea | Botón [✏ Cambiar], log de correcciones, `eval_classifier.py`, umbrales calibrables |
+| Clasificación errónea | Botón [Cambiar], log de correcciones, `eval_classifier.py`, umbrales calibrables |
 | Privacidad | Solo se envía el texto del mensaje a Jev; nunca saldos; no loguear textos a nivel INFO |
 | Desgaste de la tarjeta SD | Preferir SSD por USB; WAL; respaldos diarios |
 | Inyección de prompts (fases futuras con correo) | Solo lectura, contenido del correo tratado como datos, confirmación para cualquier escritura |

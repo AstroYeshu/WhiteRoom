@@ -51,7 +51,7 @@ def edited(channel: FakeChannel) -> list[str]:
     return [text for _, _, text in channel.edits]
 
 
-# --- ✅ Hecho ---------------------------------------------------------------------------------
+# --- Hecho ---------------------------------------------------------------------------------
 
 
 def test_hecho_marca_el_recordatorio_y_edita_el_mensaje_sin_teclado(
@@ -59,7 +59,7 @@ def test_hecho_marca_el_recordatorio_y_edita_el_mensaje_sin_teclado(
 ):
     press(conn, clock, channel, f"rem_done:{sent_reminder.id}")
     assert row(conn, sent_reminder.id).status == "done"
-    assert channel.edits == [(str(OWNER), REF, "✅ Hecho: llevar tarea")]
+    assert channel.edits == [(str(OWNER), REF, "Hecho: llevar tarea")]
     assert not channel.sent_anything  # se edita el mensaje, no se manda otro
 
 
@@ -79,7 +79,7 @@ def test_hecho_sobre_uno_pendiente_tambien_vale(conn, clock, channel):
     assert row(conn, created.id).status == "done"
 
 
-# --- ⏱ +10 min / +1 h ------------------------------------------------------------------------
+# --- +10 min / +1 h ------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("minutes", [10, 60])
@@ -91,7 +91,7 @@ def test_posponer_reprograma_y_dice_para_cuando_conservando_el_texto(
     assert stored.status == "pending" and stored.snooze_count == 1
     assert from_utc_iso(stored.fire_at_utc) == clock() + timedelta(minutes=minutes)
     (text,) = edited(channel)
-    assert text.startswith("⏱ Pospuesto para hoy, ")  # es hoy: no se repite el día completo
+    assert text.startswith("Pospuesto para hoy, ")  # es hoy: no se repite el día completo
     assert text.endswith(": llevar tarea")
 
 
@@ -109,14 +109,14 @@ def test_posponer_cruzando_la_medianoche_incluye_el_dia(conn, clock, channel, se
     assert "domingo 4 de octubre" in text and "hoy" not in text
 
 
-# --- 🌅 Mañana --------------------------------------------------------------------------------
+# --- Mañana --------------------------------------------------------------------------------
 
 
 def test_manana_dice_el_dia_completo_si_no_es_hoy(conn, clock, channel, sent_reminder):
     press(conn, clock, channel, f"rem_tomorrow:{sent_reminder.id}")
     stored = row(conn, sent_reminder.id)
     assert from_utc_iso(stored.fire_at_utc) == local_to_utc(datetime(2026, 10, 4, 9, 0), TZ)
-    assert edited(channel) == ["⏱ Pospuesto para domingo 4 de octubre, 9:00 am: llevar tarea"]
+    assert edited(channel) == ["Pospuesto para domingo 4 de octubre, 9:00 am: llevar tarea"]
 
 
 def test_manana_de_madrugada_es_hoy_y_el_texto_lo_dice(conn, clock, channel, sent_reminder):
@@ -124,7 +124,7 @@ def test_manana_de_madrugada_es_hoy_y_el_texto_lo_dice(conn, clock, channel, sen
     press(conn, clock, channel, f"rem_tomorrow:{sent_reminder.id}")
     stored = row(conn, sent_reminder.id)
     assert from_utc_iso(stored.fire_at_utc) == local_to_utc(datetime(2026, 10, 4, 9, 0), TZ)
-    assert edited(channel) == ["⏱ Pospuesto para hoy, 9:00 am: llevar tarea"]
+    assert edited(channel) == ["Pospuesto para hoy, 9:00 am: llevar tarea"]
 
 
 def test_pulsar_manana_dos_veces_no_da_error(conn, clock, channel, sent_reminder):
@@ -181,4 +181,4 @@ def test_sin_referencia_al_mensaje_se_responde_con_un_mensaje_nuevo(
     """La consola no puede editar mensajes anteriores."""
     press(conn, clock, channel, f"rem_done:{sent_reminder.id}", ref=None)
     assert channel.edits == []
-    assert channel.texts == [(str(OWNER), "✅ Hecho: llevar tarea", "reply")]
+    assert channel.texts == [(str(OWNER), "Hecho: llevar tarea", "reply")]

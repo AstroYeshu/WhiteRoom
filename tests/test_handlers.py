@@ -47,9 +47,9 @@ def test_texto_libre_va_a_la_bandeja_y_pregunta_que_es():
     channel = send("comprar leche")
     assert channel.texts == []
     assert [choice.label for choice in channel.choices[0][2]][:3] == [
-        "📝 Tarea",
-        "⏰ Recordatorio",
-        "🗒 Nota",
+        "Tarea",
+        "Recordatorio",
+        "Nota",
     ]
 
 

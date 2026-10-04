@@ -45,10 +45,10 @@ def raise_(error: Exception):
 
 def test_edit_text_edita_el_mensaje_y_quita_el_teclado(channel, monkeypatch):
     calls = patch_edit(channel, monkeypatch, lambda kwargs: None)
-    asyncio.run(channel.edit_text("1", "77", "✅ Hecho: x"))
+    asyncio.run(channel.edit_text("1", "77", "Hecho: x"))
     assert len(calls) == 1
     assert calls[0]["chat_id"] == 1 and calls[0]["message_id"] == 77
-    assert calls[0]["text"] == "✅ Hecho: x"
+    assert calls[0]["text"] == "Hecho: x"
     assert calls[0].get("reply_markup") is None  # sin teclado: Telegram lo quita
 
 
@@ -161,5 +161,5 @@ def test_un_boton_sin_mensaje_asociado_llega_sin_referencia(channel, monkeypatch
 def test_la_consola_muestra_el_texto_editado():
     output: list[str] = []
     console = ConsoleChannel("1", input_fn=lambda p: "", output_fn=output.append)
-    asyncio.run(console.edit_text("1", "ignorado", "✅ Hecho: x"))
-    assert output == ["[editado] ✅ Hecho: x"]
+    asyncio.run(console.edit_text("1", "ignorado", "Hecho: x"))
+    assert output == ["[editado] Hecho: x"]

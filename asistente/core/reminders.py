@@ -55,14 +55,12 @@ ACTION_SNOOZE = "rem_snooze"
 ACTION_TOMORROW = "rem_tomorrow"
 SNOOZE_SHORT_MINUTES = 10
 SNOOZE_LONG_MINUTES = 60
-LABEL_TOMORROW = "🌅 Mañana"
-LABEL_TOMORROW_TODAY = (
-    "🌅 Hoy"  # antes de las 05:00 locales: se le añade la hora, p. ej. "Hoy 9:00"
-)
+LABEL_TOMORROW = "Mañana"
+LABEL_TOMORROW_TODAY = "Hoy"  # antes de las 05:00 locales; siempre lleva la hora: "Hoy 9:00"
 EARLY_MORNING_CUTOFF = time(5, 0)  # antes de esto, "mañana" es hoy (M5)
 
 NAG_INTERVAL = timedelta(minutes=15)  # insistencia (priority=2): cada cuánto se reenvía
-NAG_MAX_RESENDS = 3  # reenvíos tras el primer aviso, si no se pulsa ✅ Hecho
+NAG_MAX_RESENDS = 3  # reenvíos tras el primer aviso, si no se pulsa Hecho
 PREPARATION_NOTICES = (
     (timedelta(days=1), "Mañana vence"),
     (timedelta(hours=1), "En 1 hora vence"),
@@ -198,7 +196,7 @@ def list_due(conn: sqlite3.Connection, moment: datetime) -> list[Reminder]:
     """Lo que toca enviar ahora, del más antiguo al más reciente, sin los detenidos.
 
     - Pendientes cuya hora ya llegó (incluye los vencidos por una caída).
-    - Reenvíos de insistencia: `priority=2` ya avisado, sin ✅ Hecho, con menos de
+    - Reenvíos de insistencia: `priority=2` ya avisado, sin Hecho, con menos de
       `NAG_MAX_RESENDS` reenvíos y al menos `NAG_INTERVAL` desde el último aviso.
     """
     rows = conn.execute(
@@ -220,7 +218,7 @@ def list_due(conn: sqlite3.Connection, moment: datetime) -> list[Reminder]:
 
 
 def mark_done(conn: sqlite3.Connection, reminder_id: int) -> bool:
-    """✅ Hecho. False si ya estaba hecho/cancelado o no existe (botón viejo)."""
+    """Hecho. False si ya estaba hecho/cancelado o no existe (botón viejo)."""
     with conn:
         cursor = conn.execute(
             "UPDATE reminders SET status = 'done' WHERE id = ? AND status IN ('pending', 'sent')",
@@ -315,7 +313,7 @@ def insert_preparation_reminders(
 def snooze(
     conn: sqlite3.Connection, reminder_id: int, delta: timedelta, now: Clock
 ) -> datetime | None:
-    """⏱ Reprograma un recordatorio ya avisado: vuelve a `pending` a `now + delta`.
+    """Reprograma un recordatorio ya avisado: vuelve a `pending` a `now + delta`.
 
     Devuelve la nueva hora (UTC) o None si el botón ya no aplica (ya hecho, cancelado...).
     """
@@ -325,7 +323,7 @@ def snooze(
 def snooze_until_tomorrow(
     conn: sqlite3.Connection, reminder_id: int, now: Clock, tz_name: str
 ) -> datetime | None:
-    """🌅 Mañana a `default_morning_time` (hora local del usuario).
+    """Mañana a `default_morning_time` (hora local del usuario).
 
     Antes de las 05:00 locales "mañana" casi siempre significa "cuando me levante", o sea HOY:
     se ofrece hoy a esa hora, siempre que todavía no haya pasado (M5).
@@ -334,7 +332,7 @@ def snooze_until_tomorrow(
 
 
 def tomorrow_target(conn: sqlite3.Connection, moment: datetime, tz_name: str) -> datetime:
-    """Adónde va 🌅 Mañana: `default_morning_time` de mañana, o de HOY si es antes de las 05:00.
+    """Adónde va Mañana: `default_morning_time` de mañana, o de HOY si es antes de las 05:00.
 
     Es la ÚNICA fuente: la etiqueta del botón y la acción salen de aquí y no pueden discrepar.
     """
@@ -350,11 +348,13 @@ def tomorrow_target(conn: sqlite3.Connection, moment: datetime, tz_name: str) ->
 
 
 def tomorrow_label(conn: sqlite3.Connection, moment: datetime, tz_name: str) -> str:
-    """ "🌅 Mañana", o "🌅 Hoy 9:00" cuando la hora local es anterior a las 05:00."""
+    """ "Mañana 9:00", o "Hoy 9:00" cuando la hora local es anterior a las 05:00."""
     target = to_local(tomorrow_target(conn, moment, tz_name), tz_name)
     if target.date() == to_local(moment, tz_name).date():
-        return f"{LABEL_TOMORROW_TODAY} {target.hour}:{target.minute:02d}"
-    return LABEL_TOMORROW
+        day = LABEL_TOMORROW_TODAY
+    else:
+        day = LABEL_TOMORROW
+    return f"{day} {target.hour}:{target.minute:02d}"
 
 
 def _snooze_to(conn: sqlite3.Connection, reminder_id: int, target: datetime) -> datetime | None:
@@ -373,16 +373,16 @@ def _snooze_to(conn: sqlite3.Connection, reminder_id: int, target: datetime) -> 
 
 def reminder_choices(reminder_id: int, tomorrow: str = LABEL_TOMORROW) -> list[Choice]:
     return [
-        Choice(encode_choice_id(ACTION_DONE, reminder_id), "✅ Hecho"),
-        Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_SHORT_MINUTES), "⏱ +10 min"),
-        Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_LONG_MINUTES), "⏱ +1 h"),
+        Choice(encode_choice_id(ACTION_DONE, reminder_id), "Hecho"),
+        Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_SHORT_MINUTES), "+10 min"),
+        Choice(encode_choice_id(ACTION_SNOOZE, reminder_id, SNOOZE_LONG_MINUTES), "+1 h"),
         Choice(encode_choice_id(ACTION_TOMORROW, reminder_id), tomorrow),
     ]
 
 
 def format_reminder_text(text: str, area_name: str | None, delayed: bool) -> str:
-    """`⏰ {texto} [{área}]`, con "(retrasado)" si salió tarde."""
-    message = f"⏰ {text}"
+    """`Recordatorio: {texto} [{área}]`, con "(retrasado)" si salió tarde."""
+    message = f"Recordatorio: {text}"
     if area_name:
         message += f" [{area_name}]"
     if delayed:
@@ -576,7 +576,7 @@ class ReminderEngine:
                     " attempts = 0, first_failed_at = NULL WHERE id = ? AND status = 'sent'",
                     (to_utc_iso(moment), reminder.id),
                 )
-            if cursor.rowcount != 1:  # ✅ Hecho, cancelado o pospuesto mientras se reenviaba
+            if cursor.rowcount != 1:  # Hecho, cancelado o pospuesto mientras se reenviaba
                 return False
         else:
             with self._conn:

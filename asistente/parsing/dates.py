@@ -64,7 +64,7 @@ class WhenResult:
     - `ask`: hay que preguntar; `reason` dice por qué y `candidates` son opciones futuras
       ya resueltas (con `ambiguous_meridiem`: la misma hora en am y en pm).
 
-    `meridiem_inferred` es True si la hora venía sin am/pm y se asumió (1-4 → tarde), para que
+    `meridiem_inferred` es True si la hora venía sin am/pm y se asumió (1-4 = tarde), para que
     el handler muestre el botón "Cambiar a am/pm".
     """
 

@@ -120,7 +120,7 @@ async def _handle_reminder_choice(
 
     if action == reminders.ACTION_DONE:
         if reminders.mark_done(conn, reminder_id):
-            await show(channel, choice, f"✅ Hecho: {reminder.text}")
+            await show(channel, choice, f"Hecho: {reminder.text}")
             return
     else:
         if action == reminders.ACTION_SNOOZE and minutes is not None:
@@ -129,11 +129,11 @@ async def _handle_reminder_choice(
             target = reminders.snooze_until_tomorrow(conn, reminder_id, now, tz_name)
         if target is not None:
             when = _when_text(target, tz_name, now)
-            await show(channel, choice, f"⏱ Pospuesto para {when}: {reminder.text}")
+            await show(channel, choice, f"Pospuesto para {when}: {reminder.text}")
             return
 
     # Pulsó dos veces, o el recordatorio ya se hizo, se canceló o se pospuso: sin error.
-    await show(channel, choice, f"⏰ {reminder.text} (ya no está activo)")
+    await show(channel, choice, f"Recordatorio: {reminder.text} (ya no está activo)")
 
 
 async def handle_choice(

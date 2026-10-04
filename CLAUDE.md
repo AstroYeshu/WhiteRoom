@@ -29,6 +29,7 @@ El diseño completo está en `SPEC.md`. Implementa SOLO la fase que se te pida, 
 - Python 3.11+, type hints, `pathlib`. Sin rutas ni comandos específicos de un SO
   (desarrollo en Windows, producción en Linux ARM64).
 - Identificadores en inglés; comentarios, docstrings y mensajes al usuario en español.
+- Mensajes al usuario sin emojis ni pictogramas (lo vigila `tests/test_no_pictograms.py`).
 - Lógica de negocio en `core/`; conversación en `bot/`; la plataforma (consola, Telegram, un posible
   WhatsApp futuro) solo en `channels/`, detrás de la interfaz `Channel` (SPEC 3.1).
   Solo `channels/telegram.py` importa la librería de Telegram. Una función, una responsabilidad.

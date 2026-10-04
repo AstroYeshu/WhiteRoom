@@ -10,7 +10,7 @@ Sin compromiso ni fecha. Nada de aquí se implementa sin que el dueño lo pida. 
 
 ## Deuda conocida (detalle en `docs/PLAN_FASE1.md`)
 - **M4:** una serie diaria a las 02:30 en zonas con horario de verano se corre a las 03:30 y se queda ahí.
-- **M11:** 🌅 Mañana en una serie diaria de las 8:00 hace que suenen dos avisos mañana (serie + pospuesto).
+- **M11:** Mañana en una serie diaria de las 8:00 hace que suenen dos avisos mañana (serie + pospuesto).
 - **M12:** +10 min pulsado a las 21:55 sale a las 07:00 "(retrasado)" sin avisar.
 - **M14:** si Telegram aceptó el mensaje pero la respuesta no llegó a tiempo, el aviso llega dos veces.
 - **M15:** las horas se comparan como texto; un `CHECK` sobre el formato de `fire_at_utc` lo blindaría.

@@ -67,7 +67,7 @@ def test_badrequest_con_dos_validos_en_el_mismo_tick_los_dos_validos_salen(
     first, bad, last = make(conn, clock, "uno", "malo", "tres")
     fail_texts(channel, PermanentChannelError("bad_request:wrong_entity"), "malo")
     assert tick(engine) == 2
-    assert sent_texts(channel) == ["⏰ uno", "⏰ tres"]
+    assert sent_texts(channel) == ["Recordatorio: uno", "Recordatorio: tres"]
     assert row(conn, first).status == row(conn, last).status == "sent"
     stopped = row(conn, bad)
     assert stopped.stopped and stopped.status == "pending"
@@ -96,7 +96,7 @@ def test_una_excepcion_inesperada_con_otros_que_salen_despues_se_aisla_y_se_deti
     bad, good_a, good_b = make(conn, clock, "malo", "bueno-a", "bueno-b")
     fail_texts(channel, RuntimeError("raro"), "malo")
     assert tick(engine) == 2
-    assert sent_texts(channel) == ["⏰ bueno-a", "⏰ bueno-b"]
+    assert sent_texts(channel) == ["Recordatorio: bueno-a", "Recordatorio: bueno-b"]
     stopped = row(conn, bad)
     assert stopped.stopped and stopped.status == "pending"
     assert (
@@ -177,7 +177,7 @@ def test_un_fallo_transitorio_declarado_corta_y_no_aisla_a_los_anteriores(
     assert len(channel.attempts) == 2  # "nunca" no se intentó: el canal está caído
     assert not row(conn, bad).stopped and row(conn, bad).attempts == 1
     assert not row(conn, down).stopped
-    assert "⏰ nunca" not in channel.attempts
+    assert "Recordatorio: nunca" not in channel.attempts
 
 
 def test_el_texto_del_usuario_nunca_va_al_log(conn, clock, engine, channel, caplog):
