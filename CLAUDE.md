@@ -38,6 +38,7 @@ El diseño completo está en `SPEC.md`. Implementa SOLO la fase que se te pida, 
 
 ## Flujo de trabajo
 - Al empezar: lee `docs/STATUS.md` y `git log -n 10` antes de planificar.
+- La prueba se escribe y se ve fallar antes del código; si no se pudo, dilo y haz una mutación después.
 - Alcance: solo lo pedido. Cualquier idea o hallazgo fuera de alcance va a `docs/BACKLOG.md`;
   no se implementa.
 - Al terminar cada bloque: actualiza `docs/STATUS.md` y `docs/DECISIONS.md`.
