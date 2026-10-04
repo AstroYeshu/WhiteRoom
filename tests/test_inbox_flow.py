@@ -329,8 +329,9 @@ def test_deshacer_dos_veces_no_da_error(bot, conn):
     confirmed(bot)
     button = bot.choice_id("Deshacer")
     bot.press(button)
-    bot.press(button)
-    assert "ya no se puede deshacer" in bot.last[1].lower()
+    before = len(bot.channel.log)
+    assert bot.press(button) is None  # la doble pulsación no hace nada ni pisa el mensaje
+    assert len(bot.channel.log) == before
 
 
 def test_deshacer_cuando_ya_sono_dice_que_ya_no_se_puede(bot, conn, clock):
@@ -594,8 +595,9 @@ def test_mejor_como_tarea_dos_veces_no_da_error(bot, conn):
     waiting_for_when_in(bot, "personal")
     button = bot.choice_id("Mejor como tarea")
     bot.press(button)
-    bot.press(button)
-    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    before = len(bot.channel.log)
+    assert bot.press(button) is None  # la doble pulsación no hace nada
+    assert len(bot.channel.log) == before
     assert len(all_tasks(conn)) == 1 and pending(conn) == []
 
 

@@ -165,3 +165,11 @@ los últimos botones juntos en la fila final). Vocabulario: «… guardado/guard
 guardado», «Área guardada»); «Escribir otra fecha» pasó a «Otra fecha». `/nuevaarea` usa la misma tarjeta (la descripción es el texto
 siguiente). Descartado: mantener el mensaje nuevo por paso (deja un rastro de fragmentos) y contestar a los botones viejos de la
 tarjeta viva (borraría la pregunta en curso).
+
+## Aviso breve para un botón de un paso viejo (answer_callback_query)
+`on_choice` devuelve el aviso breve con que se responde a la pulsación (o `None`): Telegram lo muestra con
+`answer_callback_query(text=...)` (se responde DESPUÉS de atender el botón y siempre, aunque el manejador falle); la consola lo imprime
+entre paréntesis. Reglas: un botón de un paso viejo sobre la tarjeta VIVA responde «Esa opción ya no aplica» sin crear ni editar
+mensajes; el MISMO botón que se acaba de atender (`Conversation.last_press_id`, doble pulsación, también en Guardar y Deshacer) no
+responde nada; un botón en una tarjeta muerta (otra captura, reinicio, caducidad) edita esa tarjeta a «Aviso · Esa opción ya no está
+disponible.». Un doble toque en Guardar ya no pisa la confirmación con sus botones Cambiar/Deshacer.

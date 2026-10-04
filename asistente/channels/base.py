@@ -114,7 +114,9 @@ class Channel(Protocol):
 
 
 MessageCallback = Callable[[IncomingMessage], Awaitable[None]]
-ChoiceCallback = Callable[[IncomingChoice], Awaitable[None]]
+# Devuelve el aviso breve con que se responde a la pulsación (o None): en Telegram sale como
+# `answer_callback_query(text=...)`, sin crear ni editar mensajes.
+ChoiceCallback = Callable[[IncomingChoice], Awaitable[str | None]]
 TickCallback = Callable[[], Awaitable[object]]  # el tick de recordatorios (cada 30 s)
 
 TICK_INTERVAL_SECONDS = (

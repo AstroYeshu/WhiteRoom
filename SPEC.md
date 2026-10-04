@@ -72,6 +72,8 @@ class Channel(Protocol):
   `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
   que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
   EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
+- **Aviso breve.** El manejador de un botón devuelve un texto breve (o `None`) y el canal responde con él a la pulsación
+  (`answer_callback_query(text=...)` en Telegram), sin crear ni editar mensajes: "Esa opción ya no aplica".
 - **La captura es un solo mensaje que evoluciona (la "tarjeta").** Un mensaje libre abre UN mensaje del bot
   con la primera pregunta y cada paso (tipo, área, fecha, confirmación) lo EDITA en su lugar con texto y botones
   nuevos (`edit_text(..., choices, layout)`); si el canal no puede editar (consola, `False`), se manda un mensaje

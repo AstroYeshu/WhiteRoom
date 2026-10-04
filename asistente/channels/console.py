@@ -123,6 +123,8 @@ class ConsoleChannel:
                 continue
             event = self._parse(line)
             if isinstance(event, IncomingChoice):
-                await on_choice(event)
+                toast = await on_choice(event)
+                if toast:
+                    self._output(f"({toast})")  # el aviso breve que Telegram mostraría emergente
             else:
                 await on_message(event)

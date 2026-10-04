@@ -670,8 +670,9 @@ def test_pulsar_si_dos_veces_no_da_error_ni_duplica_avisos(bot, conn):
     task_with_deadline(bot)
     yes = bot.choice_id("Sí")
     bot.press(yes)
-    bot.press(yes)
-    assert handlers.STALE_CHOICE_TEXT in bot.last[1]
+    before = len(bot.channel.log)
+    assert bot.press(yes) is None  # la doble pulsación no hace nada ni pisa la tarea guardada
+    assert len(bot.channel.log) == before
     assert len(reminders.list_pending(conn)) == 2
 
 

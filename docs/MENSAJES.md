@@ -1040,6 +1040,13 @@ _Deshacer/Cambiar cuando el recordatorio ya no está pendiente._
 <b>Aviso</b> · Ya no se puede deshacer ni cambiar: ese recordatorio ya no está pendiente.
 ```
 
+_Botón de un paso viejo sobre la tarjeta viva: solo un aviso breve; la pregunta sigue como estaba._
+
+```text
+(aviso breve emergente; no crea ni edita mensajes)
+Esa opción ya no aplica
+```
+
 _Un comando a mitad de otra pregunta no la descarta; otro flujo nuevo sí, y avisa._
 
 ```text

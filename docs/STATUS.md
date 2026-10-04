@@ -23,6 +23,21 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   recordatorio en cuadrícula, instantánea de `docs/MENSAJES.md`). Corte 2 HECHO (captura en una tarjeta: un solo mensaje que
   evoluciona; `edit_text` con botones y distribución). Falta el corte 3 (`/pendientes`, `/hoy`, `/recordatorios`, `/areas`, `/ayuda`).
 
+## Pruebas del corte 2 (rediseño de mensajes), una línea por archivo
+- `tests/test_card.py` (nuevo, 29 pruebas): un solo mensaje por captura (tarea, nota, recordatorio, Cambiar, pregunta del parser, los tres
+  comandos, vista previa, repetición, fecha límite, /nuevaarea), dos capturas = dos mensajes, Cancelar, Mejor como tarea, «Sin terminar»,
+  botón viejo (tarjeta viva, muerta, reinicio), doble pulsación, Deshacer/Cambiar repetidos, canal sin edición, edición que falla, aviso breve.
+- `tests/test_telegram_html.py` (+11): referencias de mensaje, editar con botones y distribución, «not modified» = éxito, `False` si falla,
+  reintento en texto plano con botones, consola que edita.
+- `tests/test_telegram_buttons.py` (+4): aviso breve en `answer`, sin aviso, manejador que falla, consola.
+- `tests/test_commands.py` (12 esperados cambiados): /recordar (vista previa, sin fecha, candidato), /tarea (área, a mitad de otra),
+  /nuevaarea (pregunta, omitir, cancelar, nombre ocupado) y fecha límite (pregunta, Sí, No): textos de tarjeta y vocabulario «guardado».
+- `tests/test_inbox_flow.py` (9 esperados cambiados + 2 por doble pulsación): Otra fecha, mensaje nuevo a mitad, doble pulsación, texto
+  sin fecha, hora dudosa, invitación a escribir, hora pasada, Mejor como tarea, botones de la pregunta anterior.
+- `tests/test_hostile_flows.py`: el arnés `TgBot` simula `message_id` y ediciones (sin pruebas nuevas).
+- `tests/test_main.py` (1): el dry-run muestra «¿Qué es?» en la tarjeta.
+- `tests/botkit.py` y `tests/fakes.py`: arnés con referencias, ediciones con botones, `editable` y avisos breves.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda

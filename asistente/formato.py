@@ -175,6 +175,7 @@ def aviso(text: str) -> Html:
     return join([bold("Aviso"), text], SEP)
 
 
+TOAST_STALE = "Esa opción ya no aplica"  # aviso breve (emergente), no un mensaje
 STALE_CHOICE = aviso("Esa opción ya no está disponible.")
 UNKNOWN_COMMAND = aviso("No conozco ese comando. Escribe /ayuda para ver los disponibles.")
 REMINDER_NOT_ACTIVE = aviso("Este recordatorio ya no está activo.")

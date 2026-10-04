@@ -65,6 +65,8 @@ class Conversation:
     def __init__(self) -> None:
         self._flow: Flow | None = None
         self._last_id = 0
+        # El último botón atendido: su repetición (doble pulsación) no responde nada.
+        self.last_press_id: str | None = None
 
     def _next_id(self, now: Clock) -> int:
         # Parte de la hora actual: tras un reinicio no choca con botones de la vida anterior.

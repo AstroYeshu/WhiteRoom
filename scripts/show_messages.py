@@ -117,6 +117,7 @@ class Session:
         self.conversation = Conversation()
         self._choices: list[tuple[str, list[Choice]]] = []
         self._id_refs: dict[str, str] = {}
+        self.last_toast: str | None = None
         self.engine = ReminderEngine(self.conn, self._wrap(), str(OWNER), TZ, self.clock)
 
     # El canal grabador guarda solo etiquetas; los ids se piden al fabricar los botones.
@@ -138,13 +139,14 @@ class Session:
             )
         )
 
-    def press(self, choice_id: str) -> None:
+    def press(self, choice_id: str) -> str | None:
         event = IncomingChoice("catalogo", str(OWNER), choice_id, self._id_refs.get(choice_id, REF))
-        run(
+        self.last_toast = run(
             handlers.handle_choice(
                 event, self._wrap(), OWNER, self.conn, self.clock, TZ, self.conversation
             )
         )
+        return self.last_toast
 
     def tap(self, label: str, in_message: str | None = None) -> None:
         choices = self._last_choices(in_message)
@@ -206,15 +208,21 @@ class Catalog:
     def snap(self, session: Session, comment: str, action: Callable[[], object]) -> None:
         """Ejecuta `action` y anota todo lo que el bot envió como resultado."""
         mark = len(session.channel.log)
+        session.last_toast = None
         action()
         entries = session.channel.log[mark:]
+        if not entries and session.last_toast:  # solo un aviso breve emergente, sin mensajes
+            entries = [("aviso", session.last_toast, [])]
         assert entries, f"sin respuesta: {comment}"
         self.render(comment, entries)
 
     def render(self, comment: str, entries: list[tuple[str, str, list[list[str]]]]) -> None:
         blocks = []
         for kind, text, rows in entries:
-            parts = ["(edita el mismo mensaje)"] if kind == "edicion" else []
+            parts = {
+                "edicion": ["(edita el mismo mensaje)"],
+                "aviso": ["(aviso breve emergente; no crea ni edita mensajes)"],
+            }.get(kind, [])
             parts.append(text)
             parts += ["".join(f"[{label}]" for label in row) for row in rows]
             blocks.append("\n".join(parts))
@@ -680,12 +688,22 @@ def errores(cat: Catalog) -> None:
     s.tap("Recordatorio")
     s.tap("Sin área")
     s.tap("Mañana 9:00 am")
-    first = s._last_choices(None)
-    s.tap("Deshacer")
+    undo = next(c.id for c in s._last_choices(None) if c.label == "Deshacer")
+    with s.conn:  # el aviso ya sonó: ya no se puede deshacer
+        s.conn.execute("UPDATE reminders SET status = 'sent'")
     cat.snap(
         s,
         "Deshacer/Cambiar cuando el recordatorio ya no está pendiente.",
-        lambda: s.press(first[1].id),
+        lambda: s.press(undo),
+    )
+    s3 = Session()
+    s3.say("comprar leche")
+    old_note = next(c.id for c in s3._last_choices(None) if c.label == "Nota")
+    s3.tap("Tarea")
+    cat.snap(
+        s3,
+        "Botón de un paso viejo sobre la tarjeta viva: solo un aviso breve; la pregunta sigue como estaba.",
+        lambda: s3.press(old_note),
     )
     s2 = Session()
     s2.say("/nuevaarea Salud")

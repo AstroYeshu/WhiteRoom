@@ -162,25 +162,25 @@ async def handle_choice(
     now: Clock,
     tz_name: str,
     conversation: Conversation,
-) -> None:
+) -> str | None:
+    """Atiende un botón. Devuelve el aviso breve con que se responde (o None)."""
     if not is_allowed(choice.user_ref, allowed_user_id):
         _reject(choice.user_ref)
-        return
+        return None
     action, parts = decode_choice_id(choice.choice_id)
     if action in (inbox.ACTION_FLOW, inbox.ACTION_UNDO, inbox.ACTION_CHANGE):
         ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
         if action == inbox.ACTION_FLOW:
-            await inbox.handle_flow_choice(ctx, choice, parts)
-        else:
-            await inbox.handle_conversion_choice(ctx, choice, action, parts)
-        return
+            return await inbox.handle_flow_choice(ctx, choice, parts)
+        return await inbox.handle_conversion_choice(ctx, choice, action, parts)
     if action in (commands.ACTION_TASK_DONE, commands.ACTION_TASK_DROP):
         ctx = inbox.Ctx(channel, conn, now, tz_name, conversation, choice.user_ref)
         await commands.handle_task_choice(ctx, choice, action, parts)
-        return
+        return None
     request = _parse_reminder_choice(choice.choice_id)
     if request is None:
         # Botón viejo o desconocido: se responde con cortesía y no se toca nada.
         await channel.send_text(choice.user_ref, STALE_CHOICE_TEXT)
-        return
+        return None
     await _handle_reminder_choice(choice, request, channel, conn, now, tz_name)
+    return None

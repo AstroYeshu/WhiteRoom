@@ -101,6 +101,7 @@ class Bot:
         self.conn, self.clock = conn, clock
         self.channel = LoggingChannel(editable=editable)
         self.conversation = Conversation()
+        self.toasts: list[str | None] = []  # un aviso breve (o None) por cada pulsación
 
     def say(self, text: str, user: int = OWNER) -> None:
         event = IncomingMessage("fake", str(user), text)
@@ -110,14 +111,17 @@ class Bot:
             )
         )
 
-    def press(self, choice_id: str, user: int = OWNER) -> None:
+    def press(self, choice_id: str, user: int = OWNER) -> str | None:
+        """Pulsa un botón. Devuelve el aviso breve (toast) con que se respondió, o None."""
         ref = self.channel.id_refs.get(choice_id, REF)
         event = IncomingChoice("fake", str(user), choice_id, ref)
-        run(
+        toast = run(
             handlers.handle_choice(
                 event, self.channel, OWNER, self.conn, self.clock, TZ, self.conversation
             )
         )
+        self.toasts.append(toast)
+        return toast
 
     def restart(self) -> None:
         """Simula reiniciar el proceso: se pierde el estado en memoria, no la base."""

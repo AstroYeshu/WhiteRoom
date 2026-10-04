@@ -13,7 +13,7 @@ import pytest
 from telegram import error as tg_error
 
 from asistente.channels import telegram as tg
-from asistente.channels.base import IncomingChoice
+from asistente.channels.base import Choice, IncomingChoice
 from asistente.channels.console import ConsoleChannel
 
 
@@ -88,7 +88,9 @@ def test_un_fallo_al_editar_se_registra_sin_texto_y_no_lanza(channel, monkeypatc
 # --- Pulsación del botón -----------------------------------------------------------------------
 
 
-def run_callback(channel, monkeypatch, user_id: int, answer, message_id: int | None = 55):
+def run_callback(
+    channel, monkeypatch, user_id: int, answer, message_id: int | None = 55, toast=None, fail=None
+):
     captured: dict = {}
     monkeypatch.setattr(
         channel._application,
@@ -99,8 +101,11 @@ def run_callback(channel, monkeypatch, user_id: int, answer, message_id: int | N
     monkeypatch.setattr(channel._application, "run_polling", lambda: None)
     received: list[IncomingChoice] = []
 
-    async def record(event) -> None:
+    async def record(event):
         received.append(event)
+        if fail is not None:
+            raise fail
+        return toast  # el aviso breve con que el manejador responde a la pulsación
 
     async def no_tick() -> int:
         return 0
@@ -112,7 +117,11 @@ def run_callback(channel, monkeypatch, user_id: int, answer, message_id: int | N
         effective_user=SimpleNamespace(id=user_id),
         callback_query=SimpleNamespace(data="rem_done:3", answer=answer, message=message),
     )
-    asyncio.run(callback_handler.callback(update, None))
+    try:
+        asyncio.run(callback_handler.callback(update, None))
+    except RuntimeError:
+        if fail is None:
+            raise
     return received
 
 
@@ -163,3 +172,57 @@ def test_la_consola_muestra_el_texto_editado():
     console = ConsoleChannel("1", input_fn=lambda p: "", output_fn=output.append)
     asyncio.run(console.edit_text("1", "ignorado", "Hecho: x"))
     assert output == ["[editado] Hecho: x"]
+
+
+# --- Aviso breve (answer_callback_query con texto) -------------------------------------------
+
+
+def test_el_aviso_breve_del_manejador_se_muestra_al_responder_la_pulsacion(channel, monkeypatch):
+    answers: list[dict] = []
+
+    async def answer(**kwargs) -> None:
+        answers.append(kwargs)
+
+    received = run_callback(channel, monkeypatch, 1, answer, toast="Esa opción ya no aplica")
+    assert answers == [{"text": "Esa opción ya no aplica"}]
+    assert len(received) == 1
+
+
+def test_sin_aviso_se_responde_la_pulsacion_sin_texto(channel, monkeypatch):
+    answers: list[dict] = []
+
+    async def answer(**kwargs) -> None:
+        answers.append(kwargs)
+
+    run_callback(channel, monkeypatch, 1, answer)
+    assert answers == [{}]
+
+
+def test_si_el_manejador_falla_la_pulsacion_se_responde_igual(channel, monkeypatch):
+    answers: list[dict] = []
+
+    async def answer(**kwargs) -> None:
+        answers.append(kwargs)
+
+    run_callback(channel, monkeypatch, 1, answer, fail=RuntimeError("falla"))
+    assert answers == [{}]  # el relojito del botón se quita aunque el manejador falle
+
+
+def test_la_consola_muestra_el_aviso_breve_entre_parentesis():
+    output: list[str] = []
+    lines = iter(["1", "/salir"])
+    console = ConsoleChannel("1", input_fn=lambda p: next(lines), output_fn=output.append)
+
+    async def scenario() -> None:
+        await console.send_choices("1", "Elige", [Choice("a:1", "A")])
+
+        async def on_choice(event):
+            return "Esa opción ya no aplica"
+
+        async def on_message(event):
+            return None
+
+        await console._read_loop(on_message, on_choice)
+
+    asyncio.run(scenario())
+    assert "(Esa opción ya no aplica)" in output

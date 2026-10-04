@@ -312,3 +312,95 @@ def test_si_la_edicion_falla_a_mitad_se_sigue_en_un_mensaje_nuevo(conn, clock):
     bot.tap("personal")
     assert "Tarea guardada" in fmt.plain(bot.last[1])
     assert bot.sent_count() == 2
+
+
+# --- Aviso breve para un botón de un paso viejo sobre la tarjeta viva ---------------------------
+
+TOAST = "Esa opción ya no aplica"
+
+
+def waiting_for_when(bot: Bot) -> None:
+    bot.say("llamar al dentista")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+
+
+def test_un_boton_de_un_paso_viejo_sobre_la_tarjeta_viva_responde_con_un_aviso_breve(bot):
+    bot.say("comprar leche")
+    old_note = bot.choice_id("Nota")
+    bot.tap("Tarea")  # la tarjeta pasa a la pregunta de área
+    before = len(bot.channel.log)
+    assert bot.press(old_note) == TOAST
+    assert len(bot.channel.log) == before  # sin crear ni editar mensajes
+    assert "¿En qué área va?" in bot.question[0]
+    assert bot.sent_count() == 1
+
+
+def test_un_boton_rapido_viejo_no_actua_tras_una_pregunta_nueva_del_mismo_paso(bot, conn):
+    """«Mañana 9:00 am» no lleva argumento: solo el id del flujo la distingue."""
+    waiting_for_when(bot)
+    old_tomorrow = bot.choice_id("Mañana 9:00 am")
+    bot.say("mañana a las 9")  # nueva pregunta del parser, mismo paso
+    before = len(bot.channel.log)
+    assert bot.press(old_tomorrow) == TOAST
+    assert reminders.list_pending(conn) == []  # el botón viejo no creó nada
+    assert len(bot.channel.log) == before
+
+
+def test_la_doble_pulsacion_del_mismo_boton_no_responde_nada(bot):
+    bot.say("comprar leche")
+    button = bot.choice_id("Nota")
+    assert bot.press(button) is None  # la primera avanza la tarjeta
+    before = len(bot.channel.log)
+    assert bot.press(button) is None  # la segunda: ni aviso ni cambios
+    assert len(bot.channel.log) == before
+
+
+def test_un_doble_toque_en_guardar_no_pisa_la_confirmacion(bot, conn):
+    bot.say("/recordar mañana 8am llevar tarea")
+    bot.tap("Sin área")
+    save = bot.choice_id("Guardar")
+    bot.press(save)
+    before = len(bot.channel.log)
+    assert bot.press(save) is None
+    assert len(bot.channel.log) == before
+    assert plain(bot).startswith("Recordatorio guardado")
+    assert bot.labels() == ["Cambiar", "Deshacer"]  # los botones de la confirmación siguen
+    assert len(reminders.list_pending(conn)) == 1
+
+
+def test_un_doble_toque_en_deshacer_deja_el_mensaje_como_estaba(bot, conn):
+    bot.say("mañana 8am llevar tarea")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    undo = bot.choice_id("Deshacer")
+    bot.press(undo)
+    shown_text = plain(bot, card_ref(bot))
+    before = len(bot.channel.log)
+    assert bot.press(undo) is None
+    assert len(bot.channel.log) == before
+    assert plain(bot, card_ref(bot)) == shown_text
+
+
+def test_un_deshacer_viejo_tras_cambiar_responde_con_el_aviso_y_no_pisa_la_tarjeta(bot, conn):
+    bot.say("mañana 8am llevar tarea")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    undo = bot.choice_id("Deshacer")
+    bot.tap("Cambiar")
+    before = len(bot.channel.log)
+    assert bot.press(undo) == TOAST
+    assert len(bot.channel.log) == before
+    assert "¿Cuándo?" in plain(bot)
+
+
+def test_un_cambiar_repetido_no_pisa_la_tarjeta(bot, conn):
+    bot.say("mañana 8am llevar tarea")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    change = bot.choice_id("Cambiar")
+    bot.press(change)
+    before = len(bot.channel.log)
+    assert bot.press(change) is None
+    assert len(bot.channel.log) == before
+    assert "¿Cuándo?" in plain(bot)

@@ -177,13 +177,21 @@ async def _finish(
     await _present(ctx, flow, text, choices, layout)
 
 
-async def _stale(ctx: Ctx, choice: IncomingChoice) -> None:
-    """Botón viejo. Si está en la tarjeta VIVA se ignora en silencio (la pregunta vigente no se
-    toca); si está en una tarjeta muerta, esa tarjeta se marca como no disponible."""
+async def _stale(ctx: Ctx, choice: IncomingChoice) -> str | None:
+    """Botón viejo. Devuelve el aviso breve (o None).
+
+    - El mismo botón que se acaba de atender (doble pulsación): no pasa nada.
+    - Un botón de un paso viejo sobre la tarjeta VIVA: aviso breve, sin crear ni editar mensajes
+      (la pregunta vigente no se toca).
+    - Un botón en una tarjeta muerta: esa tarjeta se marca como no disponible.
+    """
+    if choice.choice_id == ctx.conversation.last_press_id:
+        return None
     flow = ctx.conversation.current(ctx.now)
     if flow is not None and flow.message_ref is not None and flow.message_ref == choice.message_ref:
-        return
+        return fmt.TOAST_STALE
     await show(ctx.channel, choice, STALE_CHOICE_TEXT)
+    return None
 
 
 def _parse(ctx: Ctx, text: str) -> ScheduleResult:
@@ -629,7 +637,7 @@ _FLOW_ACTIONS = {
 }
 
 
-async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str]) -> None:
+async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str]) -> str | None:
     """`in:FLUJO:ACCION[:ARG]`. Mal formado, de otro flujo o de otro paso = botón viejo."""
     handled = False
     if len(parts) >= 2 and _is_id(parts[0]):
@@ -645,7 +653,9 @@ async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str])
                 if step is None or flow.step == step:
                     handled = await handler(ctx, flow, choice, args)
     if not handled:
-        await _stale(ctx, choice)
+        return await _stale(ctx, choice)
+    ctx.conversation.last_press_id = choice.choice_id
+    return None
 
 
 # --- Deshacer y Cambiar ----------------------------------------------------------------------
@@ -653,30 +663,32 @@ async def handle_flow_choice(ctx: Ctx, choice: IncomingChoice, parts: list[str])
 
 async def handle_conversion_choice(
     ctx: Ctx, choice: IncomingChoice, action: str, parts: list[str]
-) -> None:
+) -> str | None:
     """`un:RECORDATORIO:TAREA` / `ch:RECORDATORIO:TAREA`. Viven en la base, no en la memoria."""
     if len(parts) != 2 or not all(_is_id(part) for part in parts):
-        await _stale(ctx, choice)
-        return
+        return await _stale(ctx, choice)
     reminder_id, task_id = int(parts[0]), int(parts[1])
     reminder = reminders.get_reminder(ctx.conn, reminder_id)
     task = tasks.get_task(ctx.conn, task_id)
     if reminder is None or task is None:
-        await _stale(ctx, choice)
-        return
+        return await _stale(ctx, choice)
     if not tasks.undo_reminder_conversion(ctx.conn, task_id, reminder_id, ctx.now):
+        if choice.choice_id == ctx.conversation.last_press_id:
+            return None  # doble pulsación: el mensaje ya quedó como debía
         flow = ctx.conversation.current(ctx.now)
-        live = flow is not None and flow.message_ref == choice.message_ref
-        if not live:  # sobre la tarjeta viva (un segundo toque) no se pisa la pregunta vigente
-            await show(ctx.channel, choice, fmt.NOT_UNDOABLE)
-        return
+        if flow is not None and flow.message_ref == choice.message_ref:
+            return fmt.TOAST_STALE  # sobre la tarjeta viva no se pisa la pregunta vigente
+        await show(ctx.channel, choice, fmt.NOT_UNDOABLE)
+        return None
+    ctx.conversation.last_press_id = choice.choice_id
     logger.info("Bandeja: recordatorio %s deshecho (tarea %s)", reminder_id, task_id)
     if action == ACTION_UNDO:
         text = fmt.state_line(fmt.UNDONE, shown(reminder.text), "vuelve a tu bandeja como tarea")
         await show(ctx.channel, choice, text)
-        return
+        return None
     await _drop_current_flow(ctx)
     flow = ctx.conversation.start(task_id, task.source_text or task.title, ctx.now, STEP_WHEN)
     flow.kind, flow.area_id, flow.title = KIND_REMINDER, reminder.area_id, reminder.text
     flow.message_ref = choice.message_ref  # sigue en el mismo mensaje
     await _ask_when(ctx, flow)
+    return None
