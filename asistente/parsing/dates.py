@@ -460,13 +460,30 @@ def _resolve_date(
     return None, "invalid_date"
 
 
-def _is_ambiguous_domingo(match: re.Match[str]) -> bool:
-    """¿"domingo" sin determinante? Puede ser el día o un nombre propio: no se decide.
+_RE_A_OR_CON_BEFORE = re.compile(r"\b(?:a|con)\s+$")
+_RE_PRONOUN_AFTER = re.compile(r"\A\s+(?:me|te|le|nos|les|se)\b")
 
-    Solo aplica a "domingo", con cualquier capitalización y en cualquier lugar. Con
-    `el / este / esta / próximo / que viene / para el` es el día. Los otros días no cambian.
+
+def _is_ambiguous_domingo(match: re.Match[str], original: str, work: str) -> bool:
+    """¿"domingo" es quizá un nombre propio y no el día? Entonces no se decide: se pregunta.
+
+    Solo aplica a "domingo" SIN determinante (`el / este / esta / próximo / que viene`), y solo si:
+    (a) va tras "a" o "con" ("llamar a domingo"), con cualquier capitalización;
+    (b) tiene mayúscula inicial a mitad de frase ("regalo para Domingo");
+    (c) está al inicio seguido de me/te/le/nos/les/se ("Domingo me presta el carro").
+    Un texto todo en mayúsculas se evalúa como si fuera minúscula (la capitalización no informa).
+    En cualquier otro caso es la fecha ("ensayo domingo 5pm", "Domingo ensayo 5pm").
     """
-    return match["wd"] == "domingo" and not (match["art"] or match["mod"] or match["qv"])
+    if match["wd"] != "domingo" or match["art"] or match["mod"] or match["qv"]:
+        return False
+    start, end = match.start("wd"), match.end("wd")
+    before = work[:start]
+    if _RE_A_OR_CON_BEFORE.search(before):
+        return True
+    has_lowercase = any(ch.islower() for ch in original)
+    if has_lowercase and original[start].isupper() and before.strip():
+        return True
+    return not before.strip() and bool(_RE_PRONOUN_AFTER.match(work[end:]))
 
 
 def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, bool]:
@@ -523,7 +540,7 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
             continue  # "de la mañana": es parte del día, no el día de mañana
         take(m, "day", (today + timedelta(days=1), None, None))
     for m in list(_RE_WEEKDAY.finditer(work)):
-        if _is_ambiguous_domingo(m):
+        if _is_ambiguous_domingo(m, original, work):
             skipped_name = True  # "llamar a Domingo": ¿nombre o día?
             continue
         weekday = WEEKDAYS.index(m["wd"])

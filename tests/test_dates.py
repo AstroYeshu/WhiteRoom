@@ -51,7 +51,8 @@ OK_CASES = [
     ("viernes a las 5 pm", "2026-10-09 17:00", True, None),
     ("viernes 5pm", "2026-10-09 17:00", True, None),
     ("el domingo a las 8 pm", "2026-10-04 20:00", True, None),
-    ("el domingo 20:00", "2026-10-04 20:00", True, None),  # regla 5: sin "el" ahora se pregunta
+    ("domingo 20:00", "2026-10-04 20:00", True, None),  # regla 5 revisada: es fecha
+    ("el domingo 20:00", "2026-10-04 20:00", True, None),
     ("pasado mañana", "2026-10-05 09:00", False, None),
     ("pasado mañana a las 9 am", "2026-10-05 09:00", True, None),
     ("hoy a las 6 pm llamar a mamá", "2026-10-03 18:00", True, "llamar a mamá"),
@@ -258,9 +259,8 @@ ASK_CASES = [
         "ambiguous_time",
         ["2026-10-04 00:00", "2026-10-05 00:00"],
     ),  # regla 3: medianoche
-    ("llamar a Domingo", "name_or_day", []),  # regla 5 (antes: sin fecha)
-    ("regalo para Domingo", "name_or_day", []),  # regla 5 (antes: sin fecha)
-    ("domingo 20:00", "name_or_day", []),  # regla 5 (antes: domingo 20:00)
+    ("llamar a Domingo", "name_or_day", []),  # regla 5 (a): tras "a"
+    ("regalo para Domingo", "name_or_day", []),  # regla 5 (b): mayúscula a mitad de frase
     ("mañana a las 25", "invalid_time", []),
     ("mañana a las 15 pm", "invalid_time", []),
     ("mañana a las 0 am", "invalid_time", []),
@@ -340,9 +340,11 @@ def test_el_titulo_conserva_el_texto_cuando_no_hay_fecha():
 
 
 # --- "Domingo": día de la semana frente a nombre propio ---------------------------------------
-# Solo "domingo" puede ser un nombre (los otros seis días siguen siendo fecha). Regla 5: sin
-# determinante (el, este, esta, próximo, que viene, para el) SE PREGUNTA con cualquier
-# capitalización y en cualquier posición; con determinante es fecha.
+# Solo "domingo" puede ser un nombre (los otros seis días siguen siendo fecha). Regla 5
+# revisada: sin determinante (el, este, esta, próximo, que viene, para el) pregunta SOLO si
+# (a) va tras "a" o "con", (b) lleva mayúscula inicial a mitad de frase o (c) está al inicio
+# seguido de me/te/le/nos/les/se. Todo en mayúsculas se evalúa como minúsculas. Con
+# determinante es fecha con cualquier capitalización.
 
 # Para cada día: a qué fecha cae (el reloj es sábado 3) y 17:00 como hora. El sábado es "hoy".
 _DAY_DATES = {
@@ -374,8 +376,14 @@ _CONTEXTS = [
 ]
 
 
-def _expected_for(day: str, caps: str, has_determiner: bool, at_start: bool):
-    is_name = day == "domingo" and not has_determiner  # regla 5: sin importar mayúsculas ni lugar
+def _expected_for(day: str, caps: str, has_determiner: bool, at_start: bool, template: str):
+    # Regla 5 revisada: sin determinante pregunta SOLO tras "a"/"con" (cualquier capitalización)
+    # o con mayúscula inicial a mitad de frase. Al inicio (sin me/te/le...) o en minúsculas es fecha.
+    after_a_or_con = " a {d}" in template or " con {d}" in template
+    capitalized_mid_sentence = caps != "minúscula" and not at_start
+    is_name = (
+        day == "domingo" and not has_determiner and (after_a_or_con or capitalized_mid_sentence)
+    )
     if is_name:
         return ("ask", "name_or_day", None)
     if day == "sabado":
@@ -395,7 +403,7 @@ _MATRIX = [
 def test_dias_de_la_semana_por_capitalizacion_y_contexto(day, caps_name, context):
     _, template, has_determiner, at_start = context
     text = template.format(d=_CAPS[caps_name](_DAY_SPELLINGS[day]))
-    status, reason, local = _expected_for(day, caps_name, has_determiner, at_start)
+    status, reason, local = _expected_for(day, caps_name, has_determiner, at_start, template)
     result = parse(text)
     assert (result.status, result.reason) == (status, reason), (text, result)
     if status == "ok":
@@ -448,12 +456,38 @@ def test_con_un_nombre_domingo_y_otro_dia_la_fecha_es_la_del_otro_dia():
 
 @pytest.mark.parametrize(
     "text",
-    ["Domingo", "Domingo a las 5 pm", "domingo a las 5 pm", "DOMINGO A LAS 5 PM", "para domingo"],
+    [
+        "Domingo me presta el carro a las 5 pm",
+        "domingo te llamo a las 5 pm",
+        "Domingo le toca a las 5 pm",
+        "Domingo nos invita a las 5 pm",
+        "domingo les avisa a las 5 pm",
+        "Domingo se va a las 5 pm",
+    ],
 )
-def test_domingo_sin_determinante_pregunta_tambien_al_inicio(text):
-    result = parse(text)  # regla 5: al inicio y en mayúsculas ya no se asume que es el día
+def test_domingo_al_inicio_seguido_de_pronombre_pregunta(text):
+    result = parse(text)  # regla 5 (c)
     assert (result.status, result.reason) == ("ask", "name_or_day"), text
     assert result.when_utc is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Domingo",
+        "Domingo a las 5 pm",
+        "domingo a las 5 pm",
+        "DOMINGO A LAS 5 PM",
+        "para domingo",
+        "ensayo domingo 5pm",
+        "domingo 20:00",
+        "Domingo ensayo 5pm",
+    ],
+)
+def test_domingo_en_cualquier_otro_caso_es_fecha(text):
+    result = parse(text)  # regla 5 revisada: al inicio, en minúsculas o todo en mayúsculas
+    assert result.status == "ok", (text, result)
+    assert result.when_utc is not None
 
 
 # --- Verbo inicial del título -----------------------------------------------------------------

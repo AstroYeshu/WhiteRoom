@@ -251,8 +251,20 @@ DOMINGO = [
     ("llamar a domingo a las 5 pm", SAT_1530, ("ask", "name_or_day")),
     ("LLAMAR A DOMINGO A LAS 5 PM", SAT_1530, ("ask", "name_or_day")),
     ("Domingo me presta el carro a las 3", SAT_1530, ("ask", "name_or_day")),
-    ("domingo misa 10 am", SAT_1530, ("ask", "name_or_day")),
-    ("regalo para domingo", SAT_1530, ("ask", "name_or_day")),
+    ("domingo me toca a las 5 pm", SAT_1530, ("ask", "name_or_day")),  # (c) inicio + "me"
+    ("Domingo te llama a las 5 pm", SAT_1530, ("ask", "name_or_day")),
+    ("regalo para Domingo", SAT_1530, ("ask", "name_or_day")),  # (b) mayúscula a mitad de frase
+    ("reunión DOMINGO a las 5 pm", SAT_1530, ("ask", "name_or_day")),
+    ("cenar con domingo a las 5 pm", SAT_1530, ("ask", "name_or_day")),  # (a) "con"
+    # Cualquier otro caso es fecha (regla 5 revisada)
+    ("ensayo domingo 5pm", SAT_1530, ("ok", "2026-10-04 17:00", True)),
+    ("domingo 20:00", SAT_1530, ("ok", "2026-10-04 20:00", True)),
+    ("Domingo ensayo 5pm", SAT_1530, ("ok", "2026-10-04 17:00", True)),
+    ("domingo misa 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("regalo para domingo", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+    ("Domingo a las 5 pm", SAT_1530, ("ok", "2026-10-04 17:00", True)),
+    ("REUNIÓN DOMINGO A LAS 5 PM", SAT_1530, ("ok", "2026-10-04 17:00", True)),  # todo mayúsculas
+    ("MISA DOMINGO 10 AM", SAT_1530, ("ok", "2026-10-04 10:00", True)),
     # Con determinante es fecha, con cualquier capitalización
     ("misa el domingo a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
     ("MISA EL DOMINGO A LAS 10 AM", SAT_1530, ("ok", "2026-10-04 10:00", True)),
