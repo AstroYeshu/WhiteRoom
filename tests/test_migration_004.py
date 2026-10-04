@@ -144,7 +144,7 @@ def test_detener_usa_columnas_y_no_toca_attempts(conn, clock):
 
     stored = reminders.get_reminder(conn, created.id)
     assert stored.stopped is True and stored.status == "pending"
-    assert stored.stop_reason == "permanente: bot_blocked"
+    assert stored.stop_reason == "permanent:bot_blocked"
     assert stored.stopped_at is not None
     assert stored.attempts < 1000
 
@@ -155,7 +155,7 @@ def test_stopped_y_list_due_salen_de_stop_reason(conn, clock):
     assert [r.id for r in reminders.list_due(conn, clock())] == [created.id]
     with conn:
         conn.execute(
-            "UPDATE reminders SET stop_reason = 'permanente: x', stopped_at = 'y' WHERE id = ?",
+            "UPDATE reminders SET stop_reason = 'permanent:x', stopped_at = 'y' WHERE id = ?",
             (created.id,),
         )
     assert reminders.get_reminder(conn, created.id).stopped is True

@@ -386,7 +386,7 @@ class ReminderEngine:
                 self._user_ref, text, reminder_choices(reminder.id), kind="reminder"
             )
         except PermanentChannelError as error:
-            self._stop(reminder, f"permanente: {error.reason}")
+            self._stop(reminder, f"permanent:{error.reason}")
             return Delivery.SKIPPED  # un fallo permanente es de ESA fila: los demás siguen
         except Exception as error:  # noqa: BLE001 - cualquier otro fallo se trata como pasajero
             self._fail_transient(reminder, moment, getattr(error, "reason", type(error).__name__))
@@ -472,7 +472,7 @@ class ReminderEngine:
 
     @staticmethod
     def _horizon_reason(reason: str) -> str:
-        return f"horizonte de 24 h agotado: {reason}"
+        return f"horizon:{reason}"
 
     def _fail_transient(self, reminder: Reminder, moment: datetime, reason: str) -> None:
         """Fallo pasajero: el CANAL espera más cada vez (con tope); la fila lleva su horizonte.
@@ -503,13 +503,23 @@ class ReminderEngine:
     def _stop(self, reminder: Reminder, why: str) -> None:
         """Detiene el envío (queda `pending` con `stop_reason`; se marca en /recordatorios).
 
-        Si es una serie, la siguiente ocurrencia se crea igual: rendirse con una no corta la serie.
+        `why` es un código estable (`permanent:<motivo>` / `horizon:<motivo>`), no prosa: el texto
+        para el usuario lo pone la interfaz. Si es una serie, la siguiente ocurrencia se crea igual
+        (rendirse con una no corta la serie), en la MISMA transacción: `stopped_at` no nulo
+        significa "ya se generó la siguiente". Si algo falla, no queda detenido a medias y el tick
+        sigue.
         """
-        with self._conn:
-            self._conn.execute(
-                "UPDATE reminders SET stopped_at = ?, stop_reason = ? WHERE id = ?",
-                (to_utc_iso(self._now()), why, reminder.id),
+        try:
+            with self._conn:
+                self._conn.execute(
+                    "UPDATE reminders SET stopped_at = ?, stop_reason = ? WHERE id = ?",
+                    (to_utc_iso(self._now()), why, reminder.id),
+                )
+                if reminder.status == "pending":
+                    self._spawn_next(reminder, self._now())
+        except Exception as error:  # noqa: BLE001 - un fallo de base no debe frenar el resto
+            logger.error(
+                "No se pudo detener el recordatorio id=%s: %s", reminder.id, type(error).__name__
             )
-            if reminder.status == "pending":
-                self._spawn_next(reminder, self._now())
+            return
         logger.error("Recordatorio id=%s detenido: %s", reminder.id, why)

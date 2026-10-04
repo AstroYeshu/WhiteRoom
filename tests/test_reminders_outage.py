@@ -72,8 +72,7 @@ def test_se_detiene_a_las_24_horas_del_primer_fallo(conn, clock, engine, channel
     elapsed = stopped_at - first_failure
     assert timedelta(hours=24) <= elapsed <= timedelta(hours=24, seconds=330)  # un tope de espera
     stored = row(conn, created.id)
-    assert stored.stop_reason.startswith("horizonte de 24 h")
-    assert "telegram_down" in stored.stop_reason
+    assert stored.stop_reason == "horizon:telegram_down"  # código estable, no prosa
     assert from_utc_iso(stored.stopped_at) == stopped_at
 
 
@@ -283,3 +282,90 @@ def test_reactivar_una_fila_de_serie_no_crea_otra_siguiente(conn, clock, engine,
     assert len(rows) == 2  # M13: reactivar y enviar NO crea una tercera
     assert [r.status for r in rows] == ["sent", "pending"]
     assert rows[1].fire_at_utc == to_utc_iso(start + timedelta(days=1))
+
+
+# --- Refinamientos: futuros sin estampar, caídas separadas, códigos y atomicidad ----------------
+
+
+def test_un_recordatorio_futuro_no_se_estampa_con_first_failed_at(conn, clock, engine, channel):
+    due = reminders.create_reminder(conn, "ya", clock() + timedelta(minutes=1), clock)
+    future = reminders.create_reminder(conn, "luego", clock() + timedelta(hours=3), clock)
+    channel.always_fail_with(DOWN)
+    clock.advance(minutes=1)
+    tick(engine)
+    assert row(conn, due.id).first_failed_at is not None
+    assert row(conn, future.id).first_failed_at is None  # aún no le toca: el canal no le falló
+
+
+def test_dos_caidas_separadas_no_se_suman_al_horizonte(conn, clock, engine, channel):
+    """1 h de caída, recuperación y luego 23 h de caída: ninguna llega a las 24 h propias."""
+
+    def create_pair(label: str) -> list[int]:
+        return [
+            reminders.create_reminder(
+                conn, f"{label}{i}", clock() + timedelta(minutes=1), clock, priority=2
+            ).id
+            for i in range(2)
+        ]
+
+    def run(duration: timedelta) -> None:
+        end = clock() + duration
+        while clock() < end:
+            tick(engine)
+            clock.advance(seconds=30)
+
+    first = create_pair("a")
+    channel.always_fail_with(DOWN)
+    clock.advance(minutes=1)
+    run(timedelta(hours=1))
+    assert all(row(conn, i).first_failed_at is not None for i in first)
+
+    channel.always_fail_with(None)  # recuperación: salen los dos
+    run(timedelta(minutes=6))
+    assert all(
+        row(conn, i).status == "sent" and row(conn, i).first_failed_at is None for i in first
+    )
+    for reminder_id in first:
+        reminders.mark_done(conn, reminder_id)  # sin esto insistirían
+
+    second = create_pair("b")
+    channel.always_fail_with(DOWN)
+    clock.advance(minutes=1)
+    run(timedelta(hours=23))
+    assert all(not r.stopped for r in all_rows(conn))  # ninguno se detuvo
+    assert all(row(conn, i).status == "pending" for i in second)
+
+
+def test_el_motivo_de_detencion_es_un_codigo_estable(conn, clock, engine, channel):
+    created = reminders.create_reminder(conn, "x", clock() + timedelta(minutes=1), clock)
+    channel.always_fail_with(PermanentChannelError("chat_not_found"))
+    clock.advance(minutes=1)
+    tick(engine)
+    assert row(conn, created.id).stop_reason == "permanent:chat_not_found"
+
+
+def test_detener_y_crear_la_siguiente_de_la_serie_es_una_transaccion(
+    conn, clock, engine, channel, monkeypatch
+):
+    start = clock() + timedelta(minutes=1)
+    first = reminders.create_reminder(conn, "serie", start, clock, rrule="FREQ=DAILY")
+    channel.always_fail_with(PermanentChannelError("bot_blocked"))
+    clock.advance(minutes=1)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("falla al calcular la siguiente")
+
+    monkeypatch.setattr(reminders, "next_occurrence", boom)
+    tick(engine)  # no revienta el tick
+    rows = all_rows(conn)
+    assert len(rows) == 1  # no hay siguiente...
+    stored = rows[0]
+    assert (stored.stop_reason, stored.stopped_at) == (None, None)  # ...ni quedó detenido a medias
+
+    monkeypatch.undo()
+    clock.advance(seconds=30)
+    tick(engine)  # el siguiente tick lo completa entero
+    rows = all_rows(conn)
+    assert len(rows) == 2
+    assert row(conn, first.id).stop_reason == "permanent:bot_blocked"
+    assert row(conn, first.id).stopped_at is not None  # stopped_at => ya se generó la siguiente
