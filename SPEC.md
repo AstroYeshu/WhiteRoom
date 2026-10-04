@@ -88,11 +88,11 @@ class Channel(Protocol):
   etiquetas). Telegram envía con `parse_mode=HTML`; ante `cant_parse_entities` reintenta UNA vez en texto plano
   antes de tratarlo como permanente (un recordatorio no se pierde por formato). Fechas: `fecha_corta` ("sáb 3 oct,
   6:00 pm", "hoy, 6:00 pm", "mañana, 8:00 am") en botones y listas; `fecha_larga` ("sábado 3 de octubre, 6:00 pm")
-  solo en confirmaciones. Botones: filas de 2 como máximo, acción principal primero, Cancelar al final y etiquetas
+  solo en confirmaciones. Botones: filas de 2 como máximo (excepción: los números de `/pendientes` van de 5 en 5), acción principal primero, Cancelar al final y etiquetas
   de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal.
 - **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal
   decide cómo adornar, y WhatsApp o una consola sin fuentes no deben depender de ellos. Etiquetas en texto:
-  `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00`, `Cancelar`. Lo vigila `tests/test_no_pictograms.py` (AST).
+  `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00 am`, `Cancelar` (las horas llevan siempre am/pm). Lo vigila `tests/test_no_pictograms.py` (AST).
 - **Solo `channels/telegram.py` importa la librería de Telegram.** `core/` y `bot/` jamás.
 - `core/reminders.py` y `core/briefing.py` reciben el `Channel` por inyección (se prueban con un canal falso).
 - Para un futuro adaptador de WhatsApp (NO implementar ahora): requiere webhook HTTPS público con verificación
@@ -134,11 +134,20 @@ asistente/
 │  │  ├─ base.py              # Protocol Channel, Choice, IncomingMessage, IncomingChoice
 │  │  ├─ console.py           # canal de consola (--dry-run y pruebas)
 │  │  └─ telegram.py          # ÚNICO módulo que importa la librería de Telegram
+│  ├─ textio.py               # salida en UTF-8 de los scripts
 │  ├─ bot/                    # conversación independiente de la plataforma
 │  │  ├─ auth.py              # filtro ALLOWED_USER_ID
-│  │  └─ handlers.py          # handle_message / handle_choice (comandos y mensajes libres)
+│  │  ├─ handlers.py          # handle_message / handle_choice (comandos y mensajes libres)
+│  │  ├─ commands.py          # /hoy, /pendientes, /recordatorios, /areas, /estado...
+│  │  ├─ inbox.py             # la tarjeta de captura (bandeja)
+│  │  ├─ conversation.py      # estado del flujo a medias, en memoria
+│  │  └─ ui.py                # editar la tarjeta o mandar un mensaje nuevo
 │  ├─ core/
 │  │  ├─ capture.py           # pipeline de captura de mensajes libres
+│  │  ├─ areas.py
+│  │  ├─ settings.py          # lectura de la tabla `settings`
+│  │  ├─ runtime.py           # estado de ejecución para /estado (solo memoria)
+│  │  ├─ classification.py    # etiquetas del dueño en classification_log
 │  │  ├─ tasks.py
 │  │  ├─ notes.py
 │  │  ├─ reminders.py         # motor: tick, snooze, rrule, silencio
@@ -158,6 +167,8 @@ asistente/
 │     └─ amounts.py           # regex de montos
 ├─ scripts/
 │  ├─ eval_classifier.py
+│  ├─ check_env.py            # verificación del entorno antes de arrancar
+│  ├─ dev_remind_me.py, show_messages.py, show_parse_table.py   # herramientas de desarrollo
 │  └─ backup_db.py          # respaldo con la API de sqlite3 (sin el binario), también en Windows
 ├─ deploy/asistente.service   # unidad systemd
 ├─ data/                      # (ignorado por git) asistente.db, backups/
@@ -181,6 +192,7 @@ DB_PATH=data/asistente.db
 MONTHLY_API_BUDGET_USD=8          # tope de gasto en IA; al superarlo se desactivan las rutas con LLM
 DRY_RUN=0                         # equivale al flag --dry-run (multiplataforma)
 LOG_LEVEL=INFO
+TICK_SECONDS=30                   # cada cuánto revisa los avisos (5-60); un aviso llega 0 a N s tarde
 ```
 
 ## 7. Modelo de datos (`migrations/001_init.sql`)
@@ -347,8 +359,8 @@ Todo mensaje que no sea comando entra a este pipeline:
    Deuda conocida: horas inexistentes o repetidas por el horario de verano (ver el plan).
 3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
 4. Clasificar (8.2).
-5. Crear la entidad (tarea, recordatorio, nota o gasto) y responder compacto:
-   `Tarea · universidad · vie 17:00   [Cambiar] [Deshacer]`.
+5. Crear la entidad (tarea, recordatorio, nota o gasto) y dejar la tarjeta como constancia (sección 3.1):
+   «Tarea guardada», el contenido y `Área: universidad`; un recordatorio lleva además `[Cambiar] [Deshacer]`.
 6. Si el tipo es recordatorio y no hay hora válida: preguntar "¿Cuándo?" con botones rápidos
    (Hoy 6 pm · Mañana {default_morning_time} · Elegir...).
 
@@ -409,12 +421,12 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 
 ### 8.3 Motor de recordatorios (`core/reminders.py`)
 
-- Un job repetitivo cada 30 s consulta `reminders` con `status='pending' AND fire_at_utc <= now()`.
+- Un job repetitivo cada `TICK_SECONDS` (por defecto 30 s, entre 5 y 60; un aviso llega entre 0 y ese tiempo tarde) consulta `reminders` con `status='pending' AND fire_at_utc <= now()`.
 - **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
-  el silencio salen en orden, con la etiqueta "(retrasado)".
-- **Mensaje**: `Recordatorio: {text} [{área}]` con botones `Hecho · +10 min · +1 h · Mañana 9:00`.
-  `Mañana 9:00` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
-  (si todavía no pasó). En ese caso la etiqueta del botón es `Hoy 9:00` (la hora de `default_morning_time`).
+  el silencio salen en orden, con la etiqueta "(retrasado)"; la lleva también cualquier aviso que salga con más de 2 minutos de atraso.
+- **Mensaje**: el texto en negrita y debajo `Recordatorio · {área}` (`(retrasado)` en cursiva si aplica), con botones `Hecho · +10 min · +1 h · Mañana 9:00 am`.
+  `Mañana 9:00 am` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
+  (si todavía no pasó). En ese caso la etiqueta del botón es `Hoy 9:00 am` (la hora de `default_morning_time`).
 - **Reloj**: el motor relee el reloj en cada envío; el silencio, el "(retrasado)" y las horas registradas
   usan la hora de ESE envío, no la del inicio del tick (un canal lento no los falsea).
 - **Antes de enviar**: se relee la fila; si ya no sigue `pending` (o `sent`, en una insistencia) con la misma
@@ -510,7 +522,7 @@ Cada fase termina con: tests en verde, `ruff check .` limpio, commit y la secuen
 ### Fase 0 — Esqueleto
 Config, runner de migraciones, `001_init.sql`, interfaz `Channel` con `ConsoleChannel` y `TelegramChannel`
 (sección 3.1), filtro de autenticación, `/start`, `/ayuda`, tests, y el modo
-`--dry-run` (lee mensajes de la consola y usa clasificadores falsos; no conecta con Telegram ni con ninguna API
+`--dry-run` (lee mensajes de la consola; en la Fase 2 usará clasificadores falsos; no conecta con Telegram ni con ninguna API
 y no requiere ningún secreto).
 - Un mensaje de un ID no autorizado no recibe respuesta alguna.
 - `pytest -q` pasa. La base se crea con el esquema completo y las áreas iniciales.
@@ -570,7 +582,8 @@ acceso a shell, interfaz web, múltiples usuarios, notas de voz.
 
 - Raspberry Pi OS de 64 bits, Python 3.11+, entorno virtual en `venv/`.
 - Servicio `deploy/asistente.service` (systemd) con `Restart=always`, `RestartSec=5`,
-  `EnvironmentFile=` apuntando al `.env` con `chmod 600`, y `After=network-online.target`.
+  `EnvironmentFile=` apuntando al `.env` con `chmod 600`, y `After=` y `Wants=` de `network-online.target` y `time-sync.target`
+  (sin `Wants=`, `After=` no espera a la red; `time-sync.target` está por verificar en la Pi).
   Activar con `sudo systemctl enable --now asistente`; logs con `journalctl -u asistente -f`.
 - Sin puertos abiertos (long polling). SSH solo con llave.
 - `scripts/backup_db.py` (API de respaldo del módulo `sqlite3`, no el binario `sqlite3`): guarda

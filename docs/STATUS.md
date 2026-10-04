@@ -82,6 +82,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - Etiquetas para la Fase 2: cada captura completada deja una fila `source='user'` en `classification_log` (`tests/test_classification_log.py`, 35 pruebas;
   17 mutaciones, todas con 2 o más fallos).
 
+- Auditoría con columna de resolución: 11 discrepancias resueltas editando el SPEC; quedan la 7 y la 10 como preguntas (`docs/PREGUNTAS.md`).
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
