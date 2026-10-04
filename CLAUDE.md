@@ -41,6 +41,8 @@ El diseño completo está en `SPEC.md`. Implementa SOLO la fase que se te pida, 
 - Al empezar: lee `docs/STATUS.md` y `git log -n 10` antes de planificar.
 - La prueba se escribe y se ve fallar antes del código; si no se pudo, dilo y haz una mutación después.
 - Antes de cada commit, `pytest -q` y `ruff check .` deben terminar con código 0; nunca cortar su salida con un pipe.
+- Nunca termines procesos por nombre (`taskkill /IM`, `pkill`); solo el PID que lanzaste tú. Si pytest
+  se cuelga, usa `faulthandler_timeout` y busca la causa.
 - Alcance: solo lo pedido. Cualquier idea o hallazgo fuera de alcance va a `docs/BACKLOG.md`;
   no se implementa.
 - Al terminar cada bloque: actualiza `docs/STATUS.md` y `docs/DECISIONS.md`.
