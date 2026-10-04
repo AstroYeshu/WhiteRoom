@@ -93,6 +93,144 @@ def fold(text: str) -> str:
     return "".join(unicodedata.normalize("NFD", ch)[0].lower()[:1] for ch in text)
 
 
+# --- Citas bíblicas ------------------------------------------------------------------------
+# "Juan 3:16" no es una hora. Lista CERRADA: los 66 libros en español (con las variantes
+# numeradas) más las abreviaturas habituales. Las abreviaturas que coinciden con palabras
+# comunes (Mi, Mal, Os, Is, Am, Ex, Sal, Rey) no se deciden: se pregunta (`time_or_verse`).
+
+_NONE = frozenset({""})  # sin número delante
+_N12 = frozenset({"1", "2"})
+_OPT123 = frozenset({"", "1", "2", "3"})  # "Juan", "1 Juan", "2 Juan", "3 Juan"
+_BOOKS_BASE: dict[str, tuple[frozenset[str], str]] = {  # nombre plegado -> (números, nombre)
+    "genesis": (_NONE, "Génesis"), "exodo": (_NONE, "Éxodo"), "levitico": (_NONE, "Levítico"),
+    "numeros": (_NONE, "Números"), "deuteronomio": (_NONE, "Deuteronomio"),
+    "josue": (_NONE, "Josué"), "jueces": (_NONE, "Jueces"), "rut": (_NONE, "Rut"),
+    "samuel": (_N12, "Samuel"), "reyes": (_N12, "Reyes"), "cronicas": (_N12, "Crónicas"),
+    "esdras": (_NONE, "Esdras"), "nehemias": (_NONE, "Nehemías"), "ester": (_NONE, "Ester"),
+    "job": (_NONE, "Job"), "salmos": (_NONE, "Salmos"), "salmo": (_NONE, "Salmos"),
+    "proverbios": (_NONE, "Proverbios"), "eclesiastes": (_NONE, "Eclesiastés"),
+    "cantares": (_NONE, "Cantares"), "cantar de los cantares": (_NONE, "Cantares"),
+    "isaias": (_NONE, "Isaías"), "jeremias": (_NONE, "Jeremías"),
+    "lamentaciones": (_NONE, "Lamentaciones"), "ezequiel": (_NONE, "Ezequiel"),
+    "daniel": (_NONE, "Daniel"), "oseas": (_NONE, "Oseas"), "joel": (_NONE, "Joel"),
+    "amos": (_NONE, "Amós"), "abdias": (_NONE, "Abdías"), "jonas": (_NONE, "Jonás"),
+    "miqueas": (_NONE, "Miqueas"), "nahum": (_NONE, "Nahúm"), "habacuc": (_NONE, "Habacuc"),
+    "sofonias": (_NONE, "Sofonías"), "hageo": (_NONE, "Hageo"), "zacarias": (_NONE, "Zacarías"),
+    "malaquias": (_NONE, "Malaquías"), "mateo": (_NONE, "Mateo"), "marcos": (_NONE, "Marcos"),
+    "lucas": (_NONE, "Lucas"), "juan": (_OPT123, "Juan"), "hechos": (_NONE, "Hechos"),
+    "romanos": (_NONE, "Romanos"), "corintios": (_N12, "Corintios"),
+    "galatas": (_NONE, "Gálatas"), "efesios": (_NONE, "Efesios"),
+    "filipenses": (_NONE, "Filipenses"), "colosenses": (_NONE, "Colosenses"),
+    "tesalonicenses": (_N12, "Tesalonicenses"), "timoteo": (_N12, "Timoteo"),
+    "tito": (_NONE, "Tito"), "filemon": (_NONE, "Filemón"), "hebreos": (_NONE, "Hebreos"),
+    "santiago": (_NONE, "Santiago"), "pedro": (_N12, "Pedro"), "judas": (_NONE, "Judas"),
+    "apocalipsis": (_NONE, "Apocalipsis"),
+}  # fmt: skip
+_ABBREVIATIONS: dict[str, tuple[frozenset[str], str]] = {  # abreviatura plegada -> (números, libro)
+    "gn": (_NONE, "Génesis"), "gen": (_NONE, "Génesis"), "lv": (_NONE, "Levítico"),
+    "nm": (_NONE, "Números"), "dt": (_NONE, "Deuteronomio"), "jos": (_NONE, "Josué"),
+    "rt": (_NONE, "Rut"), "sam": (_N12, "Samuel"), "cr": (_N12, "Crónicas"),
+    "pr": (_NONE, "Proverbios"), "prov": (_NONE, "Proverbios"), "jer": (_NONE, "Jeremías"),
+    "dn": (_NONE, "Daniel"), "ez": (_NONE, "Ezequiel"), "mt": (_NONE, "Mateo"),
+    "mc": (_NONE, "Marcos"), "lc": (_NONE, "Lucas"), "jn": (_OPT123, "Juan"),
+    "hch": (_NONE, "Hechos"), "ro": (_NONE, "Romanos"), "co": (_N12, "Corintios"),
+    "cor": (_N12, "Corintios"), "ga": (_NONE, "Gálatas"), "ef": (_NONE, "Efesios"),
+    "fil": (_NONE, "Filipenses"), "col": (_NONE, "Colosenses"), "ts": (_N12, "Tesalonicenses"),
+    "ti": (_N12, "Timoteo"), "tim": (_N12, "Timoteo"), "heb": (_NONE, "Hebreos"),
+    "stg": (_NONE, "Santiago"), "pe": (_N12, "Pedro"), "jud": (_NONE, "Judas"),
+    "ap": (_NONE, "Apocalipsis"),
+}  # fmt: skip
+# Abreviaturas que son también palabras comunes: ante la duda, se pregunta.
+_AMBIGUOUS_ABBREVIATIONS = frozenset({"mi", "mal", "os", "is", "am", "ex", "sal", "rey"})
+# Nombres de persona que son también libros: "llamar a Juan 3:30" es una hora, "leer Juan 3:16" no.
+_PERSON_BOOKS = frozenset(
+    {"juan", "mateo", "marcos", "lucas", "santiago", "daniel", "samuel", "tito", "timoteo", "josue"}
+)
+_BOOK_NUMBERS: dict[str, frozenset[str]] = {
+    **{key: numbers for key, (numbers, _) in _BOOKS_BASE.items()},
+    **{key: numbers for key, (numbers, _) in _ABBREVIATIONS.items()},
+    **dict.fromkeys(_AMBIGUOUS_ABBREVIATIONS, _NONE),
+}
+
+
+def _canonical_books() -> tuple[str, ...]:
+    """Los 66 libros: la forma numerada cuenta aparte ("1 Juan"); "Juan" una sola vez."""
+    names: list[str] = []
+    for key, (numbers, name) in _BOOKS_BASE.items():
+        if key in ("salmo", "cantar de los cantares"):
+            continue  # variantes del mismo libro
+        names.extend(f"{n} {name}" if n else name for n in sorted(numbers))
+    return tuple(names)
+
+
+BIBLE_BOOKS = _canonical_books()
+_BOOK_ALT = "|".join(sorted(map(re.escape, _BOOK_NUMBERS), key=len, reverse=True))
+_RE_CITATION = re.compile(
+    r"(?<![\w])(?:(?P<n>[123])\s*)?(?P<b>" + _BOOK_ALT + r")\.?\s*"
+    r"(?P<c>\d{1,3}):(?P<v>\d{1,3})(?P<rng>\s*[-–]\s*\d{1,3})?(?![\d:])"
+)
+_RE_PRECEDED_BY_A_CON = re.compile(r"\b(?:a|con)\s+$")
+_RE_PREV_WORD = re.compile(r"(\w+)\s*$")
+_DAY_WORDS = frozenset({"manana", "hoy", "pasado", *WEEKDAYS})
+
+
+def _person_then_time(folded: str, match: re.Match[str]) -> bool:
+    """¿"a/con <nombre> H:MM" ("llamar a Juan 3:30")? Entonces es dudoso: hora o cita."""
+    verse = match["v"]
+    return (
+        not match["n"]
+        and match["b"] in _PERSON_BOOKS
+        and not match["rng"]
+        and len(verse) == 2
+        and int(match["c"]) <= 23
+        and int(verse) <= 59
+        and bool(_RE_PRECEDED_BY_A_CON.search(folded[: match.start()]))
+    )
+
+
+def mask_citations(folded: str) -> tuple[str, bool]:
+    """Enmascara las citas bíblicas ("Juan 3:16") para que no cuenten como hora.
+
+    Devuelve (texto plegado con las citas en blanco, ¿hay duda hora/cita?). Hay duda con una
+    abreviatura que es también palabra común (Sal, Is, Am...) y con un nombre de persona
+    precedido de "a"/"con" y seguido de una hora válida ("llamar a Juan 3:30"): ahí se pregunta.
+    """
+    doubt = False
+    for match in list(_RE_CITATION.finditer(folded)):
+        book, number = match["b"], match["n"] or ""
+        if book in _AMBIGUOUS_ABBREVIATIONS or _person_then_time(folded, match):
+            doubt = True
+        elif number not in _BOOK_NUMBERS[book]:
+            continue  # "Samuel 3:16" sin número, "2 Rut 3:16": no es una cita de la lista
+        folded = _mask(folded, match.start(), match.end())
+    return folded, doubt
+
+
+def split_doubtful_weak(original: str, weak: list[Hit]) -> tuple[list[Hit], bool]:
+    """Separa las horas sueltas `H:MM` que siguen a una palabra con mayúscula a mitad de frase.
+
+    "reunión con Pedro 3:30 mañana": ¿hora o cita? No se decide: devuelve (las que sí valen,
+    ¿hubo alguna dudosa?). Esas horas dudosas no se usan como hora.
+    """
+    kept: list[Hit] = []
+    doubtful = False
+    has_lowercase = any(ch.islower() for ch in original)
+    for hit in weak:
+        before = original[: hit.start]
+        word = _RE_PREV_WORD.search(before)
+        if (
+            word
+            and has_lowercase
+            and word[1][0].isupper()
+            and before[: word.start()].strip()
+            and fold(word[1]) not in _DAY_WORDS | _GLUE_WORDS
+        ):
+            doubtful = True
+        else:
+            kept.append(hit)
+    return kept, doubtful
+
+
 # --- Horas ---------------------------------------------------------------------------------
 
 _RE_PERIOD_TIME = re.compile(
@@ -401,22 +539,25 @@ def parse_when(
     moment = now()
     today = to_local(moment, tz_name).date()
     original = text
-    folded = fold(text)
+    folded, verse_doubt = mask_citations(fold(text))
 
     days, work, skipped_name = _scan_days(folded, original, today)
     strong, weak, work = scan_times(work, meridiem_ask_range)
+    for hit in weak:
+        work = _mask(work, hit.start, hit.end)
     if days:  # una hora débil ("8:30") solo cuenta si hay un día en el texto
-        for hit in weak:
-            strong.append(hit)
-            work = _mask(work, hit.start, hit.end)
-    else:
-        for hit in weak:
-            work = _mask(work, hit.start, hit.end)
+        usable, doubtful = split_doubtful_weak(original, weak)
+        verse_doubt = verse_doubt or doubtful
+        strong.extend(usable)
     hits = days + strong
     if not hits:
+        if verse_doubt:
+            return _ask(clean_title(original, []), "time_or_verse")
         return WhenResult("none", clean_title(original, []))
 
     title = strip_reminder_verb(clean_title(original, [(h.start, h.end) for h in hits]))
+    if verse_doubt:
+        return _ask(title, "time_or_verse")
     instants = [h for h in days if h.kind == "instant"]
     plain_days = [h for h in days if h.kind == "day"]
     if skipped_name and strong and not days:

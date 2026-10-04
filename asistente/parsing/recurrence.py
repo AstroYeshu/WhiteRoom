@@ -24,8 +24,10 @@ from asistente.parsing.dates import (
     WEEKDAYS,
     clean_title,
     fold,
+    mask_citations,
     parse_when,
     scan_times,
+    split_doubtful_weak,
     strip_reminder_verb,
 )
 from asistente.timeutil import Clock, local_to_utc, to_local
@@ -69,7 +71,7 @@ def parse_recurrence(
     default_morning: time,
     meridiem_ask_range: tuple[int, int] = DEFAULT_MERIDIEM_ASK_RANGE,
 ) -> RecurrenceResult:
-    folded = fold(text)
+    folded, verse_doubt = mask_citations(fold(text))
     found: list[tuple[re.Match[str], str]] = []
     for match in _RE_DAILY.finditer(folded):
         found.append((match, "FREQ=DAILY"))
@@ -85,15 +87,19 @@ def parse_recurrence(
     for match, _ in found:
         work = work[: match.start()] + " " * (match.end() - match.start()) + work[match.end() :]
     strong, weak, work = scan_times(work, meridiem_ask_range)
-    times = strong + weak  # la repetición hace de "día": una hora suelta 8:30 sí cuenta
     for hit in weak:
         work = work[: hit.start] + " " * (hit.end - hit.start) + work[hit.end :]
+    usable, doubtful = split_doubtful_weak(text, weak)
+    verse_doubt = verse_doubt or doubtful
+    times = strong + usable  # la repetición hace de "día": una hora suelta 8:30 sí cuenta
     spans = [(m.start(), m.end()) for m, _ in found] + [(h.start, h.end) for h in times]
     title = strip_reminder_verb(clean_title(text, spans))
 
     def ask(reason: str) -> RecurrenceResult:
         return RecurrenceResult("ask", title, reason=reason)
 
+    if verse_doubt:
+        return ask("time_or_verse")
     if len(found) > 1 or len(times) > 1:
         return ask("two_dates")
     if times and isinstance(times[0].value, str):
