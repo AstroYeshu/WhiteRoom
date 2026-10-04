@@ -430,11 +430,39 @@ _RE_WEEKDAY = re.compile(
 _RE_ARTICLE_BEFORE = re.compile(r"\b(?:la|las|esta|cada|toda)\s+$")
 
 
-def _add_years(day: date, years: int) -> date | None:
-    try:
-        return day.replace(year=day.year + years)
-    except ValueError:
-        return None
+# Fechas con aspecto de fecha que la gramática cerrada NO entiende: se pregunta (unsupported_date).
+_ORDINAL = r"\d{1,2}(?:ro|er|ero|do|to|mo|vo|no|º|°|ª)"
+_RE_UNSUPPORTED = re.compile(
+    r"(?:\bpara\s+)?(?:\bel\s+)?\b(?:" + _ORDINAL + r"|primero)\s+de\s+(?:" + _MONTH_ALT + r")\b"
+    r"|(?:\bpara\s+)?(?:\bel\s+)?\b\d{1,2}\s+(?:de\s+(?:este|esta|ese|el|la|lo|proximo|siguiente)"
+    r"|del)\s+(?:proximo\s+)?(?:mes|ano|semana)(?:\s+(?:que\s+viene|proximo|siguiente))?\b"
+    r"|\b(?:en|dentro\s+de)\s+(?:\d{1,3}|" + "|".join(_NUMBER_WORDS) + r"|media?)\s+"
+    r"(?:mes(?:es)?|anos?|trimestres?|quincenas?)\b"
+    r"|\bfin\s+de\s+(?:mes|ano|semana)\b"
+    r"|\b(?:este|esta|ese|esa|proximo|proxima|siguiente|pasado|pasada)\s+(?:mes|ano|semana)\b"
+    r"|\b(?:el\s+|la\s+)?(?:mes|ano|semana)\s+(?:que\s+viene|proximo|proxima|siguiente)\b"
+)
+# "el N" = el día N del mes (la siguiente ocurrencia; hoy cuenta). Solo si lo que sigue no es una
+# palabra ("el 5 a las 3", "pagar el 5."): "el 3 de espadas" o "el 5 dentista" se preguntan.
+_RE_DAY_OF_MONTH = re.compile(
+    r"(?:\bpara\s+)?\bel\s+(?P<d>\d{1,2})\b(?![/:.]\d)"
+    r"(?=\s*(?:$|[,.;!?)]|\ba\s+las?\b|\d{1,2}\s*(?:[ap]\s*\.?\s*m\b|:\d)))"
+)
+_RE_EL_NUMBER_LEFTOVER = re.compile(r"\bel\s+\d{1,2}\b(?![/:.]\d)")
+
+
+def _next_day_of_month(day_number: int, today: date) -> date | None:
+    """El próximo día `day_number` del mes, desde `today` (hoy cuenta). Salta meses sin ese día."""
+    year, month = today.year, today.month
+    for _ in range(14):
+        try:
+            candidate = date(year, month, day_number)
+        except ValueError:
+            candidate = None
+        if candidate is not None and candidate >= today:
+            return candidate
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return None
 
 
 def _resolve_date(
@@ -499,6 +527,8 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
         hits.append(Hit(match.start(), match.end(), kind, value))
         work = _mask(work, match.start(), match.end())
 
+    for m in list(_RE_UNSUPPORTED.finditer(work)):
+        take(m, "unsupported", "unsupported_date")
     for m in list(_RE_RELATIVE.finditer(work)):
         amount = m["n"]
         unit = m["u"]
@@ -533,6 +563,13 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
                 int(m["d"]), int(m["mon"]), int(m["y"]) if m["y"] else None, today
             )
             take(m, "day", (found, reason, "yearless" if not m["y"] else None))
+    for m in list(_RE_DAY_OF_MONTH.finditer(work)):
+        day_number = int(m["d"])
+        found = _next_day_of_month(day_number, today) if 1 <= day_number <= 31 else None
+        if found is None:
+            take(m, "invalid", "invalid_date")
+        else:
+            take(m, "day", (found, None, "monthday"))
     for m in list(_RE_TODAY.finditer(work)):
         take(m, "day", (today, None, "today"))
     for m in list(_RE_TOMORROW.finditer(work)):
@@ -554,6 +591,10 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
                 take(m, "day", (None, "same_weekday", "weekday"))
         else:
             take(m, "day", (today + timedelta(days=delta), None, "weekday"))
+    for m in list(
+        _RE_EL_NUMBER_LEFTOVER.finditer(work)
+    ):  # "el 5 dentista": parece fecha, no se entiende
+        take(m, "unsupported", "unsupported_date")
     return hits, work, skipped_name
 
 
@@ -641,6 +682,8 @@ def parse_when(
     plain_days = [h for h in days if h.kind == "day"]
     if any(h.kind == "invalid" for h in days):
         return _ask(title, "invalid_date")
+    if any(h.kind == "unsupported" for h in days):
+        return _ask(title, "unsupported_date")
     if (
         len(plain_days) > 1
         or len(strong) > 1
@@ -740,9 +783,13 @@ def _future_alternatives(
         later = day + timedelta(days=1)
     elif extra == "weekday":
         later = day + timedelta(days=7)
-    elif extra == "yearless":
-        later = _add_years(day, 1) or day + timedelta(days=365)
+    elif extra == "yearless":  # la siguiente ocurrencia REAL (29 de febrero -> próximo bisiesto)
+        later = _resolve_date(day.day, day.month, None, day + timedelta(days=1))[0]
+    elif extra == "monthday":
+        later = _next_day_of_month(day.day, day + timedelta(days=1))
     else:
+        return ()
+    if later is None:
         return ()
     candidate = local_to_utc(datetime.combine(later, clock), tz_name)
     return (candidate,) if candidate > moment else ()

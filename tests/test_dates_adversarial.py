@@ -297,3 +297,70 @@ def test_domingo(phrase, now_local, expected):
 )
 def test_el_titulo_conserva_domingo(phrase, title):
     assert run(phrase).title == title
+
+
+# --- Familia 5: fechas con aspecto de fecha (regla 7) y 29 de febrero (regla 11) -----------------
+FEB29 = "2028-02-29 16:00"
+DATES = [
+    # No soportadas: se pregunta, nunca se descartan en silencio
+    ("el 20 de este mes", SAT_1530, ("ask", "unsupported_date")),
+    ("pagar el 20 de este mes", SAT_1530, ("ask", "unsupported_date")),
+    ("1ro de noviembre", SAT_1530, ("ask", "unsupported_date")),
+    ("1º de noviembre", SAT_1530, ("ask", "unsupported_date")),
+    ("1er de noviembre", SAT_1530, ("ask", "unsupported_date")),
+    ("primero de noviembre", SAT_1530, ("ask", "unsupported_date")),
+    ("en 3 meses", SAT_1530, ("ask", "unsupported_date")),
+    ("dentro de 2 meses", SAT_1530, ("ask", "unsupported_date")),
+    ("en un año", SAT_1530, ("ask", "unsupported_date")),
+    ("el próximo mes", SAT_1530, ("ask", "unsupported_date")),
+    ("fin de mes", SAT_1530, ("ask", "unsupported_date")),
+    ("la semana que viene", SAT_1530, ("ask", "unsupported_date")),
+    ("esta semana", SAT_1530, ("ask", "unsupported_date")),
+    ("el 5 del mes que viene", SAT_1530, ("ask", "unsupported_date")),
+    ("comprar el 3 de espadas", SAT_1530, ("ask", "unsupported_date")),
+    ("el 5 dentista", SAT_1530, ("ask", "unsupported_date")),
+    # Soportadas: "el N" (siguiente ocurrencia, hoy cuenta)
+    ("pagar renta el 5", SAT_1530, ("ok", "2026-10-05 09:00", False)),
+    ("el 5 a las 3 pm", SAT_1530, ("ok", "2026-10-05 15:00", True)),
+    ("el 5, pagar renta", SAT_1530, ("ok", "2026-10-05 09:00", False)),
+    ("el 20 a las 8 pm", SAT_1530, ("ok", "2026-10-20 20:00", True)),
+    ("el 3 a las 8 pm", SAT_1530, ("ok", "2026-10-03 20:00", True)),
+    ("el 3", SAT_1530, ("ask", "past", ["2026-11-03 09:00"])),  # hoy 09:00 ya pasó
+    ("el 3", "2026-10-03 08:00", ("ok", "2026-10-03 09:00", False)),
+    ("el 31", SAT_1530, ("ok", "2026-10-31 09:00", False)),
+    ("el 31", "2026-04-15 10:00", ("ok", "2026-05-31 09:00", False)),  # abril no tiene 31
+    ("el 5", "2026-12-20 10:00", ("ok", "2027-01-05 09:00", False)),
+    ("el 40", SAT_1530, ("ask", "invalid_date")),
+    ("el 0", SAT_1530, ("ask", "invalid_date")),
+    # Soportadas: "N de mes" y "en N días/semanas"
+    ("el 12 de octubre", SAT_1530, ("ok", "2026-10-12 09:00", False)),
+    ("12 de octubre a las 5 pm", SAT_1530, ("ok", "2026-10-12 17:00", True)),
+    ("el 3 de octubre", SAT_1530, ("ask", "past", ["2027-10-03 09:00"])),
+    ("el 2 de octubre de 2027", SAT_1530, ("ok", "2027-10-02 09:00", False)),
+    ("en 3 días", SAT_1530, ("ok", "2026-10-06 09:00", False)),
+    ("en 1 día", SAT_1530, ("ok", "2026-10-04 09:00", False)),
+    ("en 2 semanas", SAT_1530, ("ok", "2026-10-17 09:00", False)),
+    ("dentro de una semana", SAT_1530, ("ok", "2026-10-10 09:00", False)),
+    ("en tres días a las 5 pm", SAT_1530, ("ok", "2026-10-06 17:00", True)),
+    # 29 de febrero: la siguiente fecha bisiesta REAL
+    ("el 29 de febrero", FEB29, ("ask", "past", ["2032-02-29 09:00"])),
+    ("el 29 de febrero", "2028-02-29 08:00", ("ok", "2028-02-29 09:00", False)),
+    ("el 29 de febrero a las 5 pm", FEB29, ("ok", "2028-02-29 17:00", True)),
+    (
+        "el 29 de febrero",
+        "2096-03-01 10:00",
+        ("ok", "2104-02-29 09:00", False),
+    ),  # 2100 no es bisiesto
+    ("el 29 de febrero", "2100-01-01 10:00", ("ok", "2104-02-29 09:00", False)),
+    ("el 29 de febrero", SAT_1530, ("ok", "2028-02-29 09:00", False)),
+    ("el 29 de febrero de 2027", SAT_1530, ("ask", "invalid_date")),
+]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "now_local", "expected"),
+    DATES,
+    ids=[f"{c[0]} @ {c[1]}" for c in DATES],
+)
+def test_fechas_con_aspecto_de_fecha(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)
