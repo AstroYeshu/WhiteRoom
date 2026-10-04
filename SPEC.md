@@ -245,6 +245,7 @@ CREATE TABLE settings (
 -- Valores iniciales: briefing_time=07:30, quiet_start=22:00, quiet_end=07:00,
 -- auto_threshold=0.80, ask_threshold=0.50, default_morning_time=09:00,
 -- daily_proactive_cap=6, ledger_auto_save=0
+-- (migración 003) meridiem_ask_range=5-11: horas sin am/pm que se preguntan en vez de adivinarse
 
 CREATE TABLE usage_log (
   id            INTEGER PRIMARY KEY,

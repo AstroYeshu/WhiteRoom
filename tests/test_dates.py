@@ -1,14 +1,14 @@
 """Parser de fechas en español: tablas con reloj fijo.
 
 Reloj: sábado 2026-10-03 15:30 en México (UTC-6, sin horario de verano).
-`default_morning_time` = 09:00.
+`default_morning_time` = 09:00. Rango de horas sin am/pm que se preguntan: 5-11.
 """
 
 from datetime import UTC, datetime, time
 
 import pytest
 
-from asistente.parsing.dates import format_when, parse_when
+from asistente.parsing.dates import WEEKDAYS, format_when, parse_when
 from asistente.timeutil import local_to_utc
 
 TZ = "America/Mexico_City"
@@ -20,8 +20,8 @@ def clock() -> datetime:
     return NOW
 
 
-def parse(text: str, now: datetime = NOW, tz: str = TZ):
-    return parse_when(text, lambda: now, tz, DEFAULT_MORNING)
+def parse(text: str, now: datetime = NOW, tz: str = TZ, **kwargs):
+    return parse_when(text, lambda: now, tz, DEFAULT_MORNING, **kwargs)
 
 
 def utc(local_text: str, tz: str = TZ) -> datetime:
@@ -38,11 +38,16 @@ OK_CASES = [
         "recordar mañana 8am llevar tarea de cálculo",
         "2026-10-04 08:00",
         True,
-        "recordar llevar tarea de cálculo",
+        "llevar tarea de cálculo",
     ),
-    ("llevar tarea de cálculo mañana a las 8", "2026-10-04 08:00", True, "llevar tarea de cálculo"),
+    (
+        "llevar tarea de cálculo mañana a las 8 am",
+        "2026-10-04 08:00",
+        True,
+        "llevar tarea de cálculo",
+    ),
     ("el viernes a las 5 pm", "2026-10-09 17:00", True, None),
-    ("viernes a las 5", "2026-10-09 17:00", True, None),
+    ("viernes a las 5 pm", "2026-10-09 17:00", True, None),
     ("viernes 5pm", "2026-10-09 17:00", True, None),
     ("el domingo a las 8 pm", "2026-10-04 20:00", True, None),
     ("domingo 20:00", "2026-10-04 20:00", True, None),
@@ -71,9 +76,7 @@ OK_CASES = [
     ("este viernes", "2026-10-09 09:00", False, None),
     ("para mañana entregar proyecto", "2026-10-04 09:00", False, "entregar proyecto"),
     ("mañana", "2026-10-04 09:00", False, None),
-    ("mañana a las 8 y media", "2026-10-04 08:30", True, None),
-    ("mañana a las 5 y cuarto", "2026-10-04 17:15", True, None),
-    ("mañana 8:30", "2026-10-04 08:30", True, None),  # H:MM suelto vale si hay día
+    ("mañana a las 3 y media", "2026-10-04 15:30", True, None),  # 1-4 sin marcador = tarde
     ("mañana 18:30", "2026-10-04 18:30", True, None),
     ("mañana 08:00", "2026-10-04 08:00", True, None),
     ("mañana 05:00", "2026-10-04 05:00", True, None),  # cero inicial = 24 h literal
@@ -92,18 +95,132 @@ OK_CASES = [
     ("el sábado que viene a las 6 pm", "2026-10-10 18:00", True, None),
 ]
 
-# Regla de la hora sin am/pm: 7-11 = mañana, 12 = mediodía, 1-6 = tarde.
-BARE_HOUR_CASES = [
-    ("mañana a las 7", "2026-10-04 07:00"),
-    ("mañana a las 8", "2026-10-04 08:00"),
-    ("mañana a las 11", "2026-10-04 11:00"),
-    ("mañana a las 12", "2026-10-04 12:00"),
-    ("mañana a las 1", "2026-10-04 13:00"),
-    ("mañana a las 3", "2026-10-04 15:00"),
-    ("mañana a las 6", "2026-10-04 18:00"),
-    ("mañana a las 13", "2026-10-04 13:00"),
-    ("mañana a las 23", "2026-10-04 23:00"),
+# --- Regla de la hora sin am/pm (docs/PLAN_FASE1.md, regla 3) ---------------------------------
+# Sin marcador: 12 = mediodía; 1-4 = tarde (inferido); 5-11 = PREGUNTA con las dos lecturas.
+
+# "mañana a las H" (y `H:30` suelto, que se comporta igual): hora, lectura, ¿inferida?
+BARE_HOUR_OK = [
+    (1, "13:00", True),
+    (2, "14:00", True),
+    (3, "15:00", True),
+    (4, "16:00", True),
+    (12, "12:00", False),
 ]
+BARE_HOUR_ASK = [5, 6, 7, 8, 9, 10, 11]
+
+
+@pytest.mark.parametrize(("hour", "reading", "inferred"), BARE_HOUR_OK)
+@pytest.mark.parametrize("form", ["mañana a las {h}", "mañana {h}:30", "mañana a las {h}:30"])
+def test_hora_sin_marcador_se_asume(hour, reading, inferred, form):
+    minute = "30" if ":30" in form else "00"
+    text = form.format(h=hour)
+    result = parse(text)
+    assert result.status == "ok", (text, result)
+    assert result.when_utc == utc(f"2026-10-04 {reading.split(':')[0]}:{minute}"), (text, result)
+    assert result.meridiem_inferred is inferred
+
+
+@pytest.mark.parametrize("hour", BARE_HOUR_ASK)
+@pytest.mark.parametrize("form", ["mañana a las {h}", "mañana {h}:30", "mañana a las {h}:30"])
+def test_hora_5_a_11_sin_marcador_pregunta_con_las_dos_lecturas(hour, form):
+    text = form.format(h=hour)
+    minute = "30" if ":30" in form else "00"
+    result = parse(text)
+    assert (result.status, result.reason) == ("ask", "ambiguous_meridiem"), (text, result)
+    assert result.when_utc is None
+    assert list(result.candidates) == [
+        utc(f"2026-10-04 {hour:02d}:{minute}"),
+        utc(f"2026-10-04 {hour + 12:02d}:{minute}"),
+    ]
+
+
+@pytest.mark.parametrize("hour", range(1, 12))
+def test_con_am_se_respeta(hour):
+    result = parse(f"mañana a las {hour} am")
+    assert result.when_utc == utc(f"2026-10-04 {hour:02d}:00") and not result.meridiem_inferred
+
+
+@pytest.mark.parametrize("hour", range(1, 12))
+def test_con_pm_se_respeta(hour):
+    result = parse(f"mañana a las {hour} pm")
+    assert result.when_utc == utc(f"2026-10-04 {hour + 12:02d}:00")
+    assert not result.meridiem_inferred
+
+
+@pytest.mark.parametrize(
+    ("text", "local"),
+    [
+        ("mañana a las 12 pm", "2026-10-04 12:00"),
+        ("mañana 6:30 pm", "2026-10-04 18:30"),
+        ("mañana 6:30 de la tarde", "2026-10-04 18:30"),
+        ("mañana a las 6 de la mañana", "2026-10-04 06:00"),
+        ("mañana 9 de la noche", "2026-10-04 21:00"),
+        ("mañana a las 13", "2026-10-04 13:00"),
+        ("mañana a las 18", "2026-10-04 18:00"),
+        ("mañana a las 23", "2026-10-04 23:00"),
+        ("mañana a las 0", "2026-10-04 00:00"),
+        ("mañana 06:30", "2026-10-04 06:30"),  # cero inicial = 24 h: se respeta, no se pregunta
+        ("mañana 9:30 pm", "2026-10-04 21:30"),
+    ],
+)
+def test_con_marcador_o_24_horas_nunca_se_pregunta(text, local):
+    result = parse(text)
+    assert result.status == "ok", (text, result)
+    assert result.when_utc == utc(local)
+    assert result.meridiem_inferred is False
+
+
+def test_12_am_y_12_de_la_noche_siguen_preguntando():
+    for text in ("mañana a las 12 am", "mañana 12 de la noche", "mañana 12:30 am"):
+        result = parse(text)
+        assert (result.status, result.reason) == ("ask", "ambiguous_time"), text
+        assert result.candidates == ()
+
+
+def test_h_mm_suelto_sin_dia_no_es_hora():
+    assert parse("leer Juan 3:16").status == "none"
+    assert parse("Romanos 8:28").status == "none"  # versículo: ni pregunta ni inventa
+
+
+def test_la_lectura_pasada_se_descarta_de_las_opciones():
+    # Hoy sábado a las 15:30: "a las 8" -> 8 am ya pasó, solo queda 8 pm.
+    result = parse("hoy a las 8")
+    assert (result.status, result.reason) == ("ask", "ambiguous_meridiem")
+    assert list(result.candidates) == [utc("2026-10-03 20:00")]
+
+
+def test_si_las_dos_lecturas_ya_pasaron_se_pregunta_por_el_pasado():
+    late = datetime(2026, 10, 4, 5, 0, tzinfo=UTC)  # sábado 23:00 local
+    result = parse("hoy a las 9", late)
+    assert (result.status, result.reason) == ("ask", "past")
+    assert list(result.candidates) == [utc("2026-10-04 09:00")]
+
+
+def test_hora_asumida_que_ya_paso_hoy_pregunta_con_alternativa():
+    result = parse("hoy a las 3")  # 3 -> 3 pm (15:00), ya pasó a las 15:30
+    assert (result.status, result.reason) == ("ask", "past")
+    assert list(result.candidates) == [utc("2026-10-04 15:00")]
+
+
+def test_el_rango_a_preguntar_es_un_parametro():
+    # Rango 7-11: la hora 6 deja de preguntarse y se asume por debajo del rango (tarde).
+    narrow = parse("mañana a las 6", meridiem_ask_range=(7, 11))
+    assert narrow.when_utc == utc("2026-10-04 18:00") and narrow.meridiem_inferred
+    assert parse("mañana a las 7", meridiem_ask_range=(7, 11)).reason == "ambiguous_meridiem"
+    # Rango 1-4: las horas por encima del rango (5-11) se asumen de la mañana.
+    wide = parse("mañana a las 8", meridiem_ask_range=(1, 4))
+    assert wide.when_utc == utc("2026-10-04 08:00") and wide.meridiem_inferred
+    assert parse("mañana a las 3", meridiem_ask_range=(1, 4)).reason == "ambiguous_meridiem"
+    # Rango completo: todo se pregunta salvo 12.
+    assert parse("mañana a las 1", meridiem_ask_range=(1, 11)).reason == "ambiguous_meridiem"
+    assert parse("mañana a las 12", meridiem_ask_range=(1, 11)).status == "ok"
+
+
+@pytest.mark.parametrize("bad_range", [(0, 5), (5, 12), (8, 5), (-1, 4)])
+def test_rango_invalido_se_rechaza(bad_range):
+    with pytest.raises(ValueError):
+        parse("mañana a las 8", meridiem_ask_range=bad_range)
+
 
 # (frase, razón, candidatos locales)
 ASK_CASES = [
@@ -131,10 +248,22 @@ ASK_CASES = [
     ("mañana por la mañana", "unrecognized_time", []),
     ("mañana por la tarde", "unrecognized_time", []),
     ("mañana medianoche", "unrecognized_time", []),
-    ("mañana a las 8 menos cuarto", "unrecognized_time", []),
+    ("mañana a las 2 menos cuarto", "unrecognized_time", []),
     ("mañana a las 25", "invalid_time", []),
     ("mañana a las 15 pm", "invalid_time", []),
     ("mañana a las 0 am", "invalid_time", []),
+    (
+        "llevar tarea de cálculo mañana a las 8",
+        "ambiguous_meridiem",
+        ["2026-10-04 08:00", "2026-10-04 20:00"],
+    ),
+    ("viernes a las 5", "ambiguous_meridiem", ["2026-10-09 05:00", "2026-10-09 17:00"]),
+    ("mañana a las 8 y media", "ambiguous_meridiem", ["2026-10-04 08:30", "2026-10-04 20:30"]),
+    ("mañana a las 5 y cuarto", "ambiguous_meridiem", ["2026-10-04 05:15", "2026-10-04 17:15"]),
+    ("mañana 8:30", "ambiguous_meridiem", ["2026-10-04 08:30", "2026-10-04 20:30"]),
+    ("mañana 6:30", "ambiguous_meridiem", ["2026-10-04 06:30", "2026-10-04 18:30"]),
+    ("a las 9", "ambiguous_meridiem", ["2026-10-03 21:00"]),  # 9 am de hoy ya pasó
+    ("el sábado a las 5", "same_weekday", []),  # primero el día; la hora se pregunta después
 ]
 
 # Sin fecha: falsos positivos que NO deben interpretarse como fecha.
@@ -155,6 +284,8 @@ NONE_CASES = [
     "pagar 100 pesos",
     "sábados de limpieza",
     "5 de 10 completadas",
+    "recordar mi contraseña",
+    "regalo para Domingo",
     "",
 ]
 
@@ -167,13 +298,6 @@ def test_fechas_resueltas(text, local, has_time, title):
     assert result.has_time is has_time
     if title is not None:
         assert result.title == title
-
-
-@pytest.mark.parametrize(("text", "local"), BARE_HOUR_CASES)
-def test_hora_sin_am_pm(text, local):
-    result = parse(text)
-    assert result.status == "ok"
-    assert result.when_utc == utc(local)
 
 
 @pytest.mark.parametrize(("text", "reason", "candidates"), ASK_CASES)
@@ -197,10 +321,142 @@ def test_nunca_devuelve_una_fecha_en_el_pasado():
     for text, *_ in OK_CASES:
         result = parse(text)
         assert result.when_utc is None or result.when_utc > NOW
+    for _, _, candidates in ASK_CASES:
+        assert all(utc(c) > NOW for c in candidates)
 
 
 def test_el_titulo_conserva_el_texto_cuando_no_hay_fecha():
     assert parse("  comprar   leche ").title == "comprar leche"
+
+
+# --- "Domingo": día de la semana frente a nombre propio ---------------------------------------
+# Solo "Domingo" puede ser un nombre. Los otros seis días con mayúscula siguen siendo fecha.
+
+# Para cada día: a qué fecha cae (el reloj es sábado 3) y 17:00 como hora. El sábado es "hoy".
+_DAY_DATES = {
+    "lunes": "2026-10-05",
+    "martes": "2026-10-06",
+    "miercoles": "2026-10-07",
+    "jueves": "2026-10-08",
+    "viernes": "2026-10-09",
+    "sabado": None,  # es hoy: "el sábado" pregunta (same_weekday)
+    "domingo": "2026-10-04",
+}
+_DAY_SPELLINGS = {
+    "lunes": "lunes",
+    "martes": "martes",
+    "miercoles": "miércoles",
+    "jueves": "jueves",
+    "viernes": "viernes",
+    "sabado": "sábado",
+    "domingo": "domingo",
+}
+_CAPS = {"minúscula": str.lower, "Mayúscula": str.capitalize, "MAYÚSCULAS": str.upper}
+# (nombre del contexto, plantilla, ¿lleva artículo/determinante?, ¿el día va al inicio del texto?)
+_CONTEXTS = [
+    ("con artículo", "reunión el {d} a las 5 pm", True, False),
+    ("sin artículo, al inicio", "{d} a las 5 pm", False, True),
+    ("sin artículo, a mitad", "reunión {d} a las 5 pm", False, False),
+    ("tras 'a'", "llamar a {d} a las 5 pm", False, False),
+    ("tras 'con'", "salir con {d} a las 5 pm", False, False),
+]
+
+
+def _expected_for(day: str, caps: str, has_determiner: bool, at_start: bool):
+    is_name = day == "domingo" and caps != "minúscula" and not has_determiner and not at_start
+    if is_name:
+        return ("ask", "name_or_day", None)
+    if day == "sabado":
+        return ("ask", "same_weekday", None)
+    return ("ok", None, f"{_DAY_DATES[day]} 17:00")
+
+
+_MATRIX = [
+    pytest.param(day, caps_name, context, id=f"{day}-{caps_name}-{context[0]}")
+    for day in WEEKDAYS
+    for caps_name in _CAPS
+    for context in _CONTEXTS
+]
+
+
+@pytest.mark.parametrize(("day", "caps_name", "context"), _MATRIX)
+def test_dias_de_la_semana_por_capitalizacion_y_contexto(day, caps_name, context):
+    _, template, has_determiner, at_start = context
+    text = template.format(d=_CAPS[caps_name](_DAY_SPELLINGS[day]))
+    status, reason, local = _expected_for(day, caps_name, has_determiner, at_start)
+    result = parse(text)
+    assert (result.status, result.reason) == (status, reason), (text, result)
+    if status == "ok":
+        assert result.when_utc == utc(local), (text, result)
+    else:
+        assert result.when_utc is None  # nunca se asume "hoy"
+
+
+def test_la_matriz_cubre_21_combinaciones_por_contexto():
+    assert len(_MATRIX) == 7 * 3 * 5
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "reunión Domingo que viene a las 5 pm",
+        "reunión este Domingo a las 5 pm",
+        "reunión esta Domingo a las 5 pm",
+        "reunión próximo Domingo a las 5 pm",
+        "reunión el próximo DOMINGO a las 5 pm",
+        "reunión EL DOMINGO a las 5 pm",
+        "reunión ESTE DOMINGO a las 5 pm",
+        "REUNIÓN DOMINGO A LAS 5 PM",  # todo en mayúsculas: la capitalización no informa
+    ],
+)
+def test_domingo_con_determinante_o_todo_en_mayusculas_es_fecha(text):
+    result = parse(text)
+    assert result.status == "ok", (text, result)
+    assert result.when_utc == utc("2026-10-04 17:00")
+
+
+def test_frases_de_domingo_del_usuario():
+    assert parse("reunión el Domingo a las 5 pm").when_utc == utc("2026-10-04 17:00")
+    llamar = parse("llamar a Domingo")
+    assert (llamar.status, llamar.title) == ("none", "llamar a Domingo")
+    ambiguous = parse("llamar a Domingo a las 5")
+    assert (ambiguous.status, ambiguous.reason) == ("ask", "name_or_day")
+    assert ambiguous.title == "llamar a Domingo"
+
+
+def test_con_un_nombre_domingo_y_otro_dia_la_fecha_es_la_del_otro_dia():
+    result = parse("llamar a Domingo mañana a las 5 pm")
+    assert result.status == "ok" and result.when_utc == utc("2026-10-04 17:00")
+
+
+def test_domingo_con_mayuscula_al_inicio_es_fecha():
+    assert parse("Domingo").when_utc == utc("2026-10-04 09:00")
+    assert parse("Domingo a las 5 pm").when_utc == utc("2026-10-04 17:00")
+
+
+# --- Verbo inicial del título -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "title"),
+    [
+        ("recordar mañana 8am llevar tarea de cálculo", "llevar tarea de cálculo"),
+        ("recuérdame mañana a las 8 am llamar a mamá", "llamar a mamá"),
+        ("Recuérdame mañana 8am llamar a mamá", "llamar a mamá"),
+        ("recuérdame que mañana a las 8 am llame a mamá", "llame a mamá"),
+        ("recordarme de llamar mañana 8am", "llamar"),
+        ("llamar a mamá mañana 8am", "llamar a mamá"),
+        ("recordar mañana", "recordar"),  # sola, no se quita
+        ("mañana a las 8 am recordar pagar", "pagar"),  # tras quitar la fecha, queda al inicio
+        ("pagar y recordar mañana 8am", "pagar y recordar"),  # a mitad de frase no se toca
+    ],
+)
+def test_se_quita_el_verbo_inicial_de_recordatorio(text, title):
+    assert parse(text).title == title
+
+
+def test_sin_fecha_el_titulo_no_se_toca():
+    assert parse("recordar mi contraseña").title == "recordar mi contraseña"
 
 
 # --- Casos con el calendario ---------------------------------------------------------------
@@ -224,6 +480,7 @@ def test_el_viernes_siendo_viernes_pregunta_pero_proximo_y_este_no():
     assert list(asked.candidates) == [utc("2026-10-09 17:00"), utc("2026-10-16 17:00")]
     assert parse("el próximo viernes a las 5 pm", friday).when_utc == utc("2026-10-16 17:00")
     assert parse("este viernes a las 5 pm", friday).when_utc == utc("2026-10-09 17:00")
+    assert parse("esta Viernes a las 5 pm", friday).when_utc == utc("2026-10-09 17:00")
 
 
 def test_horario_de_verano_se_respeta():

@@ -56,7 +56,7 @@ def utc(local_text: str, tz: str = TZ) -> datetime:
             "gimnasio",
         ),
         ("de lunes a viernes", "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", "2026-10-05 09:00", False, ""),
-        ("cada martes 8:30", "FREQ=WEEKLY;BYDAY=TU", "2026-10-06 08:30", True, ""),
+        ("cada martes 8:30 am", "FREQ=WEEKLY;BYDAY=TU", "2026-10-06 08:30", True, ""),
     ],
 )
 def test_expresiones_reconocidas(text, rrule, first, has_time, title):
@@ -75,7 +75,10 @@ def test_expresiones_reconocidas(text, rrule, first, has_time, title):
         ("todos los días a las 8 y a las 5", "two_dates"),
         ("todos los días mañana", "two_dates"),
         ("cada lunes el 15 de octubre", "two_dates"),
-        ("todos los días a las 8 menos cuarto", "unrecognized_time"),
+        ("todos los días a las 2 menos cuarto", "unrecognized_time"),
+        ("cada martes 8:30", "ambiguous_meridiem"),
+        ("todos los días a las 8", "ambiguous_meridiem"),
+        ("de lunes a viernes a las 6", "ambiguous_meridiem"),
         ("todos los días a las 12 de la noche", "ambiguous_time"),
     ],
 )
@@ -131,3 +134,21 @@ def test_horario_de_verano_mantiene_la_hora_local():
 def test_serie_terminada_devuelve_none():
     scheduled = utc("2026-10-04 08:00")
     assert next_occurrence("FREQ=DAILY;COUNT=1", scheduled, scheduled, TZ) is None
+
+
+def test_hora_de_1_a_4_sin_marcador_se_asume_tarde_y_se_marca():
+    result = parse("todos los días a las 3 tomar agua")
+    assert result.status == "ok" and result.meridiem_inferred is True
+    assert result.first_at_utc == utc("2026-10-04 15:00")  # hoy 15:00 ya pasó
+    assert parse("todos los días a las 3 pm").meridiem_inferred is False
+
+
+def test_el_rango_a_preguntar_tambien_aplica_a_las_repeticiones():
+    result = parse_recurrence("todos los días a las 6", lambda: NOW, TZ, time(9, 0), (7, 11))
+    assert result.status == "ok" and result.meridiem_inferred is True
+    assert result.first_at_utc == utc("2026-10-03 18:00")
+
+
+def test_se_quita_el_verbo_inicial_del_titulo():
+    result = parse("recuérdame todos los días a las 8 am tomar vitaminas")
+    assert result.status == "ok" and result.title == "tomar vitaminas"

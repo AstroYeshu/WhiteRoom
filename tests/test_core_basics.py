@@ -157,3 +157,33 @@ def test_notas_limite_de_resultados(conn, clock):
         clock.advance(seconds=1)
         notes.create_note(conn, f"nota {i}", clock)
     assert len(notes.list_notes(conn)) == 20
+
+
+# --- Ajuste meridiem_ask_range (migración 003) ---------------------------------------------
+
+
+def test_migracion_003_siembra_meridiem_ask_range(conn):
+    from asistente.core.settings import get_meridiem_ask_range
+
+    versions = [r["version"] for r in conn.execute("SELECT version FROM schema_migrations")]
+    assert versions[:3] == [1, 2, 3]
+    assert get_meridiem_ask_range(conn) == (5, 11)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("6-10", (6, 10)), ("1-11", (1, 11)), ("7-7", (7, 7))]
+)
+def test_meridiem_ask_range_se_lee_del_ajuste(conn, raw, expected):
+    from asistente.core.settings import get_meridiem_ask_range
+
+    conn.execute("UPDATE settings SET value = ? WHERE key = 'meridiem_ask_range'", (raw,))
+    assert get_meridiem_ask_range(conn) == expected
+
+
+@pytest.mark.parametrize("raw", ["", "5", "5-", "a-b", "0-5", "5-12", "9-5", "5-11-3"])
+def test_meridiem_ask_range_invalido_falla_con_mensaje_claro(conn, raw):
+    from asistente.core.settings import get_meridiem_ask_range
+
+    conn.execute("UPDATE settings SET value = ? WHERE key = 'meridiem_ask_range'", (raw,))
+    with pytest.raises(ValueError, match="meridiem_ask_range"):
+        get_meridiem_ask_range(conn)

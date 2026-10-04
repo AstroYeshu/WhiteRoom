@@ -19,12 +19,14 @@ from typing import Literal
 from dateutil.rrule import rrulestr
 
 from asistente.parsing.dates import (
+    DEFAULT_MERIDIEM_ASK_RANGE,
     RE_TIME_LEFTOVER,
     WEEKDAYS,
     clean_title,
     fold,
     parse_when,
     scan_times,
+    strip_reminder_verb,
 )
 from asistente.timeutil import Clock, local_to_utc, to_local
 
@@ -44,6 +46,7 @@ class RecurrenceResult:
     first_at_utc: datetime | None = None
     has_time: bool = False
     reason: str | None = None
+    meridiem_inferred: bool = False
 
 
 def next_occurrence(
@@ -60,7 +63,11 @@ def next_occurrence(
 
 
 def parse_recurrence(
-    text: str, now: Clock, tz_name: str, default_morning: time
+    text: str,
+    now: Clock,
+    tz_name: str,
+    default_morning: time,
+    meridiem_ask_range: tuple[int, int] = DEFAULT_MERIDIEM_ASK_RANGE,
 ) -> RecurrenceResult:
     folded = fold(text)
     found: list[tuple[re.Match[str], str]] = []
@@ -77,12 +84,12 @@ def parse_recurrence(
     work = folded
     for match, _ in found:
         work = work[: match.start()] + " " * (match.end() - match.start()) + work[match.end() :]
-    strong, weak, work = scan_times(work)
+    strong, weak, work = scan_times(work, meridiem_ask_range)
     times = strong + weak  # la repetición hace de "día": una hora suelta 8:30 sí cuenta
     for hit in weak:
         work = work[: hit.start] + " " * (hit.end - hit.start) + work[hit.end :]
     spans = [(m.start(), m.end()) for m, _ in found] + [(h.start, h.end) for h in times]
-    title = clean_title(text, spans)
+    title = strip_reminder_verb(clean_title(text, spans))
 
     def ask(reason: str) -> RecurrenceResult:
         return RecurrenceResult("ask", title, reason=reason)
@@ -93,7 +100,7 @@ def parse_recurrence(
         return ask(times[0].value)
     if RE_TIME_LEFTOVER.search(work):
         return ask("unrecognized_time")
-    if parse_when(title, now, tz_name, default_morning).status != "none":
+    if parse_when(title, now, tz_name, default_morning, meridiem_ask_range).status != "none":
         return ask("two_dates")  # además de repetir, el texto trae otra fecha
 
     rrule = found[0][1]
@@ -102,4 +109,11 @@ def parse_recurrence(
     moment = now()
     start = local_to_utc(datetime.combine(to_local(moment, tz_name).date(), clock), tz_name)
     first = next_occurrence(rrule, start, moment, tz_name)
-    return RecurrenceResult("ok", title, rrule, first, has_time=bool(times))
+    return RecurrenceResult(
+        "ok",
+        title,
+        rrule,
+        first,
+        has_time=bool(times),
+        meridiem_inferred=bool(times) and times[0].inferred,
+    )

@@ -49,6 +49,7 @@ def test_settings_iniciales(conn):
         "default_morning_time": "09:00",
         "daily_proactive_cap": "6",
         "ledger_auto_save": "0",
+        "meridiem_ask_range": "5-11",
     }
 
 

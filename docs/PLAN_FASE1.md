@@ -37,25 +37,25 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
    (`format_when` aquí; los botones en el bloque 7).
 2. "mañana" es el día salvo que vaya precedido de `la / esta / cada / toda` ("de la mañana", "por la mañana").
    Un periodo sin hora ("mañana por la mañana") → pregunta.
-3. **Hora sin am/pm (IMPLEMENTADA tal cual; pendiente de tu visto bueno)**. Tabla real, reloj fijo sáb 2026-10-03 15:30:
-   | Texto | Resultado | Por qué |
+3. **Hora sin am/pm (APROBADA, 2026-10-03; sustituye al pivote 7).** Reloj fijo sáb 2026-10-03 15:30, "mañana" = domingo 4:
+   | Texto | Resultado | `meridiem_inferred` |
    |---|---|---|
-   | mañana a las 1 … 6 | 1:00 pm … 6:00 pm | 1–6 → tarde |
-   | mañana a las 7 … 11 | 7:00 am … 11:00 am | 7–11 → mañana |
-   | mañana a las 12 | 12:00 pm | 12 → mediodía |
-   | mañana a las 13 / 18 / 23 | 1:00 pm / 6:00 pm / 11:00 pm | ≥ 13 → 24 h |
-   | mañana a las 0 | 12:00 am (medianoche del día) | 0 → 24 h |
-   | mañana 08:30 / 05:00 | 8:30 am / 5:00 am | cero inicial → 24 h literal |
-   | mañana 6:30 (sin "a las") | 6:30 pm | `H:MM` suelto sigue la regla 1–6 → tarde; vale solo porque hay un día |
-   | mañana 12 am / 12 de la noche | PREGUNTA (`ambiguous_time`) | ¿medianoche de hoy o de mañana? |
-   | mañana a las 8 pm / 8 de la mañana | 8:00 pm / 8:00 am | con marcador, siempre se respeta |
-   Reglas, de arriba abajo:
-   - Con `am`/`pm` o `de la mañana/tarde/noche/madrugada`: se respeta (12 am y 12 de la noche → pregunta).
-   - 13–23 y 0 → reloj de 24 h. Con cero inicial (`08:30`, `05:00`) → 24 h literal.
-   - 12 → mediodía. **7–11 → mañana (am). 1–6 → tarde (pm).** Nadie agenda a la 1–6 am; clases a las 7–11 am.
-   - La confirmación siempre muestra "am/pm", así que un error se ve y se corrige con [Cambiar].
-   - `H:MM` suelto sin "a las"/am/pm (p. ej. un versículo "Juan 3:16") solo cuenta como hora si el texto trae también un día.
+   | con am/pm, "de la mañana/tarde/noche/madrugada" o 24 h (13–23, 0, `08:30`) | se respeta | no |
+   | mañana a las 12 | 12:00 pm (mediodía) | no |
+   | mañana a las 12 am / 12 de la noche | PREGUNTA (`ambiguous_time`): ¿medianoche de hoy o de mañana? | — |
+   | mañana a las 1 / 2 / 3 / 4 (y `H:MM` suelto, p. ej. `3:30`) | 1:00 pm … 4:00 pm | **sí** |
+   | mañana a las 5 … 11 (y `H:MM` suelto, p. ej. `6:30`) | PREGUNTA (`ambiguous_meridiem`) con las dos lecturas ya resueltas, p. ej. 9:00 am / 9:00 pm | — |
+   - El rango que se pregunta es `meridiem_ask_range` (por defecto `5-11`): el parser lo recibe como parámetro y vive en
+     `settings` (migración 003, ya aplicada; `core/settings.get_meridiem_ask_range`). Por debajo del rango se asume tarde,
+     por encima mañana. Debe cumplir 1 ≤ bajo ≤ alto ≤ 11.
+   - Las opciones de `ambiguous_meridiem` solo incluyen lecturas FUTURAS (hoy a las 15:30, "a las 8" ofrece solo 8 pm);
+     si ninguna es futura, se pregunta por el pasado (`past`) con la alternativa de mañana.
+   - Combinada con "el sábado" siendo sábado: primero se pregunta el día (`same_weekday`) y la hora después.
+   - `H:MM` suelto (sin "a las"/am/pm) solo cuenta si el texto trae también un día ("Juan 3:16" no es hora).
    - "a las 8 y media / y cuarto" se entienden; "menos cuarto", "medianoche" → pregunta.
+   - El texto ya está en la bandeja cuando se pregunta, así que no se pierde nada.
+   - **Para el bloque 7:** mostrar `ambiguous_meridiem` como dos botones (las dos opciones) y, cuando `meridiem_inferred`,
+     el botón "Cambiar a am/pm" en la confirmación.
 4. Día de la semana igual al de hoy ("el viernes" siendo viernes) → pregunta (hoy / en 7 días).
    "próximo viernes" siendo viernes → +7; "este viernes" siendo viernes → hoy.
 5. Fecha/hora ya pasada → pregunta (con la alternativa futura más natural); jamás se crea en el pasado.
@@ -64,13 +64,18 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
 7. Dos fechas, dos horas, hora dudosa o con restos sin entender ("8:30 menos cuarto") → pregunta.
 8. Sin hora → `default_morning_time` (`has_time=False`, para avisar "hora por defecto").
 9. "en N minutos/horas" (instante exacto), "en N días/semanas" (día a `default_morning_time`). "estudiar 2 horas" no es fecha.
-10. Un día de la semana con mayúscula a mitad de frase ("llamar a Domingo") se toma como nombre propio, no como fecha.
-    **DEFECTO CONOCIDO (detectado el 2026-10-03, sin corregir):** la regla 10 también descarta "el Domingo",
-    "este Domingo" y "para el Domingo" (con mayúscula), que deberían ser fechas. Peor: "reunión el Domingo a las 5 pm"
-    se interpreta como HOY sábado 5 pm (ignora el día y deja solo la hora). Corrección propuesta: tratar como nombre
-    propio solo si NO lo precede `el / este / próximo / para` ni va seguido de `que viene`; y si se descarta un día
-    pero queda una hora, preguntar en vez de asumir "hoy". Pendiente de aprobación.
-Pruebas: tabla con reloj fijo (sáb 2026-10-03 15:30, México), ≥ 60 frases incluidos falsos positivos.
+10. **"Domingo" como nombre propio (CORREGIDO 2026-10-03).** La heurística aplica SOLO a "Domingo": los otros seis
+    días con mayúscula (el Viernes, Martes a las 5...) siguen siendo fecha. "Domingo" es nombre si va con mayúscula
+    a mitad de frase y SIN `el / este / esta / próximo / que viene` ("llamar a Domingo", "salir con Domingo",
+    "regalo para Domingo"). Con determinante es fecha con cualquier capitalización ("el Domingo", "este DOMINGO",
+    "Domingo que viene"). Al inicio del texto es fecha. Si todo el texto está en mayúsculas, la capitalización no
+    informa y también es fecha. Si se descarta un "Domingo" como nombre y queda una hora ("llamar a Domingo a las 5"),
+    se PREGUNTA (`name_or_day`); nunca se asume "hoy". Si hay otro día ("llamar a Domingo mañana a las 5 pm"), manda ese día.
+11. **Título**: se quita el verbo inicial `recordar / recordarme / recuérdame` (y un `que`/`de` que lo siga) solo si hay
+    fecha y queda algo más: "recordar mañana 8am llevar tarea de cálculo" → "llevar tarea de cálculo". Sin fecha el título
+    no se toca ("recordar mi contraseña").
+Pruebas: tablas con reloj fijo (sáb 2026-10-03 15:30, México): frases con falsos positivos, horas 1–12 con y sin
+marcador y `H:MM` suelto, y la matriz 7 días × 3 capitalizaciones × 5 contextos para "Domingo".
 
 Recurrencia (`parsing/recurrence.py`, lista cerrada): "todos los días [hora]", "cada <día> [hora]", "de lunes a viernes [hora]".
 Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación y próxima fecha antes de guardar.
@@ -93,8 +98,9 @@ Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación
 13. Tick sin solapamiento.
 14. `is_quiet_hour`: normal, cruce de medianoche, bordes, `start==end`, zonas.
 
-## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 303 passed; `ruff check .`: limpio
-Pendientes: 6, 7 y 8, más el defecto de la regla 10 (arriba).
+## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 526 passed; `ruff check .`: limpio
+Además: regla 3 nueva (migración 003 con `meridiem_ask_range`), corrección de "Domingo" y verbo inicial del título.
+Pendientes: 6, 7 y 8.
 
 ## Decisiones de implementación (a revisar)
 2. **Estado "detenido" = `attempts = 1000`** (`STOPPED_ATTEMPTS`), un valor centinela, para no añadir otra migración.
@@ -126,5 +132,6 @@ Pendientes: 6, 7 y 8, más el defecto de la regla 10 (arriba).
 - [x] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`
 - **— CORTE PRINCIPAL —**
 - [ ] 6. Scheduler (`on_tick`, tick al arrancar) y botones de recordatorio — `Fase 1: scheduler y botones de recordatorio`
-- [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar — `Fase 1: bandeja y comandos`
+- [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar; botones de `ambiguous_meridiem` (dos opciones)
+  y "Cambiar a am/pm" cuando `meridiem_inferred` — `Fase 1: bandeja y comandos`
 - [ ] 8. README, verificación final y manual en `--dry-run` — `Fase 1: documentación y verificación`
