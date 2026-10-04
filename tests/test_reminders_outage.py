@@ -6,6 +6,7 @@ Reloj inicial: sábado 2026-10-03 15:30 en México (21:30 UTC). Silencio: 22:00-
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from datetime import datetime, timedelta
 
 import pytest
@@ -35,8 +36,27 @@ def engine(conn, channel, clock) -> ReminderEngine:
     return ReminderEngine(conn, channel, USER, TZ, clock)
 
 
+# Un solo bucle de asyncio para TODAS las pruebas del módulo. Crear uno por prueba (`asyncio.run`)
+# a veces se colgaba en Windows dentro de `_fallback_socketpair` (socket interno del bucle).
+_runner: asyncio.Runner | None = None
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _module_loop():
+    global _runner
+    with asyncio.Runner() as runner:
+        _runner = runner
+        yield runner
+    _runner = None
+
+
+def run(coroutine: Coroutine):
+    assert _runner is not None, "falta el fixture _module_loop"
+    return _runner.run(coroutine)
+
+
 def tick(engine: ReminderEngine) -> int:
-    return asyncio.run(engine.tick())
+    return run(engine.tick())
 
 
 def row(conn, reminder_id: int):
@@ -82,16 +102,16 @@ def test_reiniciar_el_proceso_no_reinicia_el_horizonte(conn, clock, channel):
     )
     channel.always_fail_with(DOWN)
     clock.advance(minutes=1)
-    asyncio.run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # primer fallo
+    run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # primer fallo
     first_failure = clock()
 
     clock.current = first_failure + timedelta(hours=23, minutes=59)
-    asyncio.run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # proceso nuevo
+    run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # proceso nuevo
     assert row(conn, created.id).stopped is False
     assert row(conn, created.id).first_failed_at == to_utc_iso(first_failure)  # intacto
 
     clock.current = first_failure + timedelta(hours=24, minutes=1)
-    asyncio.run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # otro proceso nuevo
+    run(ReminderEngine(conn, channel, USER, TZ, clock).tick())  # otro proceso nuevo
     assert row(conn, created.id).stopped is True
 
 
@@ -369,3 +389,23 @@ def test_detener_y_crear_la_siguiente_de_la_serie_es_una_transaccion(
     assert len(rows) == 2
     assert row(conn, first.id).stop_reason == "permanent:bot_blocked"
     assert row(conn, first.id).stopped_at is not None  # stopped_at => ya se generó la siguiente
+
+
+def test_todas_las_pruebas_del_modulo_comparten_un_solo_bucle(conn, clock, engine, channel):
+    """Garantía del arreglo del cuelgue en Windows: un bucle por módulo, no uno por tick."""
+    loops: list[int] = []
+    original = channel.send_choices
+
+    async def spy(*args, **kwargs):
+        loops.append(id(asyncio.get_running_loop()))
+        return await original(*args, **kwargs)
+
+    channel.send_choices = spy
+    for minutes in (1, 2):
+        reminders.create_reminder(conn, f"r{minutes}", clock() + timedelta(minutes=minutes), clock)
+    clock.advance(minutes=1)
+    tick(engine)
+    clock.advance(minutes=1)
+    tick(engine)
+    assert len(loops) == 2 and len(set(loops)) == 1
+    assert loops[0] == id(_runner.get_loop())
