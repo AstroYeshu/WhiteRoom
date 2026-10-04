@@ -122,21 +122,39 @@ def create_reminder(
     priority: int = 1,
 ) -> Reminder:
     """Crea un recordatorio pendiente. Nunca en el pasado (lanza `PastReminderError`)."""
+    with conn:
+        reminder_id = _insert_reminder(
+            conn, text, fire_at_utc, now, area_id, task_id, rrule, priority
+        )
+    reminder = get_reminder(conn, reminder_id)
+    assert reminder is not None
+    return reminder
+
+
+def _insert_reminder(
+    conn: sqlite3.Connection,
+    text: str,
+    fire_at_utc: datetime,
+    now: Clock,
+    area_id: int | None,
+    task_id: int | None,
+    rrule: str | None,
+    priority: int,
+) -> int:
+    """Valida e inserta SIN abrir ni cerrar transacción: la pone quien llama (para poder
+    juntar varias escrituras en una sola, p. ej. una tarea y sus avisos)."""
     moment = now()
     if fire_at_utc <= moment:
         raise PastReminderError("No se crean recordatorios en el pasado")
     if rrule is not None:
         rrulestr(rrule, dtstart=fire_at_utc)  # ValueError si la regla no es válida
-    with conn:
-        cursor = conn.execute(
-            "INSERT INTO reminders"
-            " (task_id, text, area_id, fire_at_utc, rrule, priority, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (task_id, text, area_id, to_utc_iso(fire_at_utc), rrule, priority, to_utc_iso(moment)),
-        )
-    reminder = get_reminder(conn, cursor.lastrowid)
-    assert reminder is not None
-    return reminder
+    cursor = conn.execute(
+        "INSERT INTO reminders (task_id, text, area_id, fire_at_utc, rrule, priority, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (task_id, text, area_id, to_utc_iso(fire_at_utc), rrule, priority, to_utc_iso(moment)),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
 
 
 def list_pending(conn: sqlite3.Connection) -> list[Reminder]:
@@ -213,11 +231,16 @@ def cancel_for_task(conn: sqlite3.Connection, task_id: int) -> int:
     (`sent`, `done`) no se toca. Devuelve cuántos canceló.
     """
     with conn:
-        cursor = conn.execute(
-            "UPDATE reminders SET status = 'cancelled' WHERE task_id = ? AND ("
-            " status = 'pending' OR (status = 'sent' AND priority = 2 AND nag_count < ?))",
-            (task_id, NAG_MAX_RESENDS),
-        )
+        return cancel_for_task_in_transaction(conn, task_id)
+
+
+def cancel_for_task_in_transaction(conn: sqlite3.Connection, task_id: int) -> int:
+    """Como `cancel_for_task`, pero dentro de la transacción de quien llama (no hace commit)."""
+    cursor = conn.execute(
+        "UPDATE reminders SET status = 'cancelled' WHERE task_id = ? AND ("
+        " status = 'pending' OR (status = 'sent' AND priority = 2 AND nag_count < ?))",
+        (task_id, NAG_MAX_RESENDS),
+    )
     return cursor.rowcount
 
 
@@ -229,15 +252,31 @@ def create_preparation_reminders(
     due_at_utc: datetime,
     now: Clock,
 ) -> list[Reminder]:
-    """Avisos 1 día y 1 hora antes del vencimiento; solo los que todavía no pasaron."""
+    """Avisos 1 día y 1 hora antes del vencimiento; solo los que todavía no pasaron.
+
+    Los crea todos o ninguno (una transacción).
+    """
+    with conn:
+        ids = insert_preparation_reminders(conn, task_id, title, area_id, due_at_utc, now)
+    return [r for r in (get_reminder(conn, i) for i in ids) if r is not None]
+
+
+def insert_preparation_reminders(
+    conn: sqlite3.Connection,
+    task_id: int,
+    title: str,
+    area_id: int | None,
+    due_at_utc: datetime,
+    now: Clock,
+) -> list[int]:
+    """Inserta los avisos de preparación dentro de la transacción de quien llama (no hace commit).
+    Devuelve los ids creados."""
     created = []
     for offset, label in PREPARATION_NOTICES:
         fire_at = due_at_utc - offset
         if fire_at > now():
             created.append(
-                create_reminder(
-                    conn, f"{label}: {title}", fire_at, now, area_id=area_id, task_id=task_id
-                )
+                _insert_reminder(conn, f"{label}: {title}", fire_at, now, area_id, task_id, None, 1)
             )
     return created
 

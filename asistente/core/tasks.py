@@ -47,7 +47,7 @@ def create_task(
     Con `due_at_utc` también crea los avisos de preparación (1 día y 1 hora antes, si no pasaron).
     """
     stamp = to_utc_iso(now())
-    with conn:
+    with conn:  # la tarea y sus avisos: o se crean todos o ninguno (M8)
         cursor = conn.execute(
             "INSERT INTO tasks (title, area_id, due_at_utc, source_text, created_at, updated_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
@@ -60,10 +60,12 @@ def create_task(
                 stamp,
             ),
         )
-    task = get_task(conn, cursor.lastrowid)
+        task_id = cursor.lastrowid
+        assert task_id is not None
+        if due_at_utc is not None:
+            reminders.insert_preparation_reminders(conn, task_id, title, area_id, due_at_utc, now)
+    task = get_task(conn, task_id)
     assert task is not None
-    if due_at_utc is not None:
-        reminders.create_preparation_reminders(conn, task.id, title, area_id, due_at_utc, now)
     return task
 
 
@@ -83,18 +85,18 @@ def set_due(
     Los recordatorios ligados a una tarea (`task_id`) son solo los de preparación; los que el
     usuario crea a mano no llevan `task_id`, así que no se tocan.
     """
-    with conn:
+    with conn:  # fecha, avisos viejos y avisos nuevos: una sola transacción (M8)
+        task = get_task(conn, task_id)
         conn.execute(
             "UPDATE tasks SET due_at_utc = ?, updated_at = ? WHERE id = ?",
             (to_utc_iso(due_at_utc) if due_at_utc else None, to_utc_iso(now()), task_id),
         )
-        reminders.cancel_for_task(conn, task_id)
-    task = get_task(conn, task_id)
-    # Abierta o pospuesta: una tarea pospuesta con fecha nueva también necesita sus avisos (M7).
-    if due_at_utc is not None and task is not None and task.status in ("open", "postponed"):
-        reminders.create_preparation_reminders(
-            conn, task.id, task.title, task.area_id, due_at_utc, now
-        )
+        reminders.cancel_for_task_in_transaction(conn, task_id)
+        # Abierta o pospuesta: una tarea pospuesta con fecha nueva también necesita avisos (M7).
+        if due_at_utc is not None and task is not None and task.status in ("open", "postponed"):
+            reminders.insert_preparation_reminders(
+                conn, task.id, task.title, task.area_id, due_at_utc, now
+            )
 
 
 CONVERSION_REASONS = ("converted_to_reminder", "converted_to_note")
@@ -120,7 +122,7 @@ def _close(
             (status, stamp, stamp, closed_reason, task_id),
         )
         if cursor.rowcount == 1:
-            reminders.cancel_for_task(conn, task_id)
+            reminders.cancel_for_task_in_transaction(conn, task_id)
     return cursor.rowcount == 1
 
 
@@ -154,7 +156,7 @@ def postpone_task(conn: sqlite3.Connection, task_id: int, until_utc: datetime, n
             (to_utc_iso(until_utc), stamp, task_id),
         )
         if cursor.rowcount == 1:
-            reminders.cancel_for_task(conn, task_id)
+            reminders.cancel_for_task_in_transaction(conn, task_id)
     return cursor.rowcount == 1
 
 
