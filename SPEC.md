@@ -359,6 +359,10 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 - **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
   el silencio salen en orden, con la etiqueta "(retrasado)".
 - **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
+  `🌅 Mañana` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
+  (si todavía no pasó).
+- **Reloj**: el motor relee el reloj en cada envío; el silencio, el "(retrasado)" y las horas registradas
+  usan la hora de ESE envío, no la del inicio del tick (un canal lento no los falsea).
 - **Antes de enviar**: se relee la fila; si ya no sigue `pending` (o `sent`, en una insistencia) con la misma
   `fire_at_utc`, no se envía.
 - **Tras enviar**: marcar `sent` y `last_fired_at` solo si la fila sigue `pending` con la misma `fire_at_utc`
@@ -383,7 +387,10 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
   fila pospuesta o reenviada NO crea otra siguiente. Si un recordatorio repetido se rinde, la serie continúa:
   detener la fila e insertar la siguiente también es UNA transacción.
 - **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces (`nag_count`), si no se pulsa ✅ Hecho.
+  Un reenvío solo toca la fila si sigue en `sent`: hecho, cancelado o pospuesto durante el envío no se pisa.
 - **Tareas**: hacer, descartar o posponer una tarea cancela sus recordatorios pendientes (también los de preparación).
+  Crear una tarea con fecha, o cambiar su fecha, es UNA transacción con sus avisos de preparación (o se hace todo
+  o nada); cambiar la fecha de una tarea pospuesta también rehace sus avisos.
 - **Fechas pasadas**: nunca se crea un recordatorio en el pasado; se pregunta.
 - **Sin solapamiento**: un tick no empieza si el anterior sigue en curso.
 - **Arranque tras caída**: los vencidos se disparan con "(retrasado)"; no se pierden.

@@ -102,8 +102,9 @@ Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación
 ## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 526 passed; `ruff check .`: limpio
 Además: regla 3 nueva (migración 003 con `meridiem_ask_range`), corrección de "Domingo" y verbo inicial del título.
 Pendientes: 6, 7 y 8.
-Revisión de robustez (commits M1-M10, antes del bloque 6): hechos M2, migración 004, M3/M6/M13 y códigos de detención;
-el resto (M7, M8, M9, M10, M5) se marca abajo al completarse.
+Revisión de robustez (antes del bloque 6) HECHA: M2, migración 004, M3/M6/M13, códigos de detención, M7, M8, M9, M10 y M5
+(un commit cada uno, con la prueba escrita antes; `pytest -q`: 584 passed; `ruff check .`: limpio). Pendiente: M1 (inicio del
+bloque 6) y la deuda conocida de abajo.
 
 ## Decisiones de implementación (a revisar)
 2. **Estado "detenido" = `stop_reason` no nulo** (migración 004; sustituye al centinela `attempts = 1000`).
