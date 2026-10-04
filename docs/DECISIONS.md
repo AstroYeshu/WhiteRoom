@@ -190,3 +190,6 @@ claro; un código desconocido sale como «motivo desconocido» y el crudo solo a
 
 ## Cobertura del corte 3
 Se compararon las 30 pruebas quitadas de `test_commands.py` con `test_vistas.py` (`docs/COBERTURA_CORTE3.md`). Huecos reales cerrados: aviso a las 00:00 exactas en /hoy, escape de texto en /hoy y /recordatorios, y privacidad en logs de los botones de /pendientes. Las pruebas de uso de /tarea, /nota y /nuevaarea solo verifican el prefijo «Aviso · Escribe /comando», no el ejemplo completo (decisión: el ejemplo cambia a menudo).
+
+## Kit de despliegue: unidad systemd
+`deploy/asistente.service` usa `EnvironmentFile` (lo pidió el dueño) con marcadores `<USUARIO>` y `<RUTA_PROYECTO>`. Como systemd no quita comentarios al final de línea, el `.env.example` los lleva en líneas propias y una prueba lo vigila. `.gitattributes` fuerza LF en `*.sh`, `*.service` y `*.sql`; `git add --renormalize .` no cambió nada (el índice ya era LF).

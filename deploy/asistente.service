@@ -1,0 +1,31 @@
+# Unidad systemd del asistente. Cópiala a /etc/systemd/system/asistente.service y cambia TODO lo
+# marcado con <...>. Detalles paso a paso: README.md, sección "Despliegue en Raspberry Pi".
+#
+#   sudo cp deploy/asistente.service /etc/systemd/system/asistente.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now asistente
+#   journalctl -u asistente -f
+#
+# El .env se lee con EnvironmentFile: systemd NO admite comentarios al final de una línea
+# (KEY=valor # nota), así que en el .env los comentarios van en líneas propias.
+
+[Unit]
+Description=Asistente personal por Telegram
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# <USUARIO>: el usuario de Linux dueño del proyecto (p. ej. pi). No uses root.
+User=<USUARIO>
+# <RUTA_PROYECTO>: carpeta del proyecto (p. ej. /home/pi/WhiteRoom). Las rutas relativas del .env
+# (DB_PATH=data/asistente.db) se resuelven desde aquí.
+WorkingDirectory=<RUTA_PROYECTO>
+EnvironmentFile=<RUTA_PROYECTO>/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=<RUTA_PROYECTO>/venv/bin/python -m asistente.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
