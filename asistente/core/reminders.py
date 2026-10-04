@@ -21,7 +21,12 @@ from enum import Enum
 from dateutil.rrule import rrulestr
 
 from asistente.bot.choices import encode_choice_id
-from asistente.channels.base import Channel, Choice, PermanentChannelError
+from asistente.channels.base import (
+    Channel,
+    Choice,
+    PermanentChannelError,
+    TransientChannelError,
+)
 from asistente.core.settings import get_time_setting
 from asistente.parsing.recurrence import next_occurrence
 from asistente.timeutil import (
@@ -39,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 LATE_GRACE = timedelta(minutes=2)  # más tarde que esto = "(retrasado)"
 BACKOFF_BASE_SECONDS = 30
+MAX_UNEXPECTED_IN_A_ROW = 3  # fallos inesperados seguidos tras los que se corta el tick
 BACKOFF_CAP_SECONDS = 5 * 60  # tope de espera entre intentos con el canal caído
 RETRY_AFTER_CAP_SECONDS = 10 * 60  # red de seguridad: tope a lo que pide RetryAfter
 GIVE_UP_AFTER = timedelta(hours=24)  # horizonte: desde `first_failed_at` (vive en la base)
@@ -69,6 +75,7 @@ class Delivery(Enum):
     SENT = "sent"  # salió y quedó registrado
     SKIPPED = "skipped"  # no salió por esta fila (cambió, se detuvo o falló el registro)
     CHANNEL_DOWN = "channel_down"  # fallo pasajero del canal: se corta el tick
+    UNEXPECTED = "unexpected"  # excepción inesperada: ¿falla del canal o de esa fila? (ver el tick)
 
 
 class PastReminderError(ValueError):
@@ -372,6 +379,9 @@ class ReminderEngine:
         self._channel_failures = 0
         self._channel_retry_at: datetime | None = None
         self._last_failure_reason = "unknown"
+        self._unexpected_reason = (
+            "unknown"  # clase de la última excepción inesperada (solo el tipo)
+        )
 
     async def tick(self) -> int:
         """Envía lo vencido. Devuelve cuántos mensajes salieron. Nunca se solapa consigo mismo."""
@@ -386,6 +396,9 @@ class ReminderEngine:
             return 0  # el canal sigue en espera tras un fallo pasajero
         sent = 0
         due = list_due(self._conn, moment)
+        # Fallos inesperados a la espera de veredicto: si DESPUÉS sale otro recordatorio, el canal
+        # está vivo y la culpa es de esa fila (se aísla); si no, se tratan como pasajeros.
+        unexpected: list[tuple[Reminder, str]] = []
         for index, reminder in enumerate(due):
             # El reloj se relee en cada envío (M9): un canal lento no debe falsear el silencio,
             # el "(retrasado)" ni las horas registradas. Solo la consulta usa el instante del tick.
@@ -394,11 +407,39 @@ class ReminderEngine:
             result = await self._deliver(reminder)
             if result is Delivery.SENT:
                 sent += 1
+                for culprit, reason in unexpected:
+                    self._stop(culprit, f"permanent:unexpected:{reason}")
+                unexpected.clear()
             elif result is Delivery.CHANNEL_DOWN:
                 # Corta-circuito: con el canal caído no se intenta ninguno más en este tick.
+                self._settle_unexpected(unexpected, channel_counted=True)
                 self._flag_blocked(due[index + 1 :])
-                break
+                return sent
+            elif result is Delivery.UNEXPECTED:
+                unexpected.append((reminder, self._unexpected_reason))
+                if len(unexpected) >= MAX_UNEXPECTED_IN_A_ROW:
+                    self._settle_unexpected(unexpected, channel_counted=False)
+                    self._flag_blocked(due[index + 1 :])
+                    return sent
+        self._settle_unexpected(unexpected, channel_counted=False)
         return sent
+
+    def _settle_unexpected(
+        self, unexpected: list[tuple[Reminder, str]], channel_counted: bool
+    ) -> None:
+        """Sin un envío posterior que los absuelva, los fallos inesperados son pasajeros.
+
+        La espera del CANAL se cuenta una sola vez (salvo que `_deliver` ya la contara); cada
+        fila anota su propio fallo y su horizonte.
+        """
+        moment = self._now()
+        for culprit, reason in unexpected:
+            if channel_counted:
+                self._record_row_failure(culprit, moment, reason)
+            else:
+                self._fail_transient(culprit, moment, reason)
+                channel_counted = True
+        unexpected.clear()
 
     def _held_by_silence(self, reminder: Reminder) -> bool:
         return reminder.priority != 2 and self._is_quiet(self._now())
@@ -445,14 +486,12 @@ class ReminderEngine:
         except PermanentChannelError as error:
             self._stop(reminder, f"permanent:{error.reason}")
             return Delivery.SKIPPED  # un fallo permanente es de ESA fila: los demás siguen
-        except Exception as error:  # noqa: BLE001 - cualquier otro fallo se trata como pasajero
-            self._fail_transient(
-                reminder,
-                self._now(),
-                getattr(error, "reason", type(error).__name__),
-                getattr(error, "retry_after", None),
-            )
+        except TransientChannelError as error:
+            self._fail_transient(reminder, self._now(), error.reason, error.retry_after)
             return Delivery.CHANNEL_DOWN
+        except Exception as error:  # noqa: BLE001 - lo decide el tick (canal caído o fila rota)
+            self._unexpected_reason = type(error).__name__  # solo el tipo: nunca el texto
+            return Delivery.UNEXPECTED
         self._channel_failures = 0  # el canal respondió: se acabó la espera
         self._channel_retry_at = None
         try:
@@ -558,6 +597,11 @@ class ReminderEngine:
         if retry_after is not None:
             wait = max(wait, min(retry_after, RETRY_AFTER_CAP_SECONDS))
         self._channel_retry_at = moment + timedelta(seconds=wait)
+        self._record_row_failure(reminder, moment, reason)
+
+    def _record_row_failure(self, reminder: Reminder, moment: datetime, reason: str) -> None:
+        """Anota el fallo en la FILA (intentos y horizonte); no cambia la espera del canal."""
+        self._last_failure_reason = reason
         first_failed = (
             from_utc_iso(reminder.first_failed_at) if reminder.first_failed_at else moment
         )
