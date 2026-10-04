@@ -1,0 +1,474 @@
+# SPEC — Asistente personal por Telegram
+
+> Se construye por fases. Cada fase se implementa en una sesión limpia de Claude Code
+> (`/clear` entre fases). Lee `CLAUDE.md` primero. Implementa solo la fase pedida.
+
+## 1. Objetivo
+
+Bot privado de Telegram (un solo usuario) que corre 24/7 en una Raspberry Pi 4 como asistente
+de vida diaria. Prioridades, en orden:
+
+1. **Los recordatorios siempre suenan**, aunque falle cualquier API de IA.
+2. **Anotar cuesta ≤ 5 segundos y casi sin teclear**: el usuario escribe solo la cosa; el sistema decide
+   el tipo y el área, o pregunta con botones si duda.
+3. **El saldo siempre es correcto** (cálculo determinista, nunca por IA).
+4. **Costo de IA de unos pocos dólares al mes**, medido y con tope.
+
+## 2. Contexto del usuario
+
+Estudiante universitario con proyectos personales y actividades de iglesia. Idioma: español.
+Áreas iniciales (editables): `universidad`, `proyectos`, `iglesia`, `personal`.
+Zona horaria configurable (`TZ_NAME`).
+
+## 3. Principio de diseño: tres capas
+
+| Capa | Quién | Responsabilidad |
+|---|---|---|
+| Reflejo | **Jev** (TypeSafe) o Claude Haiku como alternativa | Decidir *qué es* (tipo) y *de qué área*. Solo elige entre opciones; no escribe texto |
+| Reglas | **Código propio** | Fechas, montos, saldos, recordatorios, quitar tareas, permisos |
+| Razonamiento | **Claude (Haiku)** | Solo cuando hay que *escribir*: nombrar una categoría nueva, paquetes de contexto, modo chat |
+
+Orden de resolución al capturar un mensaje libre: **reglas aprendidas → clasificador (Jev/Haiku) → preguntar al usuario con botones**.
+
+### 3.1 Canales y portabilidad (Telegram hoy, WhatsApp quizá después)
+
+El núcleo no sabe en qué plataforma corre. Todo lo saliente pasa por una interfaz:
+
+```python
+@dataclass
+class Choice:
+    id: str  # corto, p. ej. "done:42"
+    label: str
+
+
+class Channel(Protocol):
+    async def send_text(self, to: str, text: str, kind: str = "reply") -> None: ...
+    async def send_choices(
+        self, to: str, text: str, choices: list[Choice], kind: str = "reply"
+    ) -> None: ...
+```
+
+- `kind` ∈ `reply | reminder | briefing`: deja que cada canal decida CÓMO enviar (WhatsApp necesitará
+  plantillas aprobadas cuando esté fuera de su ventana de 24 h).
+- Los "botones" de este documento son `Choice`: Telegram los dibuja como botones inline, la consola como
+  lista numerada y un futuro canal de WhatsApp como botones de respuesta (máx. 3) o lista.
+- Entrada: cada canal convierte lo recibido en `IncomingMessage(channel, user_ref, text)` o
+  `IncomingChoice(channel, user_ref, choice_id)` y llama a `bot.handlers`.
+- **Solo `channels/telegram.py` importa la librería de Telegram.** `core/` y `bot/` jamás.
+- `core/reminders.py` y `core/briefing.py` reciben el `Channel` por inyección (se prueban con un canal falso).
+- Para un futuro adaptador de WhatsApp (NO implementar ahora): requiere webhook HTTPS público con verificación
+  de firma (p. ej. mediante un túnel de salida); mensajes libres solo dentro de la ventana de 24 h y plantillas
+  aprobadas fuera de ella; sin conversación abierta con LLM (política de Meta sobre asistentes de propósito
+  general), así que `/chat` queda solo en Telegram; Telegram sigue siendo el canal principal.
+
+## 4. Stack
+
+- Python 3.11+
+- `python-telegram-bot` (v20+, asíncrono, con extra `job-queue`) — modo **long polling** (sin puertos abiertos)
+- `sqlite3` de la biblioteca estándar, modo WAL
+- `anthropic` (SDK oficial) para Haiku
+- `httpx` para Jev
+- `dateparser` (+ `python-dateutil` para `rrule`)
+- `python-dotenv`, `pytest`, `ruff`
+- Fijar versiones en `requirements.txt` tras instalar. Preguntar antes de añadir otra dependencia.
+
+## 5. Estructura de carpetas
+
+```
+asistente/
+├─ CLAUDE.md
+├─ SPEC.md
+├─ README.md
+├─ requirements.txt
+├─ .env.example
+├─ .gitignore                 # .env, data/, venv/, __pycache__/
+├─ asistente/
+│  ├─ main.py                 # arranque: config, DB, bot, jobs
+│  ├─ config.py               # lee y valida .env
+│  ├─ db.py                   # conexión SQLite + runner de migraciones
+│  ├─ migrations/001_init.sql
+│  ├─ timeutil.py             # UTC <-> zona local, horas de silencio, reloj inyectable
+│  ├─ channels/
+│  │  ├─ base.py              # Protocol Channel, Choice, IncomingMessage, IncomingChoice
+│  │  ├─ console.py           # canal de consola (--dry-run y pruebas)
+│  │  └─ telegram.py          # ÚNICO módulo que importa la librería de Telegram
+│  ├─ bot/                    # conversación independiente de la plataforma
+│  │  ├─ auth.py              # filtro ALLOWED_USER_ID
+│  │  ├─ handlers.py          # handle_message / handle_choice (comandos y mensajes libres)
+│  │  └─ choices.py           # opciones como datos (Choice), no como botones de una plataforma
+│  ├─ core/
+│  │  ├─ capture.py           # pipeline de captura de mensajes libres
+│  │  ├─ tasks.py
+│  │  ├─ notes.py
+│  │  ├─ reminders.py         # motor: tick, snooze, rrule, silencio
+│  │  ├─ briefing.py          # resumen diario y revisión semanal
+│  │  ├─ ledger.py            # libro de cuentas
+│  │  └─ context_pack.py      # paquetes de contexto para claude.ai
+│  ├─ classify/
+│  │  ├─ base.py              # Protocol Classifier + dataclass Classification
+│  │  ├─ rules.py             # reglas aprendidas
+│  │  ├─ jev.py
+│  │  ├─ haiku.py
+│  │  └─ decide.py            # regla de decisión por confianza
+│  ├─ llm/claude.py           # cliente Anthropic + registro de uso/costo
+│  └─ parsing/
+│     ├─ dates.py             # envoltura de dateparser (español)
+│     └─ amounts.py           # regex de montos
+├─ scripts/
+│  ├─ eval_classifier.py
+│  └─ backup_db.sh
+├─ deploy/asistente.service   # unidad systemd
+├─ data/                      # (ignorado por git) asistente.db, backups/
+└─ tests/
+```
+
+## 6. Configuración (`.env.example`)
+
+```
+TELEGRAM_BOT_TOKEN=
+ALLOWED_USER_ID=                  # tu ID numérico de Telegram
+ASSISTANT_ANTHROPIC_KEY=          # NO llamarla ANTHROPIC_API_KEY (ver CLAUDE.md)
+CLAUDE_MODEL_FAST=claude-haiku-4-5-20251001
+TYPESAFE_API_KEY=                 # opcional; si falta se usa Haiku
+TYPESAFE_BASE_URL=https://api.typesafe.ai
+CLASSIFIER=rules+jev              # rules+jev | rules+haiku
+TZ_NAME=                          # zona IANA, p. ej. America/Mexico_City
+CURRENCY_CODE=                    # p. ej. MXN, USD
+DB_PATH=data/asistente.db
+MONTHLY_API_BUDGET_USD=8          # tope de gasto en IA; al superarlo se desactivan las rutas con LLM
+DRY_RUN=0                         # equivale al flag --dry-run (multiplataforma)
+LOG_LEVEL=INFO
+```
+
+## 7. Modelo de datos (`migrations/001_init.sql`)
+
+Todas las marcas de tiempo son TEXT ISO-8601 en **UTC**. Nada se borra.
+
+```sql
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE areas (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL,            -- se usa como "criteria" para Jev: redactarla bien importa
+  archived    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL
+);
+
+CREATE TABLE tasks (
+  id                  INTEGER PRIMARY KEY,
+  title               TEXT NOT NULL,
+  area_id             INTEGER REFERENCES areas(id),   -- NULL = sin área
+  due_at_utc          TEXT,
+  status              TEXT NOT NULL DEFAULT 'open'
+                      CHECK (status IN ('open','done','postponed','dropped')),
+  postponed_until_utc TEXT,
+  source_text         TEXT,                           -- lo que el usuario escribió originalmente
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  closed_at           TEXT
+);
+
+CREATE TABLE reminders (
+  id            INTEGER PRIMARY KEY,
+  task_id       INTEGER REFERENCES tasks(id),
+  text          TEXT NOT NULL,
+  area_id       INTEGER REFERENCES areas(id),
+  fire_at_utc   TEXT NOT NULL,
+  rrule         TEXT,                                 -- RFC 5545, p. ej. FREQ=WEEKLY;BYDAY=SU
+  priority      INTEGER NOT NULL DEFAULT 1 CHECK (priority IN (1,2)),  -- 2 = insistir
+  status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','sent','done','cancelled')),
+  snooze_count  INTEGER NOT NULL DEFAULT 0,
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL,
+  last_fired_at TEXT
+);
+CREATE INDEX idx_reminders_due ON reminders(status, fire_at_utc);
+
+CREATE TABLE notes (
+  id         INTEGER PRIMARY KEY,
+  text       TEXT NOT NULL,
+  area_id    INTEGER REFERENCES areas(id),
+  created_at TEXT NOT NULL,
+  archived   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE accounts (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,                    -- efectivo, tarjeta, ahorro...
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE ledger (
+  id           INTEGER PRIMARY KEY,
+  ts_utc       TEXT NOT NULL,
+  account_id   INTEGER NOT NULL REFERENCES accounts(id),
+  kind         TEXT NOT NULL CHECK (kind IN ('expense','income','adjustment')),
+  amount_cents INTEGER NOT NULL,                      -- con signo: gasto < 0, ingreso > 0
+  category     TEXT,
+  note         TEXT,
+  voided       INTEGER NOT NULL DEFAULT 0,
+  CHECK ((kind = 'expense' AND amount_cents < 0)
+      OR (kind = 'income'  AND amount_cents > 0)
+      OR  kind = 'adjustment')
+);
+
+CREATE TABLE classification_log (
+  id               INTEGER PRIMARY KEY,
+  ts_utc           TEXT NOT NULL,
+  text_norm        TEXT NOT NULL,
+  source           TEXT NOT NULL CHECK (source IN ('rule','jev','haiku','user')),
+  pred_kind        TEXT, pred_kind_conf REAL,
+  pred_area        TEXT, pred_area_conf REAL,
+  latency_ms       INTEGER,
+  final_kind       TEXT, final_area TEXT,
+  user_corrected   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE learned_rules (
+  id         INTEGER PRIMARY KEY,
+  text_norm  TEXT NOT NULL UNIQUE,                    -- texto normalizado sin fechas ni números
+  kind       TEXT NOT NULL,
+  area_id    INTEGER REFERENCES areas(id),
+  hits       INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+-- Valores iniciales: briefing_time=07:30, quiet_start=22:00, quiet_end=07:00,
+-- auto_threshold=0.80, ask_threshold=0.50, default_morning_time=09:00,
+-- daily_proactive_cap=6, ledger_auto_save=0
+
+CREATE TABLE usage_log (
+  id            INTEGER PRIMARY KEY,
+  ts_utc        TEXT NOT NULL,
+  provider      TEXT NOT NULL,                        -- anthropic | typesafe
+  model         TEXT,
+  input_tokens  INTEGER, output_tokens INTEGER,
+  cost_usd_est  REAL
+);
+```
+
+Saldo por cuenta (la ÚNICA forma de calcularlo):
+
+```sql
+SELECT a.name, SUM(l.amount_cents) AS balance_cents
+FROM ledger l JOIN accounts a ON a.id = l.account_id
+WHERE l.voided = 0 GROUP BY a.id;
+```
+
+## 8. Comportamientos
+
+### 8.1 Captura de mensajes libres (`core/capture.py`)
+
+Todo mensaje que no sea comando entra a este pipeline:
+
+1. Normalizar (minúsculas, sin acentos, espacios). **Guardar siempre primero** el texto original en
+   una bandeja de entrada (tarea sin área) para que nada se pierda si algo falla después.
+2. Extraer fecha/hora con `dateparser.search.search_dates` (idioma `es`, preferir fechas futuras, zona
+   `TZ_NAME`). Si hay 0 fechas → sin fecha. Si hay más de una o es ambigua → preguntar con botones.
+3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
+4. Clasificar (8.2).
+5. Crear la entidad (tarea, recordatorio, nota o gasto) y responder compacto:
+   `✅ Tarea · universidad · vie 17:00   [✏ Cambiar] [↩ Deshacer]`.
+6. Si el tipo es recordatorio y no hay hora válida: preguntar "¿Cuándo?" con botones rápidos
+   (Hoy 6 pm · Mañana {default_morning_time} · Elegir...).
+
+### 8.2 Clasificación (`classify/`)
+
+Interfaz común (`Protocol`): `classify(text: str, areas: list[Area]) -> Classification` con
+`kind`, `kind_conf`, `area`, `area_conf`, `source`, `latency_ms`. Se elige la implementación por
+`CLASSIFIER`. Debe ser intercambiable sin tocar el resto del sistema.
+
+**Orden:** (a) `rules.py` coincidencia exacta con `learned_rules` → resuelve sin llamadas externas;
+(b) Jev, o Haiku si Jev no está configurado o falla; (c) preguntar.
+
+**Jev** (`classify/jev.py`):
+- `POST {TYPESAFE_BASE_URL}/v1/systemone`. **Verifica la ruta y el encabezado de autenticación en
+  https://docs.typesafe.ai/api con una llamada real. No los adivines.**
+- Cuerpo: `state` (solo el texto del mensaje), `model: "jev-latest"`, `questions`:
+  - `tipo`: `choice` con criterios `task`, `reminder`, `note`, `expense`, `income` (descripciones en español).
+  - `area`: `choice` con un criterio por cada fila **no archivada** de `areas` (usando su `description`)
+    más `none`: "No encaja claramente en ninguna de las anteriores".
+- Respuesta: `answers.<pregunta>.choice`, `.probabilities`, `.confidence`.
+- Timeout 3 s. Cualquier error → fallback a Haiku o a "preguntar". Registrar latencia.
+- Enviar SOLO el texto del mensaje. Nunca saldos ni datos del libro de cuentas.
+- Los ejemplos oficiales están en inglés: validar el rendimiento en español (ver `scripts/eval_classifier.py`).
+
+**Haiku** (`classify/haiku.py`): prompt de sistema corto y estable (se cachea); responde SOLO JSON con
+`kind`, `area` y una confianza 0-1; validar con `json.loads` y try/except; `max_tokens` bajo.
+
+**Regla de decisión** (`classify/decide.py`), aplicada a tipo y a área por separado:
+
+```python
+def decide(choice, confidence, probabilities, auto=0.80, ask=0.50):
+    if choice != "none" and confidence >= auto:
+        return ("auto", choice)
+    if choice == "none" or confidence < ask:
+        return ("new_or_ask", None)  # ofrecer categoría nueva / elegir
+    top2 = [
+        k
+        for k, _ in sorted(probabilities.items(), key=lambda kv: kv[1], reverse=True)
+        if k != "none"
+    ][:2]
+    return ("ask", top2)  # botones con las dos más probables
+```
+
+Los umbrales viven en `settings` y se calibran con datos reales. Si hay que preguntar por tipo y
+por área, hacerlo en UN solo mensaje.
+
+**Categoría nueva:** botones [Crear nueva] [Elegir existente] [Dejar sin área]. Si elige crear, una
+llamada a Haiku propone `{"name", "description"}` (o el usuario escribe el nombre). Se confirma con
+botones y se inserta en `areas`; desde la siguiente petición ya forma parte de los `criteria`.
+
+**Aprendizaje:** cada confirmación o corrección escribe en `classification_log`. Tras 3
+confirmaciones idénticas del mismo `text_norm` (sin fechas ni números) se crea una fila en
+`learned_rules`.
+
+**`scripts/eval_classifier.py`:** lee `classification_log` con etiquetas finales, ejecuta cada
+clasificador disponible y reporta exactitud, matriz de confusión, latencia media y calibración
+(exactitud por tramo de confianza). Sirve para comparar Jev contra Haiku con datos propios.
+
+### 8.3 Motor de recordatorios (`core/reminders.py`)
+
+- Un job repetitivo cada 30 s consulta `reminders` con `status='pending' AND fire_at_utc <= now()`.
+- **Silencio**: dentro de `quiet_start`–`quiet_end` se retienen, salvo `priority=2`. Al terminar
+  el silencio salen en orden, con la etiqueta "(retrasado)".
+- **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
+- **Tras enviar**: marcar `sent` y `last_fired_at`. Si falla el envío, reintentar (campo `attempts`, máx. 5).
+- **Repetición**: si hay `rrule`, calcular la siguiente ocurrencia **a partir de la hora programada, no de
+  `now()`** (evita deriva) y crear/actualizar el siguiente `fire_at_utc`.
+- **Insistencia**: `priority=2` se reenvía cada 15 min, hasta 3 veces, si no se pulsa ✅ Hecho.
+- **Arranque tras caída**: los vencidos se disparan con "(retrasado)"; no se pierden.
+- **Sin LLM**: este módulo no importa nada de `llm/` ni `classify/`.
+- **Aviso automático de preparación**: toda tarea con `due_at_utc` genera recordatorios 1 día antes
+  y 1 hora antes (si esas horas aún no pasaron).
+- Tope diario `daily_proactive_cap` aplica a mensajes proactivos NO críticos (nunca a recordatorios).
+
+### 8.4 Resumen diario y "¿quitas alguna?" (`core/briefing.py`)
+
+A `briefing_time`:
+1. **Mensaje 1 — resumen por área**: vencidas, de hoy, recordatorios de hoy, y elementos de la bandeja
+   con más de 2 días sin resolver.
+2. **Mensaje 2 — ¿Quitas alguna?**: hasta 10 tareas numeradas con botones por tarea
+   `✅ Hecha · ⏭ Posponer · 🗑 Descartar`. "Posponer" ofrece mañana / elegir fecha. "Descartar" es
+   soft delete (`status='dropped'`).
+3. Si el usuario no responde, **silencio**: no se insiste.
+4. Referencias en texto libre: "quita la 2 y la 4" por regex de números; "ya hice lo de cálculo" por una
+   pregunta `choice` de Jev cuyas opciones son los títulos de las tareas abiertas (si la confianza es
+   baja, mostrar las dos más probables).
+5. `/papelera`: tareas descartadas de los últimos 14 días con botón [Restaurar].
+6. **Revisión semanal** (domingo por la noche): lo que quedó abierto y lo pospuesto.
+
+### 8.5 Libro de cuentas (`core/ledger.py`)
+
+- Guardar siempre `amount_cents` entero. Gasto negativo, ingreso positivo (lo valida el `CHECK`).
+- Mensaje tipo "gasté 85 en tacos con tarjeta": tipo por clasificador, monto por regex, cuenta y
+  categoría por botones o por coincidencia con cuentas existentes.
+- **Confirmación con botones** (Guardar / Editar / Cancelar) antes de escribir. Tras 20
+  confirmaciones sin editar, ofrecer `ledger_auto_save`; siempre con botón **Deshacer**.
+- `/deshacer` marca `voided=1` en el último movimiento (nunca `DELETE`).
+- `/saldo` muestra el saldo por cuenta y el total, calculado con la consulta de la sección 7.
+- `/ajuste <cuenta> <monto real>` inserta un movimiento `adjustment` por la diferencia, para que el
+  libro coincida con la realidad y se vea cuánto se olvida anotar.
+- Ni Jev ni Claude reciben saldos. El usuario no conecta ningún banco.
+
+### 8.6 Contexto para Claude (Fase 5)
+
+- `/contexto <área>`: arma un `.md` con la descripción del área, tareas abiertas (con fechas), notas
+  recientes (20) y recordatorios próximos. **Sin dinero** salvo que se pida explícitamente.
+- Se envía como documento. Si el texto ocupa ≤ ~1500 caracteres, se añade además un botón con enlace
+  `https://claude.ai/new?q=<texto URL-encoded>` (precarga el prompt; no lo envía automáticamente).
+- `/chat <área>`: modo conversación en Telegram con ese contexto cargado, usando Haiku. `/fin` sale
+  del modo. Es de una sola vía respecto a claude.ai: el bot no ve lo que pase allí.
+
+### 8.7 Costos y tope
+
+- Cada llamada a Anthropic/TypeSafe escribe en `usage_log`.
+- `/costos` muestra hoy, mes y estimación de cierre de mes.
+- Si el mes supera `MONTHLY_API_BUDGET_USD`: se desactivan las rutas con LLM, el bot sigue
+  funcionando con reglas, botones y recordatorios, y avisa una sola vez.
+
+## 9. Comandos (no usan LLM salvo indicación)
+
+`/start` · `/ayuda` · `/hoy [área]` · `/pendientes [área]` · `/recordatorios` · `/tarea <texto>` ·
+`/nota <texto>` · `/recordar <texto>` · `/areas` · `/nuevaarea` · `/papelera` · `/saldo` ·
+`/deshacer` · `/ajuste` · `/costos` · `/contexto <área>` (Fase 5) · `/chat <área>` (Fase 5, usa LLM)
+
+## 10. Fases y criterios de aceptación
+
+Cada fase termina con: tests en verde, `ruff check .` limpio, commit y la secuencia de verificación manual.
+
+### Fase 0 — Esqueleto
+Config, runner de migraciones, `001_init.sql`, interfaz `Channel` con `ConsoleChannel` y `TelegramChannel`
+(sección 3.1), filtro de autenticación, `/start`, `/ayuda`, tests, y el modo
+`--dry-run` (lee mensajes de la consola y usa clasificadores falsos; no conecta con Telegram ni con ninguna API
+y no requiere ningún secreto).
+- Un mensaje de un ID no autorizado no recibe respuesta alguna.
+- `pytest -q` pasa. La base se crea con el esquema completo y las áreas iniciales.
+- `python -m asistente.main --dry-run` arranca y responde en consola SIN ningún secreto configurado.
+- Claude Code construye y prueba todo con `--dry-run` y tests; las claves reales las usa solo el dueño.
+- Un test verifica que ningún módulo fuera de `channels/telegram.py` importa la librería de Telegram.
+
+### Fase 1 — Núcleo determinista (sin ningún LLM)
+Áreas, tareas, notas, recordatorios, `dateparser`, motor de recordatorios, `/hoy`, `/pendientes`.
+Mensaje libre → bandeja con botones manuales [Tarea][Recordatorio][Nota] + elegir área.
+- Pruebas con reloj falso: recordatorio único dispara a su hora; +10 min reprograma; semanal con `rrule`
+  genera la siguiente sin deriva; silencio retiene y libera; vencidos tras "caída" se disparan.
+- Verificación manual: crear "recordar mañana 8am llevar tarea de cálculo", ver que llega, probar los botones.
+
+### Fase 2 — Clasificación ágil
+`classify/*`, `decide.py`, categoría nueva, `classification_log`, reglas aprendidas, `eval_classifier.py`.
+- Tests de `decide()` con casos límite de umbral.
+- Con un clasificador falso: auto-asigna, pregunta y ofrece categoría nueva según la confianza.
+- Un archivo `tests/fixtures/phrases_es.jsonl` con ~40 frases en español y su etiqueta esperada (el dueño las revisa).
+- Verificación manual con Jev real y con Haiku sobre esas frases; comparar latencia y exactitud.
+
+### Fase 3 — Resumen y limpieza
+`briefing.py`, flujo "¿quitas alguna?", `/papelera`, revisión semanal, tope de proactivos.
+- El resumen sale a la hora; "Descartar" es recuperable; sin respuesta no hay insistencia.
+
+### Fase 4 — Dinero
+`ledger.py`, `/saldo`, `/deshacer`, `/ajuste`, confirmación con botones.
+- Tests: suma exacta con centavos; el `CHECK` rechaza gasto positivo; `voided` excluye de la suma.
+- Ningún texto enviado a Jev/Claude contiene saldos (test que revisa los payloads).
+
+### Fase 5 — Contexto y chat
+`context_pack.py`, `/contexto`, `/chat`. Aviso claro de que la ruta del enlace es de una sola vía.
+
+### Después (no implementar sin pedirlo)
+Sincronización con Google Calendar y correo (solo lectura, `gmail.readonly`).
+Adaptador de WhatsApp (Cloud API) como canal secundario, solo después de la Fase 3 y respetando la sección 3.1.
+
+## 11. Fuera de alcance
+
+WhatsApp, enviar mensajes o correos en nombre del usuario, borrar correo, conectar bancos,
+acceso a shell, interfaz web, múltiples usuarios, notas de voz.
+
+## 12. Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| Un servicio externo falla | Captura primero; clasificar después; fallback a Haiku o a preguntar |
+| Fatiga de notificaciones | Horas de silencio, tope de proactivos, sin insistencia en el resumen |
+| Saldo desfasado | Confirmación, `/deshacer`, `/ajuste` |
+| Clasificación errónea | Botón [✏ Cambiar], log de correcciones, `eval_classifier.py`, umbrales calibrables |
+| Privacidad | Solo se envía el texto del mensaje a Jev; nunca saldos; no loguear textos a nivel INFO |
+| Desgaste de la tarjeta SD | Preferir SSD por USB; WAL; respaldos diarios |
+| Inyección de prompts (fases futuras con correo) | Solo lectura, contenido del correo tratado como datos, confirmación para cualquier escritura |
+| Gasto de IA descontrolado | `usage_log`, `/costos`, `MONTHLY_API_BUDGET_USD` |
+
+## 13. Despliegue en la Raspberry Pi
+
+- Raspberry Pi OS de 64 bits, Python 3.11+, entorno virtual en `venv/`.
+- Servicio `deploy/asistente.service` (systemd) con `Restart=always`, `RestartSec=5`,
+  `EnvironmentFile=` apuntando al `.env` con `chmod 600`, y `After=network-online.target`.
+  Activar con `sudo systemctl enable --now asistente`; logs con `journalctl -u asistente -f`.
+- Sin puertos abiertos (long polling). SSH solo con llave.
+- `scripts/backup_db.sh`: `sqlite3 data/asistente.db ".backup 'data/backups/asistente-$(date +%F).db'"`
+  diario por cron y conservar 14 días. Copiar periódicamente fuera de la tarjeta SD.
+- NTP activo; la hora del sistema debe ser correcta (los recordatorios dependen de ella).
