@@ -79,6 +79,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - Tras el bug de los botones: guarda estructural `tests/test_main_wiring.py`, CLAUDE.md a 45 líneas (detalle en `docs/FLUJO.md`), respaldo con mínimo de 7
   y nunca el último, reloj de `check_env` contra `timedatectl` y último commit, UTF-8 en los scripts, `time-sync.target` en la unidad.
 
+- Etiquetas para la Fase 2: cada captura completada deja una fila `source='user'` en `classification_log` (`tests/test_classification_log.py`, 35 pruebas;
+  17 mutaciones, todas con 2 o más fallos).
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda

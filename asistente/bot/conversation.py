@@ -50,6 +50,7 @@ class Flow:
     expires_at: datetime
     step: str = STEP_KIND
     kind: str | None = None  # "t" tarea, "r" recordatorio, "n" nota
+    first_kind: str | None = None  # el primer tipo que tuvo el flujo (para saber si se corrigió)
     area_id: int | None = None
     title: str = ""  # texto del recordatorio
     candidates: tuple[datetime, ...] = ()  # opciones de fecha ya resueltas (UTC)

@@ -33,7 +33,7 @@ from asistente.bot.conversation import (
 from asistente.bot.ui import STALE_CHOICE_TEXT, show, shown
 from asistente.channels.base import Channel, Choice, IncomingChoice
 from asistente.choices import encode_choice_id
-from asistente.core import areas, notes, reminders, tasks
+from asistente.core import areas, classification, notes, reminders, tasks
 from asistente.core.runtime import RuntimeStatus
 from asistente.core.settings import get_meridiem_ask_range, get_time_setting
 from asistente.parsing.dates import WEEKDAY_NAMES_ES, fold, parse_when, strip_reminder_verb
@@ -128,6 +128,32 @@ def _area_line(ctx: Ctx, area_id: int | None) -> list[fmt.Html]:
 def _when_line(ctx: Ctx, when_utc: datetime, has_time: bool, label: str = "Cuándo") -> fmt.Html:
     when = fmt.fecha_larga(when_utc, ctx.tz_name, ctx.now)
     return fmt.detail(label, when + ("" if has_time else " (hora por defecto)"))
+
+
+KIND_NAMES = {KIND_TASK: "task", KIND_REMINDER: "reminder", KIND_NOTE: "note"}
+
+
+def _set_kind(flow: Flow, kind: str) -> None:
+    """Fija el tipo del flujo y recuerda el primero, para saber después si el dueño lo cambió."""
+    flow.kind = kind
+    if flow.first_kind is None:
+        flow.first_kind = kind
+
+
+def _record_decision(ctx: Ctx, flow: Flow, kind: str, text: str) -> None:
+    """Etiqueta para la Fase 2: lo que el dueño decidió al completar la tarjeta. Es auxiliar:
+    si no se puede guardar, la captura sigue (el texto nunca va al log)."""
+    try:
+        classification.log_user_decision(
+            ctx.conn,
+            ctx.now,
+            text,
+            KIND_NAMES[kind],
+            _area_name(ctx, flow.area_id),
+            user_corrected=flow.first_kind is not None and flow.first_kind != kind,
+        )
+    except sqlite3.Error as error:
+        logger.warning("No se pudo guardar la etiqueta de clasificación: %s", type(error).__name__)
 
 
 async def _present(
@@ -270,7 +296,8 @@ async def _start_capture(
     if kind is None and starts_with_reminder_verb(text):  # ya dijo qué es: no se pregunta
         kind = KIND_REMINDER
     if kind is not None:
-        flow.kind, flow.preview = kind, preview
+        _set_kind(flow, kind)
+        flow.preview = preview
         if ask_deadline:
             flow.deadline = _detect_deadline(ctx, text)
         await _ask_area(ctx, flow)
@@ -300,11 +327,13 @@ async def _after_area(ctx: Ctx, flow: Flow) -> None:
         await _ask_deadline(ctx, flow)
     elif flow.kind == KIND_TASK:
         tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
+        _record_decision(ctx, flow, KIND_TASK, flow.text)
         done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
         await _finish(ctx, flow, done)
     elif flow.kind == KIND_NOTE:
         notes.create_note(ctx.conn, flow.text, ctx.now, area_id=flow.area_id)
         tasks.close_as_converted(ctx.conn, flow.task_id, "converted_to_note", ctx.now)
+        _record_decision(ctx, flow, KIND_NOTE, flow.text)
         done = fmt.card(fmt.DONE_NOTE, shown(flow.text), _area_line(ctx, flow.area_id))
         await _finish(ctx, flow, done)
     else:
@@ -353,8 +382,10 @@ async def _finish_task(ctx: Ctx, flow: Flow, with_deadline: bool) -> None:
             *_area_line(ctx, flow.area_id),
             _when_line(ctx, deadline.when_utc, deadline.has_time, "Vence"),
         ]
+        _record_decision(ctx, flow, KIND_TASK, deadline.title)
         done = fmt.card(fmt.DONE_TASK, shown(deadline.title), details)
     else:
+        _record_decision(ctx, flow, KIND_TASK, flow.text)
         done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
     await _finish(ctx, flow, done)
 
@@ -494,6 +525,7 @@ async def _create(
         await _finish(ctx, flow, STALE_CHOICE_TEXT)
         return
     logger.info("Bandeja: tarea %s convertida en el recordatorio %s", flow.task_id, reminder.id)
+    _record_decision(ctx, flow, KIND_REMINDER, reminder.text)
     details = _schedule_details(ctx, reminder.area_id, when_utc, rrule, has_time)
     done = fmt.card(fmt.DONE_REMINDER, shown(reminder.text), details)
     ids = (reminder.id, flow.task_id)
@@ -532,7 +564,7 @@ async def _finish_area(ctx: Ctx, flow: Flow, description: str) -> None:
 async def _on_kind(ctx: Ctx, flow: Flow, choice: IncomingChoice, args: list[str]) -> bool:
     if len(args) != 1 or args[0] not in KIND_LABELS:
         return False
-    flow.kind = args[0]
+    _set_kind(flow, args[0])
     await _ask_area(ctx, flow)
     return True
 
@@ -606,6 +638,7 @@ async def _on_better_as_task(ctx: Ctx, flow: Flow, choice: IncomingChoice, args:
     if args:
         return False
     tasks.set_area(ctx.conn, flow.task_id, flow.area_id, ctx.now)
+    _record_decision(ctx, flow, KIND_TASK, flow.text)
     done = fmt.card(fmt.DONE_TASK, shown(flow.text), _area_line(ctx, flow.area_id))
     await _finish(ctx, flow, done)
     return True
@@ -690,7 +723,8 @@ async def handle_conversion_choice(
         return None
     await _drop_current_flow(ctx)
     flow = ctx.conversation.start(task_id, task.source_text or task.title, ctx.now, STEP_WHEN)
-    flow.kind, flow.area_id, flow.title = KIND_REMINDER, reminder.area_id, reminder.text
+    _set_kind(flow, KIND_REMINDER)
+    flow.area_id, flow.title = reminder.area_id, reminder.text
     flow.message_ref = choice.message_ref  # sigue en el mismo mensaje
     await _ask_when(ctx, flow)
     return None
