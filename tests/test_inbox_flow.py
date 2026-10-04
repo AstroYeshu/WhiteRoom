@@ -595,3 +595,46 @@ def test_hora_de_hoy_a_las_18_se_calcula_en_hora_local(bot, conn):
 
 def test_ttl_es_de_10_minutos():
     assert FLOW_TTL == timedelta(minutes=10)
+
+
+# --- Regla de «¿cuándo?»: ¿respuesta o captura nueva? -----------------------------------------
+
+
+def waiting_for_when(bot) -> int:
+    """Deja el flujo esperando la fecha y devuelve el id de la tarea de bandeja."""
+    bot.say("llamar al dentista")
+    bot.tap("Recordatorio")
+    bot.tap("Sin área")
+    assert "¿Cuándo?" in bot.question[0]
+    return all_tasks(bot.conn)[0].id
+
+
+def test_un_texto_sin_fecha_es_captura_nueva_y_avisa_que_se_descarto_la_pregunta(bot, conn):
+    first_id = waiting_for_when(bot)
+    bot.say("comprar leche")
+    assert handlers.inbox.ABANDONED_TEXT in [t for k, t, _ in bot.channel.log if k == "text"]
+    assert [t.title for t in all_tasks(conn)] == ["llamar al dentista", "comprar leche"]
+    assert tasks.get_task(conn, first_id).status == "open"  # la primera sigue en la bandeja
+    assert pending(conn) == []
+    assert bot.labels()[0] == "📝 Tarea"  # y la captura nueva pregunta qué es
+
+
+def test_hora_dudosa_en_cuando_cuenta_como_respuesta_no_como_captura(bot, conn):
+    first_id = waiting_for_when(bot)
+    bot.say("mañana a las 9")  # ambiguous_meridiem: 9 am o 9 pm
+    assert len(all_tasks(conn)) == 1
+    assert "9:00 am" in " ".join(bot.labels()) and "9:00 pm" in " ".join(bot.labels())
+    assert handlers.inbox.ABANDONED_TEXT not in [t for k, t, _ in bot.channel.log if k == "text"]
+    bot.tap("9:00 am")
+    [reminder] = pending(conn)
+    assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-04 09:00"
+    assert tasks.get_task(conn, first_id).closed_reason == "converted_to_reminder"
+
+
+def test_candidato_unico_en_cuando_cuenta_como_respuesta_y_se_confirma(bot, conn):
+    waiting_for_when(bot)
+    bot.say("hoy a las 8")  # a las 15:30 solo queda 8 pm: candidato único
+    assert len(all_tasks(conn)) == 1 and pending(conn) == []  # no se guarda en silencio
+    bot.tap("8:00 pm")
+    [reminder] = pending(conn)
+    assert reminder.text == "llamar al dentista" and local_hhmm(reminder) == "2026-10-03 20:00"
