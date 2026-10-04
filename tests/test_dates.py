@@ -51,7 +51,7 @@ OK_CASES = [
     ("viernes a las 5 pm", "2026-10-09 17:00", True, None),
     ("viernes 5pm", "2026-10-09 17:00", True, None),
     ("el domingo a las 8 pm", "2026-10-04 20:00", True, None),
-    ("domingo 20:00", "2026-10-04 20:00", True, None),
+    ("el domingo 20:00", "2026-10-04 20:00", True, None),  # regla 5: sin "el" ahora se pregunta
     ("pasado mañana", "2026-10-05 09:00", False, None),
     ("pasado mañana a las 9 am", "2026-10-05 09:00", True, None),
     ("hoy a las 6 pm llamar a mamá", "2026-10-03 18:00", True, "llamar a mamá"),
@@ -258,6 +258,9 @@ ASK_CASES = [
         "ambiguous_time",
         ["2026-10-04 00:00", "2026-10-05 00:00"],
     ),  # regla 3: medianoche
+    ("llamar a Domingo", "name_or_day", []),  # regla 5 (antes: sin fecha)
+    ("regalo para Domingo", "name_or_day", []),  # regla 5 (antes: sin fecha)
+    ("domingo 20:00", "name_or_day", []),  # regla 5 (antes: domingo 20:00)
     ("mañana a las 25", "invalid_time", []),
     ("mañana a las 15 pm", "invalid_time", []),
     ("mañana a las 0 am", "invalid_time", []),
@@ -284,7 +287,6 @@ NONE_CASES = [
     "esta mañana desayuné tarde",
     "tarea de cálculo 3",
     "comprar 1/2 kilo de arroz",
-    "llamar a Domingo",
     "leer Juan 3:16",
     "estudiar capítulo 5 de la biblia",
     "tengo 5 amigos",
@@ -294,7 +296,6 @@ NONE_CASES = [
     "sábados de limpieza",
     "5 de 10 completadas",
     "recordar mi contraseña",
-    "regalo para Domingo",
     "",
 ]
 
@@ -339,7 +340,9 @@ def test_el_titulo_conserva_el_texto_cuando_no_hay_fecha():
 
 
 # --- "Domingo": día de la semana frente a nombre propio ---------------------------------------
-# Solo "Domingo" puede ser un nombre. Los otros seis días con mayúscula siguen siendo fecha.
+# Solo "domingo" puede ser un nombre (los otros seis días siguen siendo fecha). Regla 5: sin
+# determinante (el, este, esta, próximo, que viene, para el) SE PREGUNTA con cualquier
+# capitalización y en cualquier posición; con determinante es fecha.
 
 # Para cada día: a qué fecha cae (el reloj es sábado 3) y 17:00 como hora. El sábado es "hoy".
 _DAY_DATES = {
@@ -372,7 +375,7 @@ _CONTEXTS = [
 
 
 def _expected_for(day: str, caps: str, has_determiner: bool, at_start: bool):
-    is_name = day == "domingo" and caps != "minúscula" and not has_determiner and not at_start
+    is_name = day == "domingo" and not has_determiner  # regla 5: sin importar mayúsculas ni lugar
     if is_name:
         return ("ask", "name_or_day", None)
     if day == "sabado":
@@ -415,7 +418,8 @@ def test_la_matriz_cubre_21_combinaciones_por_contexto():
         "reunión el próximo DOMINGO a las 5 pm",
         "reunión EL DOMINGO a las 5 pm",
         "reunión ESTE DOMINGO a las 5 pm",
-        "REUNIÓN DOMINGO A LAS 5 PM",  # todo en mayúsculas: la capitalización no informa
+        "REUNIÓN EL DOMINGO A LAS 5 PM",  # todo en mayúsculas pero con determinante: fecha
+        "reunión para el domingo a las 5 pm",
     ],
 )
 def test_domingo_con_determinante_o_todo_en_mayusculas_es_fecha(text):
@@ -426,8 +430,12 @@ def test_domingo_con_determinante_o_todo_en_mayusculas_es_fecha(text):
 
 def test_frases_de_domingo_del_usuario():
     assert parse("reunión el Domingo a las 5 pm").when_utc == utc("2026-10-04 17:00")
-    llamar = parse("llamar a Domingo")
-    assert (llamar.status, llamar.title) == ("none", "llamar a Domingo")
+    llamar = parse("llamar a Domingo")  # regla 5: sin determinante se pregunta, aunque no haya hora
+    assert (llamar.status, llamar.reason, llamar.title) == (
+        "ask",
+        "name_or_day",
+        "llamar a Domingo",
+    )
     ambiguous = parse("llamar a Domingo a las 5")
     assert (ambiguous.status, ambiguous.reason) == ("ask", "name_or_day")
     assert ambiguous.title == "llamar a Domingo"
@@ -438,9 +446,14 @@ def test_con_un_nombre_domingo_y_otro_dia_la_fecha_es_la_del_otro_dia():
     assert result.status == "ok" and result.when_utc == utc("2026-10-04 17:00")
 
 
-def test_domingo_con_mayuscula_al_inicio_es_fecha():
-    assert parse("Domingo").when_utc == utc("2026-10-04 09:00")
-    assert parse("Domingo a las 5 pm").when_utc == utc("2026-10-04 17:00")
+@pytest.mark.parametrize(
+    "text",
+    ["Domingo", "Domingo a las 5 pm", "domingo a las 5 pm", "DOMINGO A LAS 5 PM", "para domingo"],
+)
+def test_domingo_sin_determinante_pregunta_tambien_al_inicio(text):
+    result = parse(text)  # regla 5: al inicio y en mayúsculas ya no se asume que es el día
+    assert (result.status, result.reason) == ("ask", "name_or_day"), text
+    assert result.when_utc is None
 
 
 # --- Verbo inicial del título -----------------------------------------------------------------

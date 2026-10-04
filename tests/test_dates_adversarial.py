@@ -240,3 +240,48 @@ def test_repeticion_tambien_pregunta_por_7_30_y_numero_suelto():
 
     assert series("todos los días 7.30").reason == "dotted_time"
     assert series("cada lunes 7 pastillas").reason == "number_after_day"
+
+
+# --- Familia 4: "domingo" sin determinante (regla 5) --------------------------------------------
+DOMINGO = [
+    ("LLAMAR A DOMINGO", SAT_1530, ("ask", "name_or_day")),
+    ("llamar a domingo", SAT_1530, ("ask", "name_or_day")),
+    ("llamar a Domingo", SAT_1530, ("ask", "name_or_day")),
+    ("llamar a Domingo a las 5", SAT_1530, ("ask", "name_or_day")),
+    ("llamar a domingo a las 5 pm", SAT_1530, ("ask", "name_or_day")),
+    ("LLAMAR A DOMINGO A LAS 5 PM", SAT_1530, ("ask", "name_or_day")),
+    ("Domingo me presta el carro a las 3", SAT_1530, ("ask", "name_or_day")),
+    ("domingo misa 10 am", SAT_1530, ("ask", "name_or_day")),
+    ("regalo para domingo", SAT_1530, ("ask", "name_or_day")),
+    # Con determinante es fecha, con cualquier capitalización
+    ("misa el domingo a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("MISA EL DOMINGO A LAS 10 AM", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("misa este Domingo a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("misa para el domingo a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("misa domingo que viene a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    ("misa el próximo DOMINGO a las 10 am", SAT_1530, ("ok", "2026-10-04 10:00", True)),
+    # Los otros días no son nombres propios
+    ("misa lunes a las 10 am", SAT_1530, ("ok", "2026-10-05 10:00", True)),
+    ("LLAMAR A MARTES A LAS 5 PM", SAT_1530, ("ok", "2026-10-06 17:00", True)),
+    # Con otro día claro, "Domingo" es el nombre y manda el otro día
+    ("llamar a Domingo mañana a las 5 pm", SAT_1530, ("ok", "2026-10-04 17:00", True)),
+    ("LLAMAR A DOMINGO MAÑANA A LAS 5 PM", SAT_1530, ("ok", "2026-10-04 17:00", True)),
+]
+
+
+@pytest.mark.parametrize(("phrase", "now_local", "expected"), DOMINGO, ids=[c[0] for c in DOMINGO])
+def test_domingo(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)
+
+
+@pytest.mark.parametrize(
+    ("phrase", "title"),
+    [
+        ("llamar a Domingo mañana a las 5 pm", "llamar a Domingo"),
+        ("LLAMAR A DOMINGO MAÑANA A LAS 5 PM", "LLAMAR A DOMINGO"),
+        ("llamar a Domingo a las 5", "llamar a Domingo"),
+        ("LLAMAR A DOMINGO", "LLAMAR A DOMINGO"),
+    ],
+)
+def test_el_titulo_conserva_domingo(phrase, title):
+    assert run(phrase).title == title

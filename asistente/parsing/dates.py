@@ -460,16 +460,13 @@ def _resolve_date(
     return None, "invalid_date"
 
 
-def _is_proper_name(original: str, match: re.Match[str], has_lowercase: bool) -> bool:
-    """¿"Domingo" es un nombre de persona y no el día? Solo aplica a "Domingo".
+def _is_ambiguous_domingo(match: re.Match[str]) -> bool:
+    """¿"domingo" sin determinante? Puede ser el día o un nombre propio: no se decide.
 
-    Es nombre si va con mayúscula a mitad de frase, sin `el / este / esta / próximo / que viene`.
-    Si todo el texto está en mayúsculas la capitalización no informa, así que no se aplica.
+    Solo aplica a "domingo", con cualquier capitalización y en cualquier lugar. Con
+    `el / este / esta / próximo / que viene / para el` es el día. Los otros días no cambian.
     """
-    if match["wd"] != "domingo" or match["art"] or match["mod"] or match["qv"]:
-        return False
-    start = match.start("wd")
-    return has_lowercase and original[start].isupper() and bool(original[:start].strip())
+    return match["wd"] == "domingo" and not (match["art"] or match["mod"] or match["qv"])
 
 
 def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, bool]:
@@ -479,7 +476,6 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
     """
     hits: list[Hit] = []
     skipped_name = False
-    has_lowercase = any(ch.islower() for ch in original)
 
     def take(match: re.Match[str], kind: str, value: object) -> None:
         nonlocal work
@@ -527,8 +523,8 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
             continue  # "de la mañana": es parte del día, no el día de mañana
         take(m, "day", (today + timedelta(days=1), None, None))
     for m in list(_RE_WEEKDAY.finditer(work)):
-        if _is_proper_name(original, m, has_lowercase):
-            skipped_name = True  # "llamar a Domingo": nombre propio
+        if _is_ambiguous_domingo(m):
+            skipped_name = True  # "llamar a Domingo": ¿nombre o día?
             continue
         weekday = WEEKDAYS.index(m["wd"])
         delta = (weekday - today.weekday()) % 7
@@ -607,6 +603,9 @@ def parse_when(
         strong.extend(usable)
     hits = days + strong
     dotted = has_dotted_time(work, bool(days))
+    if skipped_name and not days:  # ¿Domingo es una persona o el día? Nunca se asume "hoy"
+        title = strip_reminder_verb(clean_title(original, [(h.start, h.end) for h in hits]))
+        return _ask(title, "name_or_day")
     if not hits:
         if verse_doubt:
             return _ask(clean_title(original, []), "time_or_verse")
@@ -623,8 +622,6 @@ def parse_when(
         return _ask(title, "number_after_day")
     instants = [h for h in days if h.kind == "instant"]
     plain_days = [h for h in days if h.kind == "day"]
-    if skipped_name and strong and not days:
-        return _ask(title, "name_or_day")  # ¿Domingo es una persona o el día? Nunca "hoy"
     if any(h.kind == "invalid" for h in days):
         return _ask(title, "invalid_date")
     if (
