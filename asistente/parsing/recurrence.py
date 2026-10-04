@@ -23,13 +23,14 @@ from dateutil.rrule import rrulestr
 
 from asistente.parsing.dates import (
     DEFAULT_MERIDIEM_ASK_RANGE,
-    RE_RECURRENCE_KEYWORD,
     RE_TIME_LEFTOVER,
     WEEKDAYS,
     WhenResult,
     clean_title,
     fold,
     has_dotted_time,
+    has_recurrence_keyword,
+    is_noun_diario,
     mask_citations,
     number_after_day,
     parse_when,
@@ -83,14 +84,15 @@ def parse_recurrence(
     folded, verse_doubt = mask_citations(fold(text))
     found: list[tuple[re.Match[str], str]] = []
     for match in _RE_DAILY.finditer(folded):
-        found.append((match, "FREQ=DAILY"))
+        if not is_noun_diario(folded, match.start()):  # "en mi diario" no es una serie
+            found.append((match, "FREQ=DAILY"))
     for match in _RE_WORKDAYS.finditer(folded):
         found.append((match, "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"))
     for match in _RE_EVERY_WEEKDAY.finditer(folded):
         day = _RRULE_DAYS[WEEKDAYS.index(match["wd"])]
         found.append((match, f"FREQ=WEEKLY;BYDAY={day}"))
     if not found:
-        if RE_RECURRENCE_KEYWORD.search(folded):  # suena a repetición pero no es de la lista
+        if has_recurrence_keyword(folded):  # suena a repetición pero no es de la lista
             return RecurrenceResult(
                 "ask", strip_reminder_verb(clean_title(text, [])), reason="unrecognized_recurrence"
             )
@@ -121,7 +123,7 @@ def parse_recurrence(
         return ask("two_dates")
     if times and isinstance(times[0].value, str):
         return ask(times[0].value)
-    if RE_RECURRENCE_KEYWORD.search(work):  # además de la serie, otra palabra de repetición
+    if has_recurrence_keyword(work):  # además de la serie, otra palabra de repetición
         return ask("unrecognized_recurrence")
     if RE_TIME_LEFTOVER.search(work):
         return ask("unrecognized_time")

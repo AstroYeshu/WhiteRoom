@@ -267,6 +267,27 @@ RECURRENCE_KEYWORD_ALT = (
     r"|(?:semanal|mensual|quincenal|anual)(?:es|mente)?"
 )
 RE_RECURRENCE_KEYWORD = re.compile(r"\b(?:" + RECURRENCE_KEYWORD_ALT + r")\b")
+# "diario" como sustantivo ("escribir en mi diario", "el diario", "un diario"): no es una serie.
+_RE_NOUN_DETERMINER_BEFORE = re.compile(r"\b(?:mi|mis|el|un|del|su|tu)\s+$")
+
+
+def is_noun_diario(folded: str, start: int) -> bool:
+    """¿La palabra que empieza en `start` es "diario" precedido de mi/mis/el/un/del/su/tu?"""
+    return folded.startswith("diari", start) and bool(
+        _RE_NOUN_DETERMINER_BEFORE.search(folded[:start])
+    )
+
+
+def has_recurrence_keyword(folded: str) -> bool:
+    """¿Hay una palabra de repetición (todos los / cada / diario / semanal / mensual...)?
+
+    "diario" precedido de mi/mis/el/un/del/su/tu es un sustantivo y no cuenta.
+    """
+    return any(
+        not is_noun_diario(folded, m.start()) for m in RE_RECURRENCE_KEYWORD.finditer(folded)
+    )
+
+
 _RE_PAST_LEFTOVER = re.compile(r"\b(?:pasad[oa]|anterior|hace)\b")
 
 
@@ -668,7 +689,7 @@ def parse_when(
         strong.extend(usable)
     hits = days + strong
     dotted = has_dotted_time(work, bool(days))
-    if RE_RECURRENCE_KEYWORD.search(folded):  # "cada mes", "semanal": nunca un aviso único
+    if has_recurrence_keyword(folded):  # "cada mes", "semanal": nunca un aviso único
         spans = [(h.start, h.end) for h in hits]
         return _ask(strip_reminder_verb(clean_title(original, spans)), "unrecognized_recurrence")
     if skipped_name and not days:  # ¿Domingo es una persona o el día? Nunca se asume "hoy"

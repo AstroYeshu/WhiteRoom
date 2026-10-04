@@ -500,4 +500,47 @@ def test_el_flujo_prueba_primero_la_repeticion_y_luego_la_fecha(monkeypatch):
 def test_la_constante_de_palabras_de_repeticion_es_compartida():
     from asistente.parsing import dates, recurrence
 
-    assert recurrence.RE_RECURRENCE_KEYWORD is dates.RE_RECURRENCE_KEYWORD
+    assert recurrence.has_recurrence_keyword is dates.has_recurrence_keyword
+
+
+# --- Familia 6b: "diario" como sustantivo no es una serie ---------------------------------------
+DIARIO = [
+    # No es repetición: "diario" es un sustantivo (mi diario, el diario, un diario...)
+    ("escribir en mi diario mañana", SAT_1530, ("once", "2026-10-04 09:00")),
+    ("escribir en mis diarios mañana", SAT_1530, ("once", "2026-10-04 09:00")),
+    ("leer el diario mañana", SAT_1530, ("once", "2026-10-04 09:00")),
+    ("comprar un diario mañana a las 8 am", SAT_1530, ("once", "2026-10-04 08:00")),
+    ("recoger el diario del lunes", SAT_1530, ("once", "2026-10-05 09:00")),
+    ("llevar su diario mañana", SAT_1530, ("once", "2026-10-04 09:00")),
+    ("traer tu diario mañana", SAT_1530, ("once", "2026-10-04 09:00")),
+    ("escribir en mi diario", SAT_1530, ("none",)),
+    # Sí es repetición
+    ("ejercicio diario", SAT_1530, ("series", "FREQ=DAILY", "2026-10-04 09:00", False)),
+    ("diario a las 8", SAT_1530, ("ask", "ambiguous_meridiem")),
+    ("diario a las 8 pm", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 20:00", True)),
+    ("ejercicio diario a las 7 pm", SAT_1530, ("series", "FREQ=DAILY", "2026-10-03 19:00", True)),
+    (
+        "escribir mi diario todos los días a las 9 pm",
+        SAT_1530,
+        ("series", "FREQ=DAILY", "2026-10-03 21:00", True),
+    ),
+    ("pagar mensual el diario", SAT_1530, ("ask", "unrecognized_recurrence")),
+]
+
+
+@pytest.mark.parametrize(("phrase", "now_local", "expected"), DIARIO, ids=[c[0] for c in DIARIO])
+def test_diario_sustantivo_o_repeticion(phrase, now_local, expected):
+    result = schedule(phrase, now_local)
+    assert result.kind == expected[0], (phrase, result)
+    if expected[0] == "series":
+        assert result.series.rrule == expected[1]
+        assert to_local(result.series.first_at_utc, TZ).strftime("%Y-%m-%d %H:%M") == expected[2]
+        assert result.series.has_time is expected[3]
+    elif expected[0] == "once":
+        assert to_local(result.when.when_utc, TZ).strftime("%Y-%m-%d %H:%M") == expected[1]
+    elif expected[0] == "ask":
+        assert result.reason == expected[1]
+
+
+def test_parse_when_solo_tampoco_trata_mi_diario_como_serie():
+    check(run("escribir en mi diario mañana"), ("ok", "2026-10-04 09:00", False))
