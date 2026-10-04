@@ -164,7 +164,10 @@ Notas para el bloque 7:
 13. Tick sin solapamiento.
 14. `is_quiet_hour`: normal, cruce de medianoche, bordes, `start==end`, zonas.
 
-## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 526 passed; `ruff check .`: limpio
+## Estado (2026-10-03): bloques 0 a 6 HECHOS — `pytest -q`: 1017 passed, 2 xfailed; `ruff check .`: limpio
+(El bloque 6 está descrito en su viñeta de más abajo; pendientes: 7 y 8.)
+
+### Estado anterior (bloques 0 a 5b) — `pytest -q`: 526 passed
 Además: regla 3 nueva (migración 003 con `meridiem_ask_range`), corrección de "Domingo" y verbo inicial del título.
 Pendientes: 6, 7 y 8.
 Revisión de robustez (antes del bloque 6) HECHA: M2, migración 004, M3/M6/M13, códigos de detención, M7, M8, M9, M10 y M5
@@ -213,9 +216,33 @@ am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de 
 - [x] 5a. Motor base: único, snooze, silencio, reintentos, AST, sin solapamiento — `Fase 1: motor de recordatorios (base)`
 - [x] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`
 - **— CORTE PRINCIPAL —**
-- [ ] 6. Scheduler (`on_tick`, tick al arrancar) y botones de recordatorio — `Fase 1: scheduler y botones de recordatorio`
-  **Empieza por M1** (traducción de errores en `channels/telegram.py`): `Forbidden` o texto demasiado largo →
-  `PermanentChannelError`; `RetryAfter` → `TransientChannelError` con la espera indicada por Telegram.
+- [x] 6. Scheduler (`on_tick`, tick al arrancar) y botones de recordatorio — HECHO (2026-10-03), 6 commits:
+  M1a (traducción de errores y `RetryAfter`), M1b (aislamiento de recordatorios rotos), M1c (ajustes: sin categoría
+  por evidencia, códigos saneados, anti-bloqueo), scheduler, botones, cuelgue de pytest y `scripts/dev_remind_me.py`.
+  - **Scheduler.** `run_polling(on_message, on_choice, on_tick)`. Telegram: `job_queue.run_repeating(interval=30,
+    first=0, job_kwargs={"max_instances": 1, "coalesce": True})`; `first=0` ES el tick de arranque (recuperación tras
+    caída: Telegram no puede enviar antes de que `run_polling` inicialice el bot). Consola: tarea asyncio con el mismo
+    ritmo (un tick al empezar), cancelada al salir. `run_tick_safely` (en `channels/base.py`) registra solo el tipo
+    de error y no mata el job. `main.py` conecta `ReminderEngine.tick` con el reloj real (`build_engine`).
+  - **Botones.** `rem_done:ID`, `rem_snooze:ID:10|60`, `rem_tomorrow:ID`. `handle_choice(choice, channel,
+    allowed_user_id, conn, now, tz_name)` valida el id (entero ASCII, minutos solo 10 o 60; un id mal formado se
+    responde como opción vieja y no toca nada), edita el mensaje SIN teclado y conserva el texto del recordatorio:
+    `✅ Hecho: {texto}`, `⏱ Pospuesto para {hoy, 3:40 pm | domingo 4 de octubre, 9:00 am}: {texto}`,
+    `⏰ {texto} (ya no está activo)` (pulsar dos veces, cancelado, ya pospuesto) o «Este recordatorio ya no está
+    activo.» si el id no existe. Sin `message_ref` (consola) se manda un mensaje nuevo en vez de editar.
+    «Activo» = `sent` para posponer (lo que ya exigía el motor) y `pending`/`sent` para Hecho.
+  - **Canal.** `Channel.edit_text(to, message_ref, text)` (SPEC 3.1) e `IncomingChoice.message_ref`. En Telegram:
+    "message is not modified" no es error; cualquier otro fallo al editar o al responder (`answer`) se registra por
+    tipo y no impide la acción. El dueño SIEMPRE recibe `answer`; un extraño, nada.
+  - **Etiqueta «Mañana».** `reminders.tomorrow_target` es la única fuente de la acción y de `tomorrow_label`
+    («🌅 Mañana» / «🌅 Hoy 9:00» antes de las 05:00 locales, con `default_morning_time`); hay una prueba que recorre
+    el día entero y exige que etiqueta y acción nunca discrepen. La etiqueta se fija al ENVIAR: si se pulsa tras las
+    05:00 con la etiqueta «Hoy 9:00», la acción manda a mañana y el texto de confirmación lo dice con el día completo.
+  - **Cuelgue de pytest en Windows.** `tests/test_reminders_outage.py` usa un solo bucle por módulo (`asyncio.Runner`).
+    Medido: ANTES 9 de 20 corridas del archivo se colgaban (tope de 45 s); DESPUÉS 0 de 20, y 4 corridas completas de
+    `pytest -q` sin cuelgue. Los demás archivos siguen usando `asyncio.run`; si reaparece, aplicar el mismo patrón.
+  - **`scripts/dev_remind_me.py`** `N ["texto"] [--urgente]`: crea el recordatorio en `DB_PATH` con el motor (sin LLM,
+    sin secretos), avisa si la hora cae en silencio. Se probó solo con bases temporales, nunca con la real.
 - [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar; botones de `ambiguous_meridiem` (dos opciones)
   y "Cambiar a am/pm" cuando `meridiem_inferred` — `Fase 1: bandeja y comandos`
   **Aviso de recuperación (una sola vez):** si hubo recordatorios detenidos (`stop_reason` no nulo) mientras el dueño
@@ -252,7 +279,10 @@ am/pm sin día y "mañana" de madrugada, barrido de reloj y deuda de horario de 
 - **Parser: "1ro/1º/1er/primero de noviembre"** pregunta (`unsupported_date`); soportarlo es una mejora menor.
 - **Entorno de pruebas en Windows (no es del parser).** Una de cada ~6 corridas de `pytest -q` se queda colgada creando el bucle
   de asyncio (`_fallback_socketpair`/`socket.accept`) en `tests/test_reminders_outage.py`; `faulthandler_timeout = 60`
-  vuelca la pila. Si ocurre, repetir la corrida; investigar al empezar el bloque 6.
+  vuelca la pila. ARREGLADO en el bloque 6 para ese archivo (un bucle por módulo; ver el bloque 6). Queda como riesgo
+  en los demás archivos que usan `asyncio.run`.
+- **Etiqueta «Hoy 9:00» fija al enviar.** Se calcula al enviar el aviso; si el dueño pulsa después de las 05:00, la
+  acción manda a mañana y el texto de confirmación lo dice. Aceptado: el id del botón (`rem_tomorrow:ID`) no lleva la fecha.
 - **M4 — deriva permanente por horario de verano (media; baja en zonas sin él).** Una serie diaria a las 02:30 en una
   zona con horario de verano pasa a las 03:30 el día del adelanto y se queda ahí, porque el ancla de `_spawn_next` es el
   `fire_at` de la fila anterior, ya corrido. Prueba futura: `FREQ=DAILY` a las 02:30 en `America/New_York` del 6 al 10 de

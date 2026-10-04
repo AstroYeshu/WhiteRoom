@@ -101,4 +101,8 @@ def main(argv: Sequence[str] | None = None, now: Clock = real_now) -> int:
 
 
 if __name__ == "__main__":
+    # La consola de Windows puede no soportar acentos ni emojis por defecto (igual que main.py).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())

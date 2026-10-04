@@ -46,6 +46,7 @@ class Channel(Protocol):
     async def send_choices(
         self, to: str, text: str, choices: list[Choice], kind: str = "reply"
     ) -> None: ...
+    async def edit_text(self, to: str, message_ref: str, text: str) -> None: ...  # sin botones
 ```
 
 - `kind` ∈ `reply | reminder | briefing`: deja que cada canal decida CÓMO enviar (WhatsApp necesitará
@@ -53,7 +54,9 @@ class Channel(Protocol):
 - Los "botones" de este documento son `Choice`: Telegram los dibuja como botones inline, la consola como
   lista numerada y un futuro canal de WhatsApp como botones de respuesta (máx. 3) o lista.
 - Entrada: cada canal convierte lo recibido en `IncomingMessage(channel, user_ref, text)` o
-  `IncomingChoice(channel, user_ref, choice_id)` y llama a `bot.handlers`.
+  `IncomingChoice(channel, user_ref, choice_id, message_ref)` y llama a `bot.handlers`. `message_ref` es el mensaje
+  que llevaba el botón (None si el canal no puede editar; entonces se responde con un mensaje nuevo). Pulsar un botón
+  EDITA ese mensaje con `edit_text` (texto nuevo, sin teclado).
 - **Solo `channels/telegram.py` importa la librería de Telegram.** `core/` y `bot/` jamás.
 - `core/reminders.py` y `core/briefing.py` reciben el `Channel` por inyección (se prueban con un canal falso).
 - Para un futuro adaptador de WhatsApp (NO implementar ahora): requiere webhook HTTPS público con verificación
@@ -373,7 +376,7 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
   el silencio salen en orden, con la etiqueta "(retrasado)".
 - **Mensaje**: `⏰ {text} [{área}]` con botones `✅ Hecho · ⏱ +10 min · ⏱ +1 h · 🌅 Mañana`.
   `🌅 Mañana` va a `default_morning_time` del día siguiente; antes de las 05:00 locales va a HOY a esa hora
-  (si todavía no pasó).
+  (si todavía no pasó). En ese caso la etiqueta del botón es `🌅 Hoy 9:00` (la hora de `default_morning_time`).
 - **Reloj**: el motor relee el reloj en cada envío; el silencio, el "(retrasado)" y las horas registradas
   usan la hora de ESE envío, no la del inicio del tick (un canal lento no los falsea).
 - **Antes de enviar**: se relee la fila; si ya no sigue `pending` (o `sent`, en una insistencia) con la misma
