@@ -574,7 +574,7 @@ acceso a shell, interfaz web, múltiples usuarios, notas de voz.
   Activar con `sudo systemctl enable --now asistente`; logs con `journalctl -u asistente -f`.
 - Sin puertos abiertos (long polling). SSH solo con llave.
 - `scripts/backup_db.py` (API de respaldo del módulo `sqlite3`, no el binario `sqlite3`): guarda
-  `data/backups/asistente-AAAA-MM-DD.db`, verifica la copia, conserva 14 días y termina con código
+  `data/backups/asistente-AAAA-MM-DD.db`, verifica la copia, conserva 14 días (y siempre los 7 más recientes) y termina con código
   distinto de 0 si falla. Diario por cron, p. ej. `15 3 * * * cd <RUTA_PROYECTO> && venv/bin/python scripts/backup_db.py`.
   Copiar periódicamente fuera de la tarjeta SD.
 - NTP activo; la hora del sistema debe ser correcta (los recordatorios dependen de ella).

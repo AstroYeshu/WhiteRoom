@@ -97,14 +97,59 @@ def test_repetir_el_mismo_dia_reemplaza_el_respaldo(script, source, tmp_path):
     assert [p.name for p in target.iterdir()] == [backup_name(TODAY)]
 
 
+def fill(target: Path, ages: list[int]) -> list[str]:
+    target.mkdir(exist_ok=True)
+    names = [backup_name(TODAY - timedelta(days=age)) for age in ages]
+    for name in names:
+        (target / name).write_bytes(b"x")
+    return names
+
+
 def test_conserva_14_dias_y_borra_los_mas_viejos(script, source, tmp_path):
     target = tmp_path / "b"
-    target.mkdir()
-    for age in (0, 1, 13, 14, 15, 40):
-        (target / backup_name(TODAY - timedelta(days=age))).write_bytes(b"x")
+    fill(target, [1, 2, 3, 4, 5, 6, 7, 13, 14, 15, 40])
     script.backup(source, target, TODAY)
     kept = sorted(p.name for p in target.iterdir())
-    assert kept == sorted(backup_name(TODAY - timedelta(days=age)) for age in (0, 1, 13))
+    assert kept == sorted(
+        backup_name(TODAY - timedelta(days=age)) for age in (0, 1, 2, 3, 4, 5, 6, 7, 13)
+    )
+
+
+def test_siempre_conserva_los_7_mas_recientes_aunque_sean_viejos(script, source, tmp_path):
+    """Un mes sin respaldar: todos los anteriores pasan de 14 días, pero quedan 7 en total."""
+    target = tmp_path / "b"
+    fill(target, [20, 21, 22, 23, 24, 25, 26, 27, 28, 29])
+    script.backup(source, target, TODAY)
+    kept = sorted(p.name for p in target.iterdir())
+    expected = [0, 20, 21, 22, 23, 24, 25]
+    assert kept == sorted(backup_name(TODAY - timedelta(days=age)) for age in expected)
+
+
+def test_con_pocos_respaldos_no_borra_ninguno_aunque_sean_viejos(script, source, tmp_path):
+    target = tmp_path / "b"
+    names = fill(target, [30, 60, 90])
+    script.backup(source, target, TODAY)
+    assert set(names) <= {p.name for p in target.iterdir()}
+
+
+def test_nunca_borra_el_ultimo_aunque_su_fecha_este_vencida(script, source, tmp_path):
+    """Con el reloj saltado 100 días al futuro, el respaldo nuevo es el último y se conserva."""
+    target = tmp_path / "b"
+    fill(target, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    future = TODAY + timedelta(days=100)
+    result = script.backup(source, target, future)
+    assert result.exists()
+    assert len(list(target.iterdir())) == 7
+
+
+def test_prune_nunca_deja_menos_de_7_ni_borra_el_mas_reciente(script, tmp_path):
+    target = tmp_path / "b"
+    fill(target, list(range(100, 120)))
+    removed = script.prune(target, TODAY)
+    left = sorted(p.name for p in target.iterdir())
+    assert len(left) == 7
+    assert backup_name(TODAY - timedelta(days=100)) in left  # el más reciente
+    assert len(removed) == 13
 
 
 def test_no_toca_archivos_que_no_son_respaldos(script, source, tmp_path):
@@ -121,8 +166,8 @@ def test_no_toca_archivos_que_no_son_respaldos(script, source, tmp_path):
 
 def test_el_dia_de_retencion_es_exacto_con_un_reloj_inyectado(script, source, tmp_path):
     target = tmp_path / "b"
-    target.mkdir()
     old = TODAY - timedelta(days=14)
+    fill(target, [1, 2, 3, 4, 5, 6, 7, 8])
     (target / backup_name(old)).write_bytes(b"x")
     script.backup(source, target, TODAY - timedelta(days=1))  # ayer: ese archivo tiene 13 días
     assert (target / backup_name(old)).exists()
@@ -222,3 +267,70 @@ def test_la_verificacion_de_integridad_no_revienta_con_basura(script, tmp_path):
         assert script._integrity_ok(conn) is False
     finally:
         conn.close()
+
+
+def test_si_la_copia_no_esta_integra_no_se_borra_nada_y_sale_con_error(
+    script, source, tmp_path, monkeypatch, capsys
+):
+    target = tmp_path / "b"
+    names = fill(target, list(range(1, 30)))
+    monkeypatch.setattr(script, "_integrity_ok", lambda conn: False)
+    code = script.main(["--db", str(source), "--dir", str(target)], today=TODAY)
+    assert code != 0
+    assert sorted(p.name for p in target.iterdir()) == sorted(names)
+    assert "FALLA" in capsys.readouterr().err
+
+
+def test_si_la_base_no_existe_no_se_borra_nada_y_sale_con_error(script, tmp_path):
+    target = tmp_path / "b"
+    names = fill(target, list(range(1, 30)))
+    code = script.main(["--db", str(tmp_path / "no.db"), "--dir", str(target)], today=TODAY)
+    assert code != 0
+    assert sorted(p.name for p in target.iterdir()) == sorted(names)
+
+
+def test_si_no_se_puede_podar_el_respaldo_queda_pero_sale_con_error(
+    script, source, tmp_path, monkeypatch, capsys
+):
+    target = tmp_path / "b"
+    fill(target, list(range(1, 30)))
+
+    real_unlink = Path.unlink
+
+    def deny(self, *args, **kwargs):
+        if self.name.endswith(".tmp"):  # los temporales del propio respaldo sí se limpian
+            return real_unlink(self, *args, **kwargs)
+        raise PermissionError("sin permiso")
+
+    monkeypatch.setattr(Path, "unlink", deny)
+    code = script.main(["--db", str(source), "--dir", str(target)], today=TODAY)
+    monkeypatch.undo()
+    assert code != 0
+    assert (target / backup_name(TODAY)).exists()
+    assert "podar" in capsys.readouterr().err
+
+
+def test_backup_directo_con_copia_danada_lanza_error_y_conserva_todo(
+    script, source, tmp_path, monkeypatch
+):
+    target = tmp_path / "b"
+    names = fill(target, list(range(1, 30)))
+    monkeypatch.setattr(script, "_integrity_ok", lambda conn: False)
+    with pytest.raises(script.BackupError):
+        script.backup(source, target, TODAY)
+    assert sorted(p.name for p in target.iterdir()) == sorted(names)
+
+
+def test_backup_directo_si_falla_la_poda_lanza_backuperror_y_el_respaldo_queda(
+    script, source, tmp_path, monkeypatch
+):
+    target = tmp_path / "b"
+    fill(target, list(range(1, 30)))
+
+    def fail(*args, **kwargs):
+        raise PermissionError("sin permiso")
+
+    monkeypatch.setattr(script, "prune", fail)
+    with pytest.raises(script.BackupError, match="ya está hecho|está hecho"):
+        script.backup(source, target, TODAY)
+    assert (target / backup_name(TODAY)).exists()

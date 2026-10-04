@@ -123,7 +123,7 @@ esquema de la base.
 crontab -e
 ```
 
-Añade la línea (todos los días a las 3:15 am; conserva 14 días en `data/backups/`):
+Añade la línea (todos los días a las 3:15 am; borra los de 14 días o más, pero siempre quedan los 7 más recientes, en `data/backups/`):
 
 ```
 15 3 * * * cd /home/pi/WhiteRoom && venv/bin/python scripts/backup_db.py >> data/backup.log 2>&1

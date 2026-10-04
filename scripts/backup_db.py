@@ -5,9 +5,9 @@ Uso (desde la raíz del repositorio, con el entorno virtual activado):
     python scripts/backup_db.py --db otra.db --dir /mnt/ssd/respaldos
 
 Guarda `asistente-AAAA-MM-DD.db` (repetir el mismo día lo reemplaza), comprueba que la copia
-esté íntegra y borra los respaldos de 14 días o más. Termina con código 0 si todo salió bien y con
-código 1 si algo falló (para que cron o systemd lo noten). Lee `DB_PATH` del entorno o del `.env`
-del directorio actual, igual que `main.py`. No imprime datos de la base.
+esté íntegra y borra los de 14 días o más, sin dejar nunca menos de 7. Termina con código 0 si
+todo salió bien y con código 1 si algo falló (para que cron o systemd lo noten). Lee `DB_PATH`
+del entorno o del `.env` del directorio actual, igual que `main.py`. No imprime datos de la base.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 RETENTION_DAYS = 14
+MIN_KEEP = 7  # nunca quedan menos de estos respaldos (los más recientes)
 DEFAULT_DB_PATH = "data/asistente.db"
 _NAME = re.compile(r"^asistente-(\d{4}-\d{2}-\d{2})\.db$")
 
@@ -66,18 +67,27 @@ def _copy(source: Path, tmp: Path) -> None:
         src.close()
 
 
-def prune(target_dir: Path, today: date, keep_days: int = RETENTION_DAYS) -> list[Path]:
-    """Borra los respaldos de `keep_days` días o más. Solo toca `asistente-AAAA-MM-DD.db`."""
+def prune(
+    target_dir: Path,
+    today: date,
+    keep_days: int = RETENTION_DAYS,
+    min_keep: int = MIN_KEEP,
+) -> list[Path]:
+    """Borra los respaldos de `keep_days` días o más, pero SIEMPRE conserva los `min_keep` más
+    recientes (el último entre ellos). Solo toca nombres `asistente-AAAA-MM-DD.db`."""
     limit = today - timedelta(days=keep_days)
-    removed = []
-    for path in sorted(target_dir.iterdir()):
+    dated = []
+    for path in target_dir.iterdir():
         match = _NAME.match(path.name)
         if not match:
             continue
         try:
-            day = date.fromisoformat(match.group(1))
+            dated.append((date.fromisoformat(match.group(1)), path))
         except ValueError:
             continue
+    dated.sort(reverse=True)  # del más reciente al más viejo
+    removed = []
+    for day, path in dated[min_keep:]:
         if day <= limit:
             path.unlink()
             removed.append(path)
@@ -85,7 +95,7 @@ def prune(target_dir: Path, today: date, keep_days: int = RETENTION_DAYS) -> lis
 
 
 def backup(source: Path, target_dir: Path, today: date) -> Path:
-    """Hace el respaldo de hoy y poda los viejos (solo si el respaldo salió bien)."""
+    """Hace el respaldo de hoy y, SOLO si salió bien y quedó verificado, poda los viejos."""
     target_dir.mkdir(parents=True, exist_ok=True)
     final = backup_path(target_dir, today)
     tmp = final.with_name(final.name + ".tmp")
@@ -96,7 +106,10 @@ def backup(source: Path, target_dir: Path, today: date) -> Path:
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    prune(target_dir, today)
+    try:
+        prune(target_dir, today)
+    except OSError as exc:
+        raise BackupError(f"el respaldo está hecho, pero no se pudo podar: {exc}") from exc
     return final
 
 
