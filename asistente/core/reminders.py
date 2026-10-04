@@ -373,25 +373,30 @@ class ReminderEngine:
         if self._channel_retry_at is not None and moment < self._channel_retry_at:
             return 0  # el canal sigue en espera tras un fallo pasajero
         sent = 0
-        quiet = self._is_quiet(moment)
         due = list_due(self._conn, moment)
         for index, reminder in enumerate(due):
-            if quiet and reminder.priority != 2:
+            # El reloj se relee en cada envío (M9): un canal lento no debe falsear el silencio,
+            # el "(retrasado)" ni las horas registradas. Solo la consulta usa el instante del tick.
+            if self._held_by_silence(reminder):
                 continue  # silencio: se retiene y sale en orden al terminar
-            result = await self._deliver(reminder, moment)
+            result = await self._deliver(reminder)
             if result is Delivery.SENT:
                 sent += 1
             elif result is Delivery.CHANNEL_DOWN:
                 # Corta-circuito: con el canal caído no se intenta ninguno más en este tick.
-                self._flag_blocked(due[index + 1 :], quiet, moment)
+                self._flag_blocked(due[index + 1 :])
                 break
         return sent
 
-    def _flag_blocked(self, blocked: list[Reminder], quiet: bool, moment: datetime) -> None:
+    def _held_by_silence(self, reminder: Reminder) -> bool:
+        return reminder.priority != 2 and self._is_quiet(self._now())
+
+    def _flag_blocked(self, blocked: list[Reminder]) -> None:
         """Los que esperaban turno comparten la caída: empiezan su horizonte ahora (o se detienen
         si ya lo agotaron). Los retenidos por el silencio NO cuentan: no se intentaron enviar."""
+        moment = self._now()
         for reminder in blocked:
-            if quiet and reminder.priority != 2:
+            if self._held_by_silence(reminder):
                 continue
             if reminder.first_failed_at is None:
                 with self._conn:
@@ -407,7 +412,7 @@ class ReminderEngine:
         end = get_time_setting(self._conn, "quiet_end")
         return is_quiet_hour(moment, start, end, self._tz_name)
 
-    async def _deliver(self, reminder: Reminder, moment: datetime) -> Delivery:
+    async def _deliver(self, reminder: Reminder) -> Delivery:
         # Releer antes de enviar: entre la consulta del tick y este punto el usuario pudo cancelar
         # o posponer. Si la fila cambió, no se envía (el siguiente tick la verá como esté).
         current = get_reminder(self._conn, reminder.id)
@@ -418,7 +423,8 @@ class ReminderEngine:
         ):
             return Delivery.SKIPPED
         is_resend = reminder.status == "sent"  # insistencia: no es un aviso "retrasado"
-        delayed = not is_resend and moment - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
+        started = self._now()
+        delayed = not is_resend and started - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
         text = format_reminder_text(reminder.text, self._area_name(reminder.area_id), delayed)
         try:
             await self._channel.send_choices(
@@ -428,12 +434,14 @@ class ReminderEngine:
             self._stop(reminder, f"permanent:{error.reason}")
             return Delivery.SKIPPED  # un fallo permanente es de ESA fila: los demás siguen
         except Exception as error:  # noqa: BLE001 - cualquier otro fallo se trata como pasajero
-            self._fail_transient(reminder, moment, getattr(error, "reason", type(error).__name__))
+            self._fail_transient(
+                reminder, self._now(), getattr(error, "reason", type(error).__name__)
+            )
             return Delivery.CHANNEL_DOWN
         self._channel_failures = 0  # el canal respondió: se acabó la espera
         self._channel_retry_at = None
         try:
-            return Delivery.SENT if self._finish_send(reminder, moment) else Delivery.SKIPPED
+            return Delivery.SENT if self._finish_send(reminder, self._now()) else Delivery.SKIPPED
         except Exception as error:  # noqa: BLE001 - un fallo de base no debe frenar el resto
             # Todo se revirtió (una sola transacción): en el próximo tick se reintenta entero.
             logger.error(
