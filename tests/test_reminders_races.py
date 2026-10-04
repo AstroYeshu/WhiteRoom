@@ -108,3 +108,63 @@ def test_la_fila_cambiada_antes_de_enviar_no_se_envia(conn, clock, engine, chann
 
     assert asyncio.run(engine._deliver(due[0])) is Delivery.SKIPPED
     assert channel.attempts == []
+
+
+# --- M10: la insistencia solo toca filas que sigan en 'sent' ------------------------------------
+
+
+def urgent_already_sent(conn, clock, engine):
+    """Recordatorio priority=2 ya avisado (status 'sent'); el reloj queda justo en el reenvío."""
+    created = reminders.create_reminder(
+        conn, "urgente", clock() + timedelta(minutes=1), clock, priority=2
+    )
+    clock.advance(minutes=1)
+    assert tick(engine) == 1
+    first_fired = reminders.get_reminder(conn, created.id).last_fired_at
+    clock.advance(minutes=15)  # toca el primer reenvío
+    return created, first_fired
+
+
+def test_hecho_mientras_se_reenvia_no_toca_la_fila(conn, clock, engine, channel):
+    created, first_fired = urgent_already_sent(conn, clock, engine)
+    channel.during_send = lambda: reminders.mark_done(conn, created.id)
+
+    assert tick(engine) == 0
+    stored = reminders.get_reminder(conn, created.id)
+    assert (stored.status, stored.nag_count, stored.last_fired_at) == ("done", 0, first_fired)
+
+
+def test_cancelado_mientras_se_reenvia_no_toca_la_fila(conn, clock, engine, channel):
+    created, first_fired = urgent_already_sent(conn, clock, engine)
+    channel.during_send = lambda: reminders.cancel(conn, created.id)
+
+    assert tick(engine) == 0
+    stored = reminders.get_reminder(conn, created.id)
+    assert (stored.status, stored.nag_count, stored.last_fired_at) == (
+        "cancelled",
+        0,
+        first_fired,
+    )
+
+
+def test_pospuesto_mientras_se_reenvia_no_se_pisa(conn, clock, engine, channel):
+    created, first_fired = urgent_already_sent(conn, clock, engine)
+    channel.during_send = lambda: reminders.snooze(conn, created.id, timedelta(minutes=10), clock)
+    assert tick(engine) == 0
+    channel.during_send = None
+
+    stored = reminders.get_reminder(conn, created.id)
+    assert (stored.status, stored.nag_count, stored.snooze_count) == ("pending", 0, 1)
+    assert stored.last_fired_at == first_fired  # el reenvío fallido no lo actualizó
+
+    clock.advance(minutes=10)  # a su nueva hora sale una vez, sin contarse como reenvío
+    assert tick(engine) == 1
+    assert reminders.get_reminder(conn, created.id).nag_count == 0
+
+
+def test_un_reenvio_normal_sigue_contando(conn, clock, engine, channel):
+    created, _ = urgent_already_sent(conn, clock, engine)
+    assert tick(engine) == 1
+    stored = reminders.get_reminder(conn, created.id)
+    assert (stored.status, stored.nag_count) == ("sent", 1)
+    assert stored.last_fired_at == to_utc_iso(clock())

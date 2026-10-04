@@ -463,15 +463,18 @@ class ReminderEngine:
 
         Solo marca `sent` si la fila sigue `pending` en la MISMA hora que se leyó antes de enviar
         (comprueba filas afectadas). Si el usuario canceló o pospuso mientras se enviaba, no se
-        pisa su acción: sin siguiente de serie y sin insistencia. Devuelve si se registró.
+        pisa su acción: sin siguiente de serie y sin insistencia. Un reenvío de insistencia solo
+        toca la fila si sigue en `sent` (M10). Devuelve si se registró.
         """
         if reminder.status == "sent":  # reenvío de insistencia
             with self._conn:
-                self._conn.execute(
+                cursor = self._conn.execute(
                     "UPDATE reminders SET nag_count = nag_count + 1, last_fired_at = ?,"
-                    " attempts = 0, first_failed_at = NULL WHERE id = ?",
+                    " attempts = 0, first_failed_at = NULL WHERE id = ? AND status = 'sent'",
                     (to_utc_iso(moment), reminder.id),
                 )
+            if cursor.rowcount != 1:  # ✅ Hecho, cancelado o pospuesto mientras se reenviaba
+                return False
         else:
             with self._conn:
                 cursor = self._conn.execute(
