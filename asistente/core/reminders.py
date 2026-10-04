@@ -17,9 +17,12 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from dateutil.rrule import rrulestr
+
 from asistente.bot.choices import encode_choice_id
 from asistente.channels.base import Channel, Choice, PermanentChannelError
 from asistente.core.settings import get_time_setting
+from asistente.parsing.recurrence import next_occurrence
 from asistente.timeutil import (
     Clock,
     from_utc_iso,
@@ -46,6 +49,13 @@ ACTION_SNOOZE = "rem_snooze"
 ACTION_TOMORROW = "rem_tomorrow"
 SNOOZE_SHORT_MINUTES = 10
 SNOOZE_LONG_MINUTES = 60
+
+NAG_INTERVAL = timedelta(minutes=15)  # insistencia (priority=2): cada cuánto se reenvía
+NAG_MAX_RESENDS = 3  # reenvíos tras el primer aviso, si no se pulsa ✅ Hecho
+PREPARATION_NOTICES = (
+    (timedelta(days=1), "Mañana vence"),
+    (timedelta(hours=1), "En 1 hora vence"),
+)
 
 
 def backoff_seconds(attempts: int) -> int:
@@ -119,6 +129,8 @@ def create_reminder(
     moment = now()
     if fire_at_utc <= moment:
         raise PastReminderError("No se crean recordatorios en el pasado")
+    if rrule is not None:
+        rrulestr(rrule, dtstart=fire_at_utc)  # ValueError si la regla no es válida
     with conn:
         cursor = conn.execute(
             "INSERT INTO reminders"
@@ -138,11 +150,24 @@ def list_pending(conn: sqlite3.Connection) -> list[Reminder]:
 
 
 def list_due(conn: sqlite3.Connection, moment: datetime) -> list[Reminder]:
-    """Pendientes ya vencidos y no detenidos, del más antiguo al más reciente."""
+    """Lo que toca enviar ahora, del más antiguo al más reciente, sin los detenidos.
+
+    - Pendientes cuya hora ya llegó (incluye los vencidos por una caída).
+    - Reenvíos de insistencia: `priority=2` ya avisado, sin ✅ Hecho, con menos de
+      `NAG_MAX_RESENDS` reenvíos y al menos `NAG_INTERVAL` desde el último aviso.
+    """
     rows = conn.execute(
-        "SELECT * FROM reminders WHERE status = 'pending' AND fire_at_utc <= ? AND attempts < ?"
+        "SELECT * FROM reminders WHERE attempts < :stopped AND ("
+        " (status = 'pending' AND fire_at_utc <= :now)"
+        " OR (status = 'sent' AND priority = 2 AND nag_count < :max_nags"
+        "     AND last_fired_at <= :nag_cutoff))"
         " ORDER BY fire_at_utc, id",
-        (to_utc_iso(moment), STOPPED_ATTEMPTS),
+        {
+            "stopped": STOPPED_ATTEMPTS,
+            "now": to_utc_iso(moment),
+            "max_nags": NAG_MAX_RESENDS,
+            "nag_cutoff": to_utc_iso(moment - NAG_INTERVAL),
+        },
     )
     return [_from_row(row) for row in rows]
 
@@ -168,6 +193,42 @@ def cancel(conn: sqlite3.Connection, reminder_id: int) -> bool:
             (reminder_id,),
         )
     return cursor.rowcount == 1
+
+
+def cancel_for_task(conn: sqlite3.Connection, task_id: int) -> int:
+    """Cancela los recordatorios de una tarea que siguen vivos (preparación incluida).
+
+    Vivos = pendientes, o ya avisados con insistencia (`priority=2`) todavía activa. El historial
+    (`sent`, `done`) no se toca. Devuelve cuántos canceló.
+    """
+    with conn:
+        cursor = conn.execute(
+            "UPDATE reminders SET status = 'cancelled' WHERE task_id = ? AND ("
+            " status = 'pending' OR (status = 'sent' AND priority = 2 AND nag_count < ?))",
+            (task_id, NAG_MAX_RESENDS),
+        )
+    return cursor.rowcount
+
+
+def create_preparation_reminders(
+    conn: sqlite3.Connection,
+    task_id: int,
+    title: str,
+    area_id: int | None,
+    due_at_utc: datetime,
+    now: Clock,
+) -> list[Reminder]:
+    """Avisos 1 día y 1 hora antes del vencimiento; solo los que todavía no pasaron."""
+    created = []
+    for offset, label in PREPARATION_NOTICES:
+        fire_at = due_at_utc - offset
+        if fire_at > now():
+            created.append(
+                create_reminder(
+                    conn, f"{label}: {title}", fire_at, now, area_id=area_id, task_id=task_id
+                )
+            )
+    return created
 
 
 def snooze(
@@ -273,7 +334,8 @@ class ReminderEngine:
         return is_quiet_hour(moment, start, end, self._tz_name)
 
     async def _deliver(self, reminder: Reminder, moment: datetime) -> bool:
-        delayed = moment - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
+        is_resend = reminder.status == "sent"  # insistencia: no es un aviso "retrasado"
+        delayed = not is_resend and moment - from_utc_iso(reminder.fire_at_utc) > LATE_GRACE
         text = format_reminder_text(reminder.text, self._area_name(reminder.area_id), delayed)
         try:
             await self._channel.send_choices(
@@ -285,7 +347,16 @@ class ReminderEngine:
         except Exception as error:  # noqa: BLE001 - cualquier otro fallo se trata como pasajero
             self._fail_transient(reminder, moment, getattr(error, "reason", type(error).__name__))
             return False
-        self._finish_send(reminder, moment)
+        try:
+            self._finish_send(reminder, moment)
+        except Exception as error:  # noqa: BLE001 - un fallo de base no debe frenar el resto
+            # Todo se revirtió (una sola transacción): en el próximo tick se reintenta entero.
+            logger.error(
+                "No se pudo registrar el envío del recordatorio id=%s: %s",
+                reminder.id,
+                type(error).__name__,
+            )
+            return False
         return True
 
     def _area_name(self, area_id: int | None) -> str | None:
@@ -295,13 +366,54 @@ class ReminderEngine:
         return row["name"] if row else None
 
     def _finish_send(self, reminder: Reminder, moment: datetime) -> None:
+        """Registra el envío. En el primer aviso de una serie, marcar `sent` e insertar la
+        siguiente ocurrencia es UNA transacción: o ocurren las dos cosas o ninguna."""
+        if reminder.status == "sent":  # reenvío de insistencia
+            with self._conn:
+                self._conn.execute(
+                    "UPDATE reminders SET nag_count = nag_count + 1, last_fired_at = ?,"
+                    " attempts = 0 WHERE id = ?",
+                    (to_utc_iso(moment), reminder.id),
+                )
+        else:
+            with self._conn:
+                self._conn.execute(
+                    "UPDATE reminders SET status = 'sent', last_fired_at = ?, attempts = 0"
+                    " WHERE id = ?",
+                    (to_utc_iso(moment), reminder.id),
+                )
+                self._spawn_next(reminder, moment)
         self._retry_at.pop(reminder.id, None)
-        with self._conn:
-            self._conn.execute(
-                "UPDATE reminders SET status = 'sent', last_fired_at = ?, attempts = 0"
-                " WHERE id = ?",
-                (to_utc_iso(moment), reminder.id),
-            )
+
+    def _spawn_next(self, reminder: Reminder, moment: datetime) -> None:
+        """Inserta la siguiente ocurrencia de una serie, contada desde la hora PROGRAMADA.
+
+        Solo en el primer disparo de la fila (`last_fired_at` vacío): una fila pospuesta o
+        reenviada ya generó su siguiente y no crea otra. Tras una caída larga se salta a la
+        primera ocurrencia posterior a `now`, sin ráfaga de las que se perdieron.
+        """
+        if reminder.rrule is None or reminder.last_fired_at is not None:
+            return
+        scheduled = from_utc_iso(reminder.fire_at_utc)
+        following = next_occurrence(
+            reminder.rrule, scheduled, max(scheduled, moment), self._tz_name
+        )
+        if following is None:
+            return  # la serie terminó (COUNT/UNTIL)
+        self._conn.execute(
+            "INSERT INTO reminders"
+            " (task_id, text, area_id, fire_at_utc, rrule, priority, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                reminder.task_id,
+                reminder.text,
+                reminder.area_id,
+                to_utc_iso(following),
+                reminder.rrule,
+                reminder.priority,
+                to_utc_iso(moment),
+            ),
+        )
 
     def _fail_transient(self, reminder: Reminder, moment: datetime, reason: str) -> None:
         """Fallo pasajero: espera creciente desde `attempts`, sin tocar `fire_at_utc`."""
@@ -322,10 +434,15 @@ class ReminderEngine:
         )
 
     def _stop(self, reminder: Reminder, why: str) -> None:
-        """Detiene el envío (queda `pending`, `attempts` centinela; se marca en /recordatorios)."""
+        """Detiene el envío (queda `pending`, `attempts` centinela; se marca en /recordatorios).
+
+        Si es una serie, la siguiente ocurrencia se crea igual: rendirse con una no corta la serie.
+        """
         self._retry_at.pop(reminder.id, None)
         with self._conn:
             self._conn.execute(
                 "UPDATE reminders SET attempts = ? WHERE id = ?", (STOPPED_ATTEMPTS, reminder.id)
             )
+            if reminder.status == "pending":
+                self._spawn_next(reminder, self._now())
         logger.error("Recordatorio id=%s detenido: %s", reminder.id, why)

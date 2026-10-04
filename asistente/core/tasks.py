@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from asistente.core import reminders
 from asistente.timeutil import Clock, to_utc_iso
 
 
@@ -40,7 +41,10 @@ def create_task(
     due_at_utc: datetime | None = None,
     source_text: str | None = None,
 ) -> Task:
-    """Crea una tarea abierta. Sin `area_id` queda "sin área" (bandeja)."""
+    """Crea una tarea abierta. Sin `area_id` queda "sin área" (bandeja).
+
+    Con `due_at_utc` también crea los avisos de preparación (1 día y 1 hora antes, si no pasaron).
+    """
     stamp = to_utc_iso(now())
     with conn:
         cursor = conn.execute(
@@ -57,6 +61,8 @@ def create_task(
         )
     task = get_task(conn, cursor.lastrowid)
     assert task is not None
+    if due_at_utc is not None:
+        reminders.create_preparation_reminders(conn, task.id, title, area_id, due_at_utc, now)
     return task
 
 
@@ -71,15 +77,30 @@ def set_area(conn: sqlite3.Connection, task_id: int, area_id: int | None, now: C
 def set_due(
     conn: sqlite3.Connection, task_id: int, due_at_utc: datetime | None, now: Clock
 ) -> None:
+    """Cambia la fecha y rehace los avisos de preparación.
+
+    Los recordatorios ligados a una tarea (`task_id`) son solo los de preparación; los que el
+    usuario crea a mano no llevan `task_id`, así que no se tocan.
+    """
     with conn:
         conn.execute(
             "UPDATE tasks SET due_at_utc = ?, updated_at = ? WHERE id = ?",
             (to_utc_iso(due_at_utc) if due_at_utc else None, to_utc_iso(now()), task_id),
         )
+        reminders.cancel_for_task(conn, task_id)
+    task = get_task(conn, task_id)
+    if due_at_utc is not None and task is not None and task.status == "open":
+        reminders.create_preparation_reminders(
+            conn, task.id, task.title, task.area_id, due_at_utc, now
+        )
 
 
 def _close(conn: sqlite3.Connection, task_id: int, status: str, now: Clock) -> bool:
-    """Cierra una tarea abierta o pospuesta. Devuelve False si no existía o ya estaba cerrada."""
+    """Cierra una tarea abierta o pospuesta. Devuelve False si no existía o ya estaba cerrada.
+
+    Cancela en la misma transacción los recordatorios pendientes de la tarea (preparación
+    incluida): una tarea ya hecha o descartada no debe seguir avisando.
+    """
     stamp = to_utc_iso(now())
     with conn:
         cursor = conn.execute(
@@ -87,6 +108,8 @@ def _close(conn: sqlite3.Connection, task_id: int, status: str, now: Clock) -> b
             " WHERE id = ? AND status IN ('open', 'postponed')",
             (status, stamp, stamp, task_id),
         )
+        if cursor.rowcount == 1:
+            reminders.cancel_for_task(conn, task_id)
     return cursor.rowcount == 1
 
 
@@ -100,6 +123,7 @@ def drop_task(conn: sqlite3.Connection, task_id: int, now: Clock) -> bool:
 
 
 def postpone_task(conn: sqlite3.Connection, task_id: int, until_utc: datetime, now: Clock) -> bool:
+    """Pospone la tarea y cancela sus recordatorios pendientes (se rehacen con `set_due`)."""
     stamp = to_utc_iso(now())
     with conn:
         cursor = conn.execute(
@@ -107,6 +131,8 @@ def postpone_task(conn: sqlite3.Connection, task_id: int, until_utc: datetime, n
             " WHERE id = ? AND status IN ('open', 'postponed')",
             (to_utc_iso(until_utc), stamp, task_id),
         )
+        if cursor.rowcount == 1:
+            reminders.cancel_for_task(conn, task_id)
     return cursor.rowcount == 1
 
 

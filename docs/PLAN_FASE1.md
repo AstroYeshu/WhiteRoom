@@ -83,7 +83,7 @@ Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación
 - [x] 3. `parsing/dates.py` y `parsing/recurrence.py` propios (sin dateparser) + pruebas en tabla (≥60 frases) — `Fase 1: parseo de fechas propio`
 - [x] 4. Migración 002, `core/areas`, `tasks`, `notes` + pruebas — `Fase 1: áreas, tareas y notas`
 - [x] 5a. Motor base: único, snooze, silencio, reintentos, AST, sin solapamiento — `Fase 1: motor de recordatorios (base)`
-- [ ] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`
+- [x] 5b. Motor: rrule, recuperación, insistencia, preparación, cascada — `Fase 1: motor (rrule, recuperación, insistencia)`
 - **— CORTE PRINCIPAL —**
 - [ ] 6. Scheduler (`on_tick`, tick al arrancar) y botones de recordatorio — `Fase 1: scheduler y botones de recordatorio`
 - [ ] 7. Bandeja, comandos, `/hoy`, `/pendientes` con Hecha/Descartar — `Fase 1: bandeja y comandos`

@@ -174,13 +174,14 @@ def test_silencio_retiene_y_libera_en_orden_con_retrasado(conn, clock, engine, c
     assert tick(engine) == 1  # solo el prioritario atraviesa el silencio
     assert sent_texts(channel) == ["⏰ urgente"]
     assert row(conn, first.id).status == row(conn, second.id).status == "pending"
+    assert reminders.mark_done(conn, urgent.id)  # ✅ Hecho: sin esto insistiría cada 15 min
 
     clock.current = local("2026-10-04 06:59")
     assert tick(engine) == 0  # sigue en silencio
     clock.current = local("2026-10-04 07:00")  # el fin del silencio es exclusivo
     assert tick(engine) == 2
     assert sent_texts(channel)[1:] == ["⏰ primero (retrasado)", "⏰ segundo (retrasado)"]
-    assert row(conn, urgent.id).status == "sent"
+    assert row(conn, urgent.id).status == "done"
 
 
 # --- 6. Fallos de envío: canal caído, permanentes, 24 h -------------------------------------
