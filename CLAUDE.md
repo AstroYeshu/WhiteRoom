@@ -37,6 +37,12 @@ El diseño completo está en `SPEC.md`. Implementa SOLO la fase que se te pida, 
   Inyecta el reloj (`now()`) para poder probar el tiempo.
 
 ## Flujo de trabajo
+- Al empezar: lee `docs/STATUS.md` y `git log -n 10` antes de planificar.
+- Alcance: solo lo pedido. Cualquier idea o hallazgo fuera de alcance va a `docs/BACKLOG.md`;
+  no se implementa.
+- Al terminar cada bloque: actualiza `docs/STATUS.md` y `docs/DECISIONS.md`.
+- Al parar, termina con "RESUMEN PARA REVISIÓN" de máx. 20 líneas: commits, pruebas, decisiones
+  que requieren mi visto bueno, dudas abiertas y lo que NO se hizo.
 - Plan primero: propón el plan y espera aprobación antes de escribir código.
 - Tras cada bloque de cambios corre `pytest -q` y `ruff check .` y muestra la salida real.
 - Commits pequeños y descriptivos cuando un bloque esté verificado.
