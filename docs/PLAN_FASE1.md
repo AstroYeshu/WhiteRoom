@@ -37,7 +37,19 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
    (`format_when` aquí; los botones en el bloque 7).
 2. "mañana" es el día salvo que vaya precedido de `la / esta / cada / toda` ("de la mañana", "por la mañana").
    Un periodo sin hora ("mañana por la mañana") → pregunta.
-3. **Hora sin am/pm (REGLA PROPUESTA, pendiente de tu visto bueno)**:
+3. **Hora sin am/pm (IMPLEMENTADA tal cual; pendiente de tu visto bueno)**. Tabla real, reloj fijo sáb 2026-10-03 15:30:
+   | Texto | Resultado | Por qué |
+   |---|---|---|
+   | mañana a las 1 … 6 | 1:00 pm … 6:00 pm | 1–6 → tarde |
+   | mañana a las 7 … 11 | 7:00 am … 11:00 am | 7–11 → mañana |
+   | mañana a las 12 | 12:00 pm | 12 → mediodía |
+   | mañana a las 13 / 18 / 23 | 1:00 pm / 6:00 pm / 11:00 pm | ≥ 13 → 24 h |
+   | mañana a las 0 | 12:00 am (medianoche del día) | 0 → 24 h |
+   | mañana 08:30 / 05:00 | 8:30 am / 5:00 am | cero inicial → 24 h literal |
+   | mañana 6:30 (sin "a las") | 6:30 pm | `H:MM` suelto sigue la regla 1–6 → tarde; vale solo porque hay un día |
+   | mañana 12 am / 12 de la noche | PREGUNTA (`ambiguous_time`) | ¿medianoche de hoy o de mañana? |
+   | mañana a las 8 pm / 8 de la mañana | 8:00 pm / 8:00 am | con marcador, siempre se respeta |
+   Reglas, de arriba abajo:
    - Con `am`/`pm` o `de la mañana/tarde/noche/madrugada`: se respeta (12 am y 12 de la noche → pregunta).
    - 13–23 y 0 → reloj de 24 h. Con cero inicial (`08:30`, `05:00`) → 24 h literal.
    - 12 → mediodía. **7–11 → mañana (am). 1–6 → tarde (pm).** Nadie agenda a la 1–6 am; clases a las 7–11 am.
@@ -53,6 +65,11 @@ Reglas del parser (gramática cerrada; lo que no encaja entero → se pregunta, 
 8. Sin hora → `default_morning_time` (`has_time=False`, para avisar "hora por defecto").
 9. "en N minutos/horas" (instante exacto), "en N días/semanas" (día a `default_morning_time`). "estudiar 2 horas" no es fecha.
 10. Un día de la semana con mayúscula a mitad de frase ("llamar a Domingo") se toma como nombre propio, no como fecha.
+    **DEFECTO CONOCIDO (detectado el 2026-10-03, sin corregir):** la regla 10 también descarta "el Domingo",
+    "este Domingo" y "para el Domingo" (con mayúscula), que deberían ser fechas. Peor: "reunión el Domingo a las 5 pm"
+    se interpreta como HOY sábado 5 pm (ignora el día y deja solo la hora). Corrección propuesta: tratar como nombre
+    propio solo si NO lo precede `el / este / próximo / para` ni va seguido de `que viene`; y si se descarta un día
+    pero queda una hora, preguntar en vez de asumir "hoy". Pendiente de aprobación.
 Pruebas: tabla con reloj fijo (sáb 2026-10-03 15:30, México), ≥ 60 frases incluidos falsos positivos.
 
 Recurrencia (`parsing/recurrence.py`, lista cerrada): "todos los días [hora]", "cada <día> [hora]", "de lunes a viernes [hora]".
@@ -75,6 +92,29 @@ Devuelve `rrule` + primera ocurrencia futura; el handler muestra interpretación
 12. Fecha pasada → pregunta, nunca crea recordatorio.
 13. Tick sin solapamiento.
 14. `is_quiet_hour`: normal, cruce de medianoche, bordes, `start==end`, zonas.
+
+## Estado (2026-10-03): bloques 0 a 5b HECHOS — `pytest -q`: 303 passed; `ruff check .`: limpio
+Pendientes: 6, 7 y 8, más el defecto de la regla 10 (arriba).
+
+## Decisiones de implementación (a revisar)
+2. **Estado "detenido" = `attempts = 1000`** (`STOPPED_ATTEMPTS`), un valor centinela, para no añadir otra migración.
+   `Reminder.stopped` lo expone; el recordatorio sigue `pending` y `/recordatorios` lo marcará. Cubre error permanente
+   y agotar las 24 h. Si es de una serie, la siguiente ocurrencia se crea igual.
+3. **Reintentos**: espera `min(30 s · 2^(n−1), 900 s)` → 30, 60, 120, 240, 480, 900, 900… **Tope máximo: 15 min**.
+   Se rinde tras 100 intentos fallidos seguidos (≈ 25 h de espera acumulada). La espera cuenta intentos, no horas de
+   reloj: el silencio nocturno (que salta ticks de prioridad 1) puede alargar algo ese plazo; se prefiere eso a rendirse antes.
+   La espera entre intentos vive en memoria: al reiniciar el proceso se reintenta de inmediato.
+4. **Bandeja → recordatorio**: el recordatorio se crea con `task_id = NULL` y la tarea de bandeja pasa a `dropped`
+   (así no se duplica y la cascada no lo cancela). En la Fase 3, `/papelera` mostrará esas tareas descartadas por
+   conversión; habrá que decidir cómo distinguirlas (no hay columna para marcarlas).
+5. **Mayúsculas en días de la semana** (regla 10 del parser): "llamar a Domingo" se toma como nombre propio. Ver el DEFECTO CONOCIDO de la regla 10: hoy también descarta "el Domingo" / "este Domingo" / "para el Domingo".
+6. **Entrega "al menos una vez"**: si el proceso muere entre enviar y marcar `sent`, un aviso puede repetirse al reiniciar;
+   nunca se pierde. Si falla registrar el envío (p. ej. el cálculo de la siguiente ocurrencia), se revierte todo y el
+   siguiente tick lo reintenta entero (una sola transacción).
+7. **Insistencia**: primer aviso + hasta 3 reenvíos cada 15 min (`nag_count`); atraviesa el silencio; los reenvíos no
+   llevan "(retrasado)". Una serie genera su siguiente SOLO en el primer disparo de la fila (`last_fired_at` vacío):
+   posponer o reenviar no crea otra. Los avisos de preparación llevan `task_id`; los recordatorios sueltos no, por eso
+   `set_due` solo rehace los de preparación.
 
 ## Bloques (un commit por bloque)
 - [x] 0. Plan y SPEC (secciones 7 y 8.3) — `Fase 1: plan y actualización del SPEC`
