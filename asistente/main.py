@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import logging
 import os
+import sqlite3
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
@@ -19,8 +20,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from asistente.bot.handlers import handle_choice, handle_message
+from asistente.channels.base import Channel
 from asistente.config import ConfigError, Settings, load_settings
+from asistente.core.reminders import ReminderEngine
 from asistente.db import open_db
+from asistente.timeutil import now
 
 logger = logging.getLogger(__name__)
 
@@ -55,29 +59,38 @@ def build_settings(dry_run_flag: bool) -> Settings:
     return settings
 
 
-def run_console(settings: Settings) -> None:
+def build_engine(settings: Settings, conn: sqlite3.Connection, channel: Channel) -> ReminderEngine:
+    """El motor de recordatorios, conectado al canal y al reloj real."""
+    return ReminderEngine(conn, channel, str(settings.allowed_user_id), settings.tz_name, now)
+
+
+def run_console(settings: Settings, conn: sqlite3.Connection) -> None:
     from asistente.channels.console import ConsoleChannel
 
     # La consola de Windows puede no soportar emojis por defecto.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     channel = ConsoleChannel(user_ref=str(settings.allowed_user_id))
+    engine = build_engine(settings, conn, channel)
     asyncio.run(
         channel.serve(
             partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
             partial(handle_choice, channel=channel, allowed_user_id=settings.allowed_user_id),
+            engine.tick,
         )
     )
 
 
-def run_telegram(settings: Settings) -> None:
+def run_telegram(settings: Settings, conn: sqlite3.Connection) -> None:
     # Importación tardía: el dry-run nunca carga la librería de Telegram.
     from asistente.channels.telegram import TelegramChannel
 
     channel = TelegramChannel(settings.telegram_bot_token, settings.allowed_user_id)
+    engine = build_engine(settings, conn, channel)
     channel.run_polling(
         partial(handle_message, channel=channel, allowed_user_id=settings.allowed_user_id),
         partial(handle_choice, channel=channel, allowed_user_id=settings.allowed_user_id),
+        engine.tick,  # Telegram lo corre cada 30 s y una vez al arrancar (first=0)
     )
 
 
@@ -94,9 +107,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         logger.info("Arrancando (dry_run=%s)", settings.dry_run)
         if settings.dry_run:
-            run_console(settings)
+            run_console(settings, conn)
         else:
-            run_telegram(settings)
+            run_telegram(settings, conn)
     finally:
         conn.close()
     return 0

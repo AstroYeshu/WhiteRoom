@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Callable
 
 from asistente.channels.base import (
+    TICK_INTERVAL_SECONDS,
     Choice,
     ChoiceCallback,
     IncomingChoice,
     IncomingMessage,
     MessageCallback,
+    TickCallback,
+    run_tick_safely,
 )
 
 CHANNEL_NAME = "console"
@@ -55,8 +59,33 @@ class ConsoleChannel:
         self._pending = []
         return IncomingMessage(CHANNEL_NAME, self._user_ref, line)
 
-    async def serve(self, on_message: MessageCallback, on_choice: ChoiceCallback) -> None:
-        """Bucle principal: lee líneas hasta `/salir` o fin de entrada (Ctrl+Z / Ctrl+D)."""
+    async def serve(
+        self,
+        on_message: MessageCallback,
+        on_choice: ChoiceCallback,
+        on_tick: TickCallback,
+        tick_interval: float = TICK_INTERVAL_SECONDS,
+    ) -> None:
+        """Bucle principal: lee líneas hasta `/salir` o fin de entrada (Ctrl+Z / Ctrl+D).
+
+        El tick de recordatorios corre en una tarea aparte (uno al arrancar y luego cada
+        `tick_interval` s); como espera a que termine cada tick, nunca se solapa.
+        """
+        ticker = asyncio.create_task(self._tick_loop(on_tick, tick_interval))
+        try:
+            await self._read_loop(on_message, on_choice)
+        finally:
+            ticker.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ticker
+
+    @staticmethod
+    async def _tick_loop(on_tick: TickCallback, interval: float) -> None:
+        while True:
+            await run_tick_safely(on_tick)
+            await asyncio.sleep(interval)
+
+    async def _read_loop(self, on_message: MessageCallback, on_choice: ChoiceCallback) -> None:
         self._output("Modo consola (dry-run). Escribe /ayuda; /salir para terminar.")
         while True:
             try:

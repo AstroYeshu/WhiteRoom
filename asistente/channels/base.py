@@ -5,9 +5,12 @@ El resto del sistema solo conoce estos tipos; nunca sabe en qué plataforma corr
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -83,3 +86,14 @@ class Channel(Protocol):
 
 MessageCallback = Callable[[IncomingMessage], Awaitable[None]]
 ChoiceCallback = Callable[[IncomingChoice], Awaitable[None]]
+TickCallback = Callable[[], Awaitable[object]]  # el tick de recordatorios (cada 30 s)
+
+TICK_INTERVAL_SECONDS = 30  # cada cuánto revisa el motor lo vencido (SPEC 8.3)
+
+
+async def run_tick_safely(on_tick: TickCallback) -> None:
+    """Un fallo dentro del tick se registra (solo el tipo, nunca texto) y no mata al job."""
+    try:
+        await on_tick()
+    except Exception as error:  # noqa: BLE001 - el siguiente tick debe poder correr
+        logger.error("Fallo en el tick de recordatorios: %s", type(error).__name__)

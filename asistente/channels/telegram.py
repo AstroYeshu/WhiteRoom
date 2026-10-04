@@ -24,14 +24,17 @@ from telegram.ext import (
 
 from asistente.bot.auth import is_allowed
 from asistente.channels.base import (
+    TICK_INTERVAL_SECONDS,
     Choice,
     ChoiceCallback,
     IncomingChoice,
     IncomingMessage,
     MessageCallback,
     PermanentChannelError,
+    TickCallback,
     TransientChannelError,
     UnclassifiedChannelError,
+    run_tick_safely,
 )
 
 logger = logging.getLogger(__name__)
@@ -137,8 +140,16 @@ class TelegramChannel:
 
     # --- Entrada -------------------------------------------------------------------
 
-    def run_polling(self, on_message: MessageCallback, on_choice: ChoiceCallback) -> None:
-        """Arranca el long polling (bloqueante). No abre puertos."""
+    def run_polling(
+        self, on_message: MessageCallback, on_choice: ChoiceCallback, on_tick: TickCallback
+    ) -> None:
+        """Arranca el long polling (bloqueante). No abre puertos.
+
+        `on_tick` corre cada 30 s (y al arrancar) en el `job_queue` de la librería.
+        """
+
+        async def _tick_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+            await run_tick_safely(on_tick)
 
         async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if update.effective_user is None or update.message is None:
@@ -167,4 +178,15 @@ class TelegramChannel:
         self._application.add_handler(MessageHandler(filters.TEXT, _on_text))
         self._application.add_handler(CallbackQueryHandler(_on_callback))
         self._application.add_error_handler(_on_error)
+        job_queue = self._application.job_queue
+        if job_queue is None:  # falta el extra `job-queue`: sin él no habría recordatorios
+            raise RuntimeError("python-telegram-bot sin el extra job-queue")
+        job_queue.run_repeating(
+            _tick_job,
+            interval=TICK_INTERVAL_SECONDS,
+            first=0,  # un tick al arrancar: recupera lo vencido durante una caída
+            name="reminder_tick",
+            # Una sola instancia a la vez; los disparos atrasados se funden en uno.
+            job_kwargs={"max_instances": 1, "coalesce": True},
+        )
         self._application.run_polling()

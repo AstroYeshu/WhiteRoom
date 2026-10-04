@@ -5,6 +5,11 @@ from asistente.channels.base import Choice, IncomingChoice, IncomingMessage
 from asistente.channels.console import ConsoleChannel
 from asistente.channels.telegram import build_keyboard
 
+
+async def no_tick() -> int:
+    return 0
+
+
 CHOICES = [Choice("done:42", "Hecho"), Choice("snooze:42", "+10 min")]
 
 
@@ -46,7 +51,7 @@ def test_consola_convierte_entradas_y_numeros_en_elecciones():
         picked.append(choice)
 
     channel, _ = make_console(["/ayuda", "2", "2", "", "/salir", "nunca llega"])
-    asyncio.run(channel.serve(on_message, on_choice))
+    asyncio.run(channel.serve(on_message, on_choice, no_tick))
 
     # El primer "2" elige (hay opciones pendientes); el segundo ya es texto normal.
     assert picked == [IncomingChoice("console", "1", "snooze:42")]
@@ -59,7 +64,7 @@ def test_consola_termina_con_fin_de_entrada():
     async def nothing(_event) -> None:
         raise AssertionError("no debía llegar nada")
 
-    asyncio.run(channel.serve(nothing, nothing))
+    asyncio.run(channel.serve(nothing, nothing, no_tick))
 
 
 def test_teclado_de_telegram_lleva_el_id_como_callback_data():
@@ -90,7 +95,7 @@ def test_telegram_ignora_en_silencio_a_usuarios_no_autorizados(monkeypatch):
     async def record(event) -> None:
         received.append(event)
 
-    channel.run_polling(record, record)
+    channel.run_polling(record, record, no_tick)
     text_handler, callback_handler = captured["handlers"]
 
     answered: list[bool] = []
