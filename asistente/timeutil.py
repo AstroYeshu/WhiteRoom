@@ -7,7 +7,7 @@ El reloj es inyectable: las funciones que dependen de la hora reciben un `Clock`
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 Clock = Callable[[], datetime]
@@ -43,3 +43,34 @@ def local_to_utc(naive_local: datetime, tz_name: str) -> datetime:
     if naive_local.tzinfo is not None:
         raise ValueError("Se esperaba un datetime sin zona horaria")
     return naive_local.replace(tzinfo=ZoneInfo(tz_name)).astimezone(UTC)
+
+
+def parse_hhmm(text: str) -> time:
+    """Lee una hora `HH:MM` (como se guarda en `settings`)."""
+    return time.fromisoformat(text.strip())
+
+
+def is_quiet_hour(moment: datetime, quiet_start: time, quiet_end: time, tz_name: str) -> bool:
+    """¿`moment` cae dentro de las horas de silencio (hora local del usuario)?
+
+    El inicio es inclusivo y el fin exclusivo. El rango puede cruzar la medianoche
+    (22:00-07:00). Si inicio y fin coinciden, no hay horas de silencio.
+    """
+    local_time = to_local(moment, tz_name).time().replace(tzinfo=None)
+    if quiet_start == quiet_end:
+        return False
+    if quiet_start < quiet_end:
+        return quiet_start <= local_time < quiet_end
+    return local_time >= quiet_start or local_time < quiet_end
+
+
+def next_quiet_end(moment: datetime, quiet_end: time, tz_name: str) -> datetime:
+    """Próximo instante (UTC) en que termina el silencio, a partir de `moment`."""
+    local = to_local(moment, tz_name)
+    candidate = local.replace(hour=quiet_end.hour, minute=quiet_end.minute, second=0, microsecond=0)
+    if candidate <= local:
+        # Se suma un día de calendario local (no 24 h) para respetar el cambio de horario.
+        candidate = (candidate.replace(tzinfo=None) + timedelta(days=1)).replace(
+            tzinfo=ZoneInfo(tz_name)
+        )
+    return candidate.astimezone(UTC)
