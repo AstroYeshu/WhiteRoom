@@ -20,6 +20,9 @@ DEFAULT_TICK_SECONDS = 30
 MIN_TICK_SECONDS = 5
 MAX_TICK_SECONDS = 60
 
+# Lo que no es opcional fuera de dry-run (solo nombres, nunca valores).
+REQUIRED_VARS = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_ID", "TZ_NAME", "CURRENCY_CODE")
+
 # En --dry-run no hay ID real de Telegram: la consola actúa como este usuario.
 DRY_RUN_USER_ID = 1
 
@@ -83,10 +86,8 @@ def load_settings(env: Mapping[str, str], dry_run: bool = False) -> Settings:
 
     dry_run = dry_run or _is_true(get("DRY_RUN", "0"))
 
-    # Lo que no es opcional fuera de dry-run (solo nombres, nunca valores).
-    required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_ID", "TZ_NAME", "CURRENCY_CODE")
     if not dry_run:
-        missing = [name for name in required if not get(name)]
+        missing = [name for name in REQUIRED_VARS if not get(name)]
         if missing:
             raise ConfigError("Faltan variables obligatorias: " + ", ".join(missing))
 

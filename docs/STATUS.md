@@ -62,7 +62,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - 2a HECHO: `deploy/asistente.service`, `.gitattributes` (`*.sh`, `*.service`, `*.sql` con LF) y `.env.example` sin comentarios al final de
   línea (systemd no los admite). Pruebas en `tests/test_deploy_files.py`. 
 - 2b HECHO: `scripts/backup_db.py` (API `sqlite3.backup`, 14 días, código de salida) con `tests/test_backup_db.py` (17 pruebas); SPEC actualizado.
-  Pendiente: 2c check_env, 2d /estado, 2e README.
+- 2c HECHO: `scripts/check_env.py` (Python, tzdata y zona, variables, base escribible, paquetes, `.env` sin comentarios al final, reloj) con
+  `tests/test_check_env.py` (30 pruebas). Mutaciones: 15, cada una mata 1 prueba (NTP, 2). `config.REQUIRED_VARS` ahora es público.
+  Pendiente: 2d /estado, 2e README.
 
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
