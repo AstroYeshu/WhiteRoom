@@ -274,7 +274,8 @@ ASK_CASES = [
     ("mañana a las 5 y cuarto", "ambiguous_meridiem", ["2026-10-04 05:15", "2026-10-04 17:15"]),
     ("mañana 8:30", "ambiguous_meridiem", ["2026-10-04 08:30", "2026-10-04 20:30"]),
     ("mañana 6:30", "ambiguous_meridiem", ["2026-10-04 06:30", "2026-10-04 18:30"]),
-    ("a las 9", "ambiguous_meridiem", ["2026-10-03 21:00"]),  # 9 am de hoy ya pasó
+    # Regla 9 (antes: solo ["2026-10-03 21:00"]): sin día, la próxima ocurrencia de cada lectura
+    ("a las 9", "ambiguous_meridiem", ["2026-10-03 21:00", "2026-10-04 09:00"]),
     ("el sábado a las 5", "same_weekday", []),  # primero el día; la hora se pregunta después
 ]
 

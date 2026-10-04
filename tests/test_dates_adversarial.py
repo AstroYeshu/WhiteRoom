@@ -544,3 +544,117 @@ def test_diario_sustantivo_o_repeticion(phrase, now_local, expected):
 
 def test_parse_when_solo_tampoco_trata_mi_diario_como_serie():
     check(run("escribir en mi diario mañana"), ("ok", "2026-10-04 09:00", False))
+
+
+# --- Familia 7: candidatos am/pm sin día (regla 9) y "mañana" de madrugada (regla 10) ------------
+SUN_0040 = "2026-10-04 00:40"
+SAT_2300 = "2026-10-03 23:00"
+MERIDIEM = [
+    # Sin día: la próxima ocurrencia futura de CADA lectura; si la am llega antes, ambas
+    ("a las 4", SAT_2300, ("ask", "ambiguous_meridiem", ["2026-10-04 04:00", "2026-10-04 16:00"])),
+    ("a las 3", SAT_1530, ("ask", "ambiguous_meridiem", ["2026-10-04 03:00", "2026-10-04 15:00"])),
+    (
+        "a las 2 y media",
+        SAT_2300,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 02:30", "2026-10-04 14:30"]),
+    ),
+    (
+        "a las 4",
+        "2026-10-03 02:00",
+        ("ask", "ambiguous_meridiem", ["2026-10-03 04:00", "2026-10-03 16:00"]),
+    ),
+    ("a las 8", SAT_1530, ("ask", "ambiguous_meridiem", ["2026-10-03 20:00", "2026-10-04 08:00"])),
+    ("a las 8", SAT_2300, ("ask", "ambiguous_meridiem", ["2026-10-04 08:00", "2026-10-04 20:00"])),
+    (
+        "a las 8",
+        "2026-10-03 02:00",
+        ("ask", "ambiguous_meridiem", ["2026-10-03 08:00", "2026-10-03 20:00"]),
+    ),
+    (
+        "a las siete y media",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-03 19:30", "2026-10-04 07:30"]),
+    ),
+    # Si la pm llega primero y la hora es de 1 a 4, queda la de la tarde (marcada como asumida)
+    ("a las 4", SAT_1530, ("ok", "2026-10-03 16:00", True)),
+    ("a las 2", "2026-10-03 10:00", ("ok", "2026-10-03 14:00", True)),
+    # Con día explícito: un candidato único sigue siendo ASK con ese candidato (nunca ok)
+    ("hoy a las 8", SAT_1530, ("ask", "ambiguous_meridiem", ["2026-10-03 20:00"])),
+    ("hoy a las 6", SAT_1530, ("ask", "ambiguous_meridiem", ["2026-10-03 18:00"])),
+    (
+        "hoy a las 8",
+        "2026-10-03 05:00",
+        ("ask", "ambiguous_meridiem", ["2026-10-03 08:00", "2026-10-03 20:00"]),
+    ),
+    (
+        "mañana a las 8",
+        SAT_1530,
+        ("ask", "ambiguous_meridiem", ["2026-10-04 08:00", "2026-10-04 20:00"]),
+    ),
+    # Con marcador, 24 h o mediodía no se pregunta
+    ("a las 8 pm", SAT_1530, ("ok", "2026-10-03 20:00", True)),
+    ("a las 16:00", SAT_2300, ("ask", "past", ["2026-10-04 16:00"])),  # ya pasó: se pregunta
+    ("a las 12", SAT_2300, ("ask", "past", ["2026-10-04 12:00"])),
+]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "now_local", "expected"), MERIDIEM, ids=[f"{c[0]} @ {c[1]}" for c in MERIDIEM]
+)
+def test_candidatos_am_pm(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)
+
+
+def test_la_hora_asumida_sigue_marcada_como_asumida():
+    assert run("a las 4").meridiem_inferred is True
+
+
+TODAY_OR_TOMORROW = [
+    # Entre las 00:00 y las 05:00 locales, "mañana" pregunta "¿hoy o mañana?"
+    (
+        "mañana a las 8 am",
+        SUN_0040,
+        ("ask", "today_or_tomorrow", ["2026-10-04 08:00", "2026-10-05 08:00"]),
+    ),
+    ("mañana", SUN_0040, ("ask", "today_or_tomorrow", ["2026-10-04 09:00", "2026-10-05 09:00"])),
+    (
+        "mañana a las 8 de la mañana",
+        SUN_0040,
+        ("ask", "today_or_tomorrow", ["2026-10-04 08:00", "2026-10-05 08:00"]),
+    ),
+    (
+        "mañana a las 8 pm",
+        "2026-10-04 04:59",
+        ("ask", "today_or_tomorrow", ["2026-10-04 20:00", "2026-10-05 20:00"]),
+    ),
+    (
+        "mañana 3 pm",
+        "2026-10-04 00:00",
+        ("ask", "today_or_tomorrow", ["2026-10-04 15:00", "2026-10-05 15:00"]),
+    ),
+    ("mañana a las 8", SUN_0040, ("ask", "today_or_tomorrow")),  # primero el día; la hora después
+    (
+        "mañana por la mañana",
+        SUN_0040,
+        ("ask", "unrecognized_time"),
+    ),  # el parser no la reconoce como hora
+    # Fuera de la ventana, o si la lectura de hoy ya pasó, no hay duda
+    ("mañana a las 8 am", "2026-10-04 05:00", ("ok", "2026-10-05 08:00", True)),
+    ("mañana a las 8 am", SAT_1530, ("ok", "2026-10-04 08:00", True)),
+    ("mañana a las 3 am", "2026-10-04 04:30", ("ok", "2026-10-05 03:00", True)),
+    # "pasado mañana" no aplica
+    ("pasado mañana a las 8 am", SUN_0040, ("ok", "2026-10-06 08:00", True)),
+    ("pasado mañana", SUN_0040, ("ok", "2026-10-06 09:00", False)),
+    # Otros días tampoco
+    ("hoy a las 8 am", SUN_0040, ("ok", "2026-10-04 08:00", True)),
+    ("el lunes a las 8 am", SUN_0040, ("ok", "2026-10-05 08:00", True)),
+]
+
+
+@pytest.mark.parametrize(
+    ("phrase", "now_local", "expected"),
+    TODAY_OR_TOMORROW,
+    ids=[f"{c[0]} @ {c[1]}" for c in TODAY_OR_TOMORROW],
+)
+def test_manana_de_madrugada_pregunta_hoy_o_manana(phrase, now_local, expected):
+    check(run(phrase, now_local), expected, phrase)

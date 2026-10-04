@@ -50,6 +50,7 @@ _REMINDER_VERBS = {"recordar", "recordarme", "recuerdame"}  # "recuérdame", sin
 # Horas sin am/pm que se PREGUNTAN (ambos extremos incluidos). Por debajo del rango se asume
 # tarde (1-4) y por encima mañana. Vive en `settings` (meridiem_ask_range).
 DEFAULT_MERIDIEM_ASK_RANGE = (5, 11)
+_SMALL_HOURS_END = 5  # antes de las 05:00 locales "mañana" puede significar hoy (regla 10)
 
 Status = Literal["none", "ok", "ask"]
 
@@ -603,7 +604,7 @@ def _scan_days(work: str, original: str, today: date) -> tuple[list[Hit], str, b
     for m in list(_RE_TOMORROW.finditer(work)):
         if _RE_ARTICLE_BEFORE.search(work[: m.start("w")]):
             continue  # "de la mañana": es parte del día, no el día de mañana
-        take(m, "day", (today + timedelta(days=1), None, None))
+        take(m, "day", (today + timedelta(days=1), None, "tomorrow"))
     for m in list(_RE_WEEKDAY.finditer(work)):
         if _is_ambiguous_domingo(m, original, work):
             skipped_name = True  # "llamar a Domingo": ¿nombre o día?
@@ -768,6 +769,26 @@ def parse_when(
         return _ask(title, reason)
     assert isinstance(day, date)
 
+    if extra == "tomorrow" and to_local(moment, tz_name).hour < _SMALL_HOURS_END:
+        # Regla 10: pasada la medianoche "mañana" puede ser hoy ("mañana a las 8" a las 00:40)
+        if meridiem_hit is not None:
+            return _ask(title, "today_or_tomorrow")  # primero el día; la hora se pregunta después
+        today_at = local_to_utc(datetime.combine(today, clock), tz_name)
+        if today_at > moment:
+            tomorrow_at = local_to_utc(datetime.combine(day, clock), tz_name)
+            return _ask(title, "today_or_tomorrow", (today_at, tomorrow_at))
+    if not plain_days and strong and strong[0].raw is not None and strong[0].raw[0] <= 11:
+        if meridiem_hit is not None or strong[0].inferred:
+            # Regla 9: sin día, la próxima ocurrencia futura de CADA lectura (am y pm). Si la am
+            # llega antes que la pm (o es una hora de 5 a 11), se pregunta con las dos.
+            hour, minute = strong[0].raw
+            readings = (time(hour, minute), time(hour + 12, minute))
+            am_next, pm_next = (
+                _next_local(reading, today, tz_name, moment) for reading in readings
+            )
+            if meridiem_hit is not None or am_next < pm_next:
+                return _ask(title, "ambiguous_meridiem", tuple(sorted((am_next, pm_next))))
+
     if meridiem_hit is not None:
         readings = (clock, clock.replace(hour=clock.hour + 12))
         options = tuple(
@@ -790,6 +811,14 @@ def parse_when(
         has_time=has_time,
         meridiem_inferred=bool(strong) and strong[0].inferred,
     )
+
+
+def _next_local(clock: time, today: date, tz_name: str, moment: datetime) -> datetime:
+    """La próxima vez (UTC) que el reloj local marca `clock`: hoy si aún no pasó, si no mañana."""
+    first = local_to_utc(datetime.combine(today, clock), tz_name)
+    if first > moment:
+        return first
+    return local_to_utc(datetime.combine(today + timedelta(days=1), clock), tz_name)
 
 
 def _midnight_options(
