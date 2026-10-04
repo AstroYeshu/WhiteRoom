@@ -46,7 +46,7 @@ Aprobado por el dueño. Marcar cada bloque al completarlo. **Corte principal de 
 
 ## Bloques (un commit por bloque)
 - [x] 0. Plan y SPEC (secciones 7 y 8.3) — `Fase 1: plan y actualización del SPEC`
-- [ ] 1. Dependencias: `python-telegram-bot[job-queue]==22.8`, `dateparser`, `python-dateutil` — `Fase 1: dependencias`
+- [x] 1. Dependencias: `python-telegram-bot[job-queue]==22.8`, `dateparser`, `python-dateutil` — `Fase 1: dependencias`
 - [ ] 2. `is_quiet_hour` / `next_quiet_end` + pruebas — `Fase 1: horas de silencio`
 - [ ] 3. `parsing/dates.py` (+ parser de repetición) + pruebas — `Fase 1: parseo de fechas`
 - [ ] 4. Migración 002, `core/areas`, `tasks`, `notes` + pruebas — `Fase 1: áreas, tareas y notas`
