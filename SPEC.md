@@ -143,7 +143,6 @@ asistente/
 │  │  ├─ conversation.py      # estado del flujo a medias, en memoria
 │  │  └─ ui.py                # editar la tarjeta o mandar un mensaje nuevo
 │  ├─ core/
-│  │  ├─ capture.py           # pipeline de captura de mensajes libres
 │  │  ├─ areas.py
 │  │  ├─ settings.py          # lectura de la tabla `settings`
 │  │  ├─ runtime.py           # estado de ejecución para /estado (solo memoria)
@@ -154,7 +153,7 @@ asistente/
 │  │  ├─ briefing.py          # resumen diario y revisión semanal
 │  │  ├─ ledger.py            # libro de cuentas
 │  │  └─ context_pack.py      # paquetes de contexto para claude.ai
-│  ├─ classify/
+│  ├─ classify/               # parte PURA de la captura: reglas, clasificador, decisión (sin conversación)
 │  │  ├─ base.py              # Protocol Classifier + dataclass Classification
 │  │  ├─ rules.py             # reglas aprendidas
 │  │  ├─ jev.py
@@ -341,7 +340,7 @@ WHERE l.voided = 0 GROUP BY a.id;
 
 ## 8. Comportamientos
 
-### 8.1 Captura de mensajes libres (`core/capture.py`)
+### 8.1 Captura de mensajes libres (`bot/inbox.py`; la parte pura irá en `classify/`)
 
 Todo mensaje que no sea comando entra a este pipeline:
 
@@ -474,9 +473,10 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 A `briefing_time`:
 1. **Mensaje 1 — resumen por área**: vencidas, de hoy, recordatorios de hoy, y elementos de la bandeja
    con más de 2 días sin resolver.
-2. **Mensaje 2 — ¿Quitas alguna?**: hasta 10 tareas numeradas con botones por tarea
-   `Hecha · Posponer · Descartar`. "Posponer" ofrece mañana / elegir fecha. "Descartar" es
-   soft delete (`status='dropped'`).
+2. **Mensaje 2 — ¿Quitas alguna?**: reutiliza el patrón de `/pendientes`: UN mensaje con la lista numerada (hasta 10
+   tareas) y un botón por número; al pulsar un número, la tarea se abre en el MISMO mensaje con
+   `Hecha · Descartar · Posponer · Volver` y, tras la acción, vuelve a la lista ya actualizada. "Posponer" ofrece
+   mañana / elegir fecha. "Descartar" es soft delete (`status='dropped'`).
 3. Si el usuario no responde, **silencio**: no se insiste.
 4. Referencias en texto libre: "quita la 2 y la 4" por regex de números; "ya hice lo de cálculo" por una
    pregunta `choice` de Jev cuyas opciones son los títulos de las tareas abiertas (si la confianza es

@@ -82,7 +82,7 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - Etiquetas para la Fase 2: cada captura completada deja una fila `source='user'` en `classification_log` (`tests/test_classification_log.py`, 35 pruebas;
   17 mutaciones, todas con 2 o más fallos).
 
-- Auditoría con columna de resolución: 11 discrepancias resueltas editando el SPEC; quedan la 7 y la 10 como preguntas (`docs/PREGUNTAS.md`).
+- Auditoría: las 13 discrepancias resueltas (la 7 y la 10 por decisión del dueño; SPEC actualizado). Abiertas en `docs/PREGUNTAS.md`: el `.env` real y activar o no el hook de pre-commit (`.githooks/`, sin activar: tarda ~2 min).
 
 - `classification_log.capture_id` (migración 005): una fila por captura, ligada a la tarea de bandeja; «Cambiar» actualiza la misma fila con
   `user_corrected=1`. `scripts/eval_classifier.py` resume las etiquetas (una por captura). 16 mutaciones, todas con 2 o más fallos.
