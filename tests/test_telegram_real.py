@@ -233,7 +233,7 @@ def test_un_numero_de_pendientes(real, conn, caplog):
     with caplog.at_level(logging.INFO):
         real.press(number)
     assert errors_in(caplog) == []
-    assert "comprar pan" in real.edits[0]["text"]
+    assert "Comprar pan" in real.edits[0]["text"]
     assert keyboard_data(real.edits[0])  # Hecha, Descartar, Volver
     assert task.id
 

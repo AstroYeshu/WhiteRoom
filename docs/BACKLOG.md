@@ -47,3 +47,7 @@ Aprobados por el dueño; no se construyen hasta que haya usado el bot una semana
 - **Posponer** abre: [+10 min] [+1 h] [Mañana 9:00 am] (o «Hoy» en vez de «Mañana» antes de las 05:00) [Elegir hora] [Volver].
 - **Variantes** en cursiva: «Retrasado» (umbral actual de 2 min) y «Aviso 2 de 3» (reintentos).
 - **Compatibilidad:** los ids viejos `rem_done`, `rem_snooze` y `rem_tomorrow` siguen funcionando (mensajes ya enviados con botones viejos).
+
+## Surgido en el commit de estilo (capitalización)
+- La descripción de un área se muestra tal cual la escribió el dueño (no pasa por `cap_first`): decidir si también debe capitalizarse al mostrar.
+- Dos áreas que ya chocaban entre sí antes de la migración 006 (sin distinguir acentos o mayúsculas) quedan ambas como estaban; no hay herramienta para fusionarlas (nada se borra).

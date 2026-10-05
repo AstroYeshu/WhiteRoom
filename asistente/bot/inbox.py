@@ -100,8 +100,15 @@ def describe_rrule(rrule: str) -> str:
 
 
 def _area_name(ctx: Ctx, area_id: int | None) -> str | None:
+    """El nombre guardado del área (para la etiqueta de clasificación; no se modifica)."""
     area = areas.get_area(ctx.conn, area_id) if area_id is not None else None
     return area.name if area is not None else None
+
+
+def _area_shown(ctx: Ctx, area_id: int | None) -> str | None:
+    """El nombre del área para MOSTRAR, con su primera letra en mayúscula."""
+    name = _area_name(ctx, area_id)
+    return fmt.cap_first(name) if name is not None else None
 
 
 def _content(flow: Flow) -> str:
@@ -114,14 +121,14 @@ def _details(ctx: Ctx, flow: Flow) -> list[fmt.Html]:
     lines: list[fmt.Html] = []
     if flow.kind:
         lines.append(fmt.detail("Tipo", KIND_LABELS[flow.kind]))
-    area = _area_name(ctx, flow.area_id)
+    area = _area_shown(ctx, flow.area_id)
     if area:
         lines.append(fmt.detail("Área", area))
     return lines
 
 
 def _area_line(ctx: Ctx, area_id: int | None) -> list[fmt.Html]:
-    area = _area_name(ctx, area_id)
+    area = _area_shown(ctx, area_id)
     return [fmt.detail("Área", area)] if area else []
 
 
@@ -316,7 +323,9 @@ async def _ask_area(ctx: Ctx, flow: Flow) -> None:
         flow.area_id = None
         await _after_area(ctx, flow)
         return
-    buttons: list[Button] = [("a", area.id, fmt.label(area.name)) for area in available]
+    buttons: list[Button] = [
+        ("a", area.id, fmt.label(fmt.cap_first(area.name))) for area in available
+    ]
     buttons += [("a", 0, fmt.BTN_NO_AREA), CANCEL]
     text = fmt.card(fmt.Q_AREA, _content(flow), _details(ctx, flow))
     await _ask(ctx, flow, STEP_AREA, text, buttons)
@@ -555,7 +564,9 @@ async def _finish_area(ctx: Ctx, flow: Flow, description: str) -> None:
         await _finish(ctx, flow, fmt.aviso(str(error)))
         return
     logger.info("Área creada id=%s", area.id)
-    done = fmt.card(fmt.DONE_AREA, area.name, note=area.description or fmt.NOTE_NO_DESCRIPTION)
+    done = fmt.card(
+        fmt.DONE_AREA, fmt.cap_first(area.name), note=area.description or fmt.NOTE_NO_DESCRIPTION
+    )
     await _finish(ctx, flow, done)
 
 

@@ -65,9 +65,9 @@ def test_badrequest_con_dos_validos_en_el_mismo_tick_los_dos_validos_salen(
     conn, clock, engine, channel
 ):
     first, bad, last = make(conn, clock, "uno", "malo", "tres")
-    fail_texts(channel, PermanentChannelError("bad_request:wrong_entity"), "malo")
+    fail_texts(channel, PermanentChannelError("bad_request:wrong_entity"), "Malo")
     assert tick(engine) == 2
-    assert sent_texts(channel) == ["<b>uno</b>\n\nRecordatorio", "<b>tres</b>\n\nRecordatorio"]
+    assert sent_texts(channel) == ["<b>Uno</b>\n\nRecordatorio", "<b>Tres</b>\n\nRecordatorio"]
     assert row(conn, first).status == row(conn, last).status == "sent"
     stopped = row(conn, bad)
     assert stopped.stopped and stopped.status == "pending"
@@ -79,7 +79,7 @@ def test_badrequest_con_dos_validos_en_el_mismo_tick_los_dos_validos_salen(
 
 def test_el_permanente_no_activa_la_espera_del_canal(conn, clock, engine, channel):
     (bad,) = make(conn, clock, "malo")
-    fail_texts(channel, PermanentChannelError("bad_request:x"), "malo")
+    fail_texts(channel, PermanentChannelError("bad_request:x"), "Malo")
     tick(engine)
     (good,) = make(conn, clock, "bueno")
     # Sin avanzar el reloj: si el canal estuviera en espera, "bueno" no saldría.
@@ -94,11 +94,11 @@ def test_una_excepcion_inesperada_con_otros_que_salen_despues_se_aisla_y_se_deti
     conn, clock, engine, channel
 ):
     bad, good_a, good_b = make(conn, clock, "malo", "bueno-a", "bueno-b")
-    fail_texts(channel, RuntimeError("raro"), "malo")
+    fail_texts(channel, RuntimeError("raro"), "Malo")
     assert tick(engine) == 2
     assert sent_texts(channel) == [
-        "<b>bueno-a</b>\n\nRecordatorio",
-        "<b>bueno-b</b>\n\nRecordatorio",
+        "<b>Bueno-a</b>\n\nRecordatorio",
+        "<b>Bueno-b</b>\n\nRecordatorio",
     ]
     stopped = row(conn, bad)
     assert stopped.stopped and stopped.status == "pending"
@@ -111,7 +111,7 @@ def test_una_excepcion_inesperada_con_otros_que_salen_despues_se_aisla_y_se_deti
 
 def test_el_aislado_no_vuelve_a_intentarse_en_el_siguiente_tick(conn, clock, engine, channel):
     make(conn, clock, "malo", "bueno")
-    fail_texts(channel, RuntimeError("raro"), "malo")
+    fail_texts(channel, RuntimeError("raro"), "Malo")
     tick(engine)
     attempts = len(channel.attempts)
     clock.advance(hours=1)
@@ -124,7 +124,7 @@ def test_una_excepcion_inesperada_tras_el_ultimo_envio_sigue_siendo_pasajera(
 ):
     """Si nadie sale DESPUÉS del fallo, no se sabe si falló el canal o la fila: se reintenta."""
     good, bad = make(conn, clock, "bueno", "malo")
-    fail_texts(channel, RuntimeError("raro"), "malo")
+    fail_texts(channel, RuntimeError("raro"), "Malo")
     assert tick(engine) == 1
     stored = row(conn, bad)
     assert (stored.status, stored.attempts, stored.stopped) == ("pending", 1, False)
@@ -171,21 +171,21 @@ def test_un_fallo_transitorio_declarado_corta_y_no_aisla_a_los_anteriores(
     bad, down, never = make(conn, clock, "malo", "caido", "nunca")
     channel.fail_if = lambda text: (
         RuntimeError("raro")
-        if "malo" in text
+        if "Malo" in text
         else TransientChannelError("telegram_down")
-        if "caido" in text
+        if "Caido" in text
         else None
     )
     assert tick(engine) == 0
     assert len(channel.attempts) == 2  # "nunca" no se intentó: el canal está caído
     assert not row(conn, bad).stopped and row(conn, bad).attempts == 1
     assert not row(conn, down).stopped
-    assert "<b>nunca</b>\n\nRecordatorio" not in channel.attempts
+    assert "<b>Nunca</b>\n\nRecordatorio" not in channel.attempts
 
 
 def test_el_texto_del_usuario_nunca_va_al_log(conn, clock, engine, channel, caplog):
     make(conn, clock, "secreto-médico", "otro")
-    fail_texts(channel, RuntimeError("secreto-médico"), "secreto")
+    fail_texts(channel, RuntimeError("secreto-médico"), "Secreto")
     with caplog.at_level("DEBUG"):
         tick(engine)
     assert "RuntimeError" in caplog.text
@@ -199,7 +199,7 @@ def test_sin_categoria_con_otro_que_sale_despues_se_detiene_con_su_clase(
     conn, clock, engine, channel
 ):
     odd, good = make(conn, clock, "raro", "bueno")
-    fail_texts(channel, UnclassifiedChannelError("telegram_error:Conflict"), "raro")
+    fail_texts(channel, UnclassifiedChannelError("telegram_error:Conflict"), "Raro")
     assert tick(engine) == 1
     stopped = row(conn, odd)
     assert stopped.stopped
@@ -229,7 +229,7 @@ BROKEN_ERRORS = [
 @pytest.mark.parametrize("error", BROKEN_ERRORS, ids=["inesperado", "sin_categoria"])
 def test_tres_rotos_al_frente_no_dejan_sin_salir_a_los_validos(conn, clock, engine, channel, error):
     ids = make(conn, clock, "roto-1", "roto-2", "roto-3", "bueno-a", "bueno-b")
-    fail_texts(channel, error, "roto")
+    fail_texts(channel, error, "Roto")
     for _ in range(2):  # como máximo 2 ticks (el segundo, pasada la espera de 30 s)
         tick(engine)
         clock.advance(seconds=31)
@@ -249,7 +249,7 @@ def test_rotos_al_frente_no_bloquean_recordatorios_nuevos_en_cada_tick(
 ):
     """Mientras los rotos siguen vivos (aún sin veredicto), un aviso nuevo y válido sale igual."""
     make(conn, clock, "roto-1", "roto-2", "roto-3")
-    fail_texts(channel, error, "roto")
+    fail_texts(channel, error, "Roto")
     tick(engine)  # tres fallos seguidos: se corta el tick
     clock.advance(seconds=31)
     (new,) = make(conn, clock, "nuevo")

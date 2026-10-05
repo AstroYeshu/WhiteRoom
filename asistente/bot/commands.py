@@ -57,8 +57,9 @@ def stop_reason_text(code: str) -> str | None:
 
 
 def _area_name(ctx: Ctx, area_id: int | None) -> str | None:
+    """El nombre del área para MOSTRAR, con su primera letra en mayúscula."""
     area = areas.get_area(ctx.conn, area_id) if area_id is not None else None
-    return area.name if area is not None else None
+    return fmt.cap_first(area.name) if area is not None else None
 
 
 async def _area_filter(ctx: Ctx, args: str) -> tuple[bool, int | None]:
@@ -94,7 +95,7 @@ async def today(ctx: Ctx, args: str) -> None:
         if to_local(due, ctx.tz_name).date() < today_local:
             when = f"vencida {when}"
         area = None if area_id is not None else _area_name(ctx, task.area_id)
-        task_items.append(fmt.bullet(fmt.clip(task.title), when, area))
+        task_items.append(fmt.bullet(fmt.cap_first(fmt.clip(task.title)), when, area))
 
     reminder_items: list[fmt.Html] = []
     for reminder in reminders.list_pending(ctx.conn):
@@ -104,7 +105,9 @@ async def today(ctx: Ctx, args: str) -> None:
         area = None if area_id is not None else _area_name(ctx, reminder.area_id)
         when = fmt.fecha_corta(fire, ctx.tz_name, ctx.now)
         stopped = "detenido" if reminder.stopped else None
-        reminder_items.append(fmt.bullet(when, fmt.clip(reminder.text), area, stopped))
+        reminder_items.append(
+            fmt.bullet(when, fmt.cap_first(fmt.clip(reminder.text)), area, stopped)
+        )
 
     title = f"Hoy{fmt.SEP}{fmt.dia_largo(moment, ctx.tz_name, ctx.now)}"
     if area_id is not None:
@@ -229,6 +232,7 @@ async def handle_pending_choice(ctx: Ctx, choice: IncomingChoice, parts: list[st
 def _reminder_item(ctx: Ctx, reminder: reminders.Reminder) -> fmt.Html:
     when = fmt.fecha_corta(from_utc_iso(reminder.fire_at_utc), ctx.tz_name, ctx.now)
     area = _area_name(ctx, reminder.area_id)
+    text = fmt.cap_first(fmt.clip(reminder.text, 80))
     if reminder.stopped:
         code = reminder.stop_reason or ""
         reason = stop_reason_text(code)
@@ -237,9 +241,9 @@ def _reminder_item(ctx: Ctx, reminder: reminders.Reminder) -> fmt.Html:
                 "Recordatorio %s detenido con un motivo desconocido: %r", reminder.id, code
             )
             reason = UNKNOWN_STOP_TEXT
-        return fmt.bullet(when, fmt.clip(reminder.text, 80), area, f"Motivo: {reason}")
+        return fmt.bullet(when, text, area, f"Motivo: {reason}")
     repeat = inbox.describe_rrule(reminder.rrule) if reminder.rrule else None
-    return fmt.bullet(when, fmt.clip(reminder.text, 80), area, repeat)
+    return fmt.bullet(when, text, area, repeat)
 
 
 async def reminders_list(ctx: Ctx, args: str) -> None:
@@ -302,7 +306,9 @@ async def areas_list(ctx: Ctx, args: str) -> None:
         await ctx.channel.send_text(ctx.user_ref, fmt.screen("Áreas", fmt.NO_AREAS))
         return
     items = [
-        fmt.bullet(area.name, None if area.description.strip() else "sin descripción")
+        fmt.bullet(
+            fmt.cap_first(area.name), None if area.description.strip() else "sin descripción"
+        )
         for area in available
     ]
     await ctx.channel.send_text(

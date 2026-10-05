@@ -64,10 +64,10 @@ def test_hoy_con_secciones_horas_cortas_y_bandeja(bot, conn, clock):
     assert screen(bot, "/hoy") == (
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
-        "- pagar luz · vencida vie 2 oct, 5:00 pm\n"
-        "- entregar informe · hoy, 5:00 pm · universidad\n\n"
+        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n"
+        "- Entregar informe · hoy, 5:00 pm · Universidad\n\n"
         "Recordatorios\n"
-        "- hoy, 6:00 pm · llamar a mamá\n\n"
+        "- hoy, 6:00 pm · Llamar a mamá\n\n"
         "3 en bandeja sin área"
     )
 
@@ -85,8 +85,8 @@ def test_hoy_con_area_filtra_y_no_muestra_la_bandeja(bot, conn, clock):
     add_reminder(conn, clock, "gimnasio", "2026-10-03 19:00", "personal")
     add_task(conn, clock, "suelta")
     text = screen(bot, "/hoy Universidad")
-    assert text.startswith("Hoy · sábado 3 de octubre · universidad\n")
-    assert "entregar informe" in text and "clase" in text
+    assert text.startswith("Hoy · sábado 3 de octubre · Universidad\n")
+    assert "Entregar informe" in text and "Clase" in text
     assert "regar plantas" not in text and "gimnasio" not in text
     assert "bandeja" not in text
 
@@ -100,7 +100,7 @@ def test_hoy_con_un_area_que_no_existe(bot):
 def test_hoy_los_recordatorios_detenidos_se_marcan(bot, conn, clock):
     stopped = add_reminder(conn, clock, "llamar a mamá", "2026-10-03 18:00")
     stop(conn, stopped.id, "permanent:bot_blocked")
-    assert "- hoy, 6:00 pm · llamar a mamá · detenido" in screen(bot, "/hoy")
+    assert "- hoy, 6:00 pm · Llamar a mamá · detenido" in screen(bot, "/hoy")
 
 
 def test_hoy_limita_cada_seccion(bot, conn, clock):
@@ -119,8 +119,8 @@ def test_hoy_cerca_de_medianoche_el_dia_termina_a_las_00_00_locales(bot, conn, c
     add_reminder(conn, clock, "aviso de hoy", "2026-10-03 23:55")
     add_reminder(conn, clock, "aviso de mañana", "2026-10-04 00:05")
     text = screen(bot, "/hoy")
-    assert "- justo antes · hoy, 11:59 pm" in text
-    assert "- hoy, 11:55 pm · aviso de hoy" in text
+    assert "- Justo antes · hoy, 11:59 pm" in text
+    assert "- hoy, 11:55 pm · Aviso de hoy" in text
     assert "justo a medianoche" not in text and "ya es mañana" not in text
     assert "aviso de mañana" not in text
 
@@ -133,9 +133,9 @@ def test_hoy_pasada_la_medianoche_ya_es_otro_dia(bot, conn, clock):
     add_task(conn, clock, "mañana a las 00", "2026-10-05 00:00")
     text = screen(bot, "/hoy")
     assert text.startswith("Hoy · domingo 4 de octubre\n")
-    assert "- de anoche · vencida sáb 3 oct, 11:59 pm" in text
-    assert "- recién empezado · hoy, 12:05 am" in text
-    assert "- fin del día · hoy, 11:59 pm" in text
+    assert "- De anoche · vencida sáb 3 oct, 11:59 pm" in text
+    assert "- Recién empezado · hoy, 12:05 am" in text
+    assert "- Fin del día · hoy, 11:59 pm" in text
     assert "mañana a las 00" not in text
 
 
@@ -156,7 +156,7 @@ def test_pendientes_es_un_solo_mensaje_con_lista_numerada_y_un_boton_por_numero(
     bot.say("/pendientes")
     assert bot.sent_count() == 1
     assert fmt.plain(bot.messages()[0]) == (
-        "Pendientes (2)\n\n1. con fecha · universidad · mañana, 9:00 am\n2. sin fecha"
+        "Pendientes (2)\n\n1. Con fecha · Universidad · mañana, 9:00 am\n2. Sin fecha"
     )
     assert "<b>Pendientes (2)</b>" in bot.messages()[0]
     assert bot.labels() == ["1", "2"]
@@ -165,7 +165,7 @@ def test_pendientes_es_un_solo_mensaje_con_lista_numerada_y_un_boton_por_numero(
 def test_pendientes_con_area_la_pone_en_el_titulo(bot, conn, clock):
     add_task(conn, clock, "de la uni", area="universidad")
     add_task(conn, clock, "personal", area="personal")
-    assert screen(bot, "/pendientes universidad") == "Pendientes · universidad (1)\n\n1. de la uni"
+    assert screen(bot, "/pendientes universidad") == "Pendientes · Universidad (1)\n\n1. De la uni"
 
 
 def test_pendientes_con_un_area_que_no_existe(bot):
@@ -177,8 +177,8 @@ def test_pendientes_limita_a_10_y_avisa_cuantas_faltan(bot, conn, clock):
         add_task(conn, clock, f"tarea {number}")
     bot.say("/pendientes")
     text = fmt.plain(bot.messages()[0])
-    assert text.startswith("Pendientes (13)\n\n1. tarea 0\n")
-    assert "10. tarea 9" in text and "11." not in text
+    assert text.startswith("Pendientes (13)\n\n1. Tarea 0\n")
+    assert "10. Tarea 9" in text and "11." not in text
     assert text.endswith("y 3 más: filtra por área (/pendientes nombre)")
     assert bot.labels() == [str(n) for n in range(1, 11)]
     assert bot.channel.layouts[-1] == (5, 5)  # los números van de a 5 por fila
@@ -193,7 +193,7 @@ def test_un_numero_muestra_la_tarea_en_el_mismo_mensaje_con_hecha_descartar_y_vo
     bot.tap("1")
     assert bot.sent_count() == 1
     assert card_text(bot) == (
-        "con fecha\n\nÁrea: universidad\nVence: mañana, 9:00 am\n\n¿Qué hago con esta tarea?"
+        "Con fecha\n\nÁrea: Universidad\nVence: mañana, 9:00 am\n\n¿Qué hago con esta tarea?"
     )
     assert bot.labels() == ["Hecha", "Descartar", "Volver"]
     assert bot.channel.edit_keyboards[-1][1] == (2, 1)
@@ -208,7 +208,7 @@ def test_hecha_cierra_esa_tarea_y_vuelve_a_la_lista_actualizada(bot, conn, clock
     bot.tap("Hecha")
     assert tasks.get_task(conn, second.id).status == "done"
     assert open_titles(conn) == ["primera", "tercera"]  # solo cayó esa
-    assert card_text(bot) == "Pendientes (2)\n\n1. primera\n2. tercera\n\nHecha · segunda"
+    assert card_text(bot) == "Pendientes (2)\n\n1. Primera\n2. Tercera\n\nHecha · Segunda"
     assert bot.labels() == ["1", "2"]
     assert bot.sent_count() == 1
 
@@ -230,7 +230,7 @@ def test_descartar_es_soft_delete_con_motivo_y_vuelve_a_la_lista(bot, conn, cloc
     bot.tap("Descartar")
     stored = tasks.get_task(conn, task.id)
     assert (stored.status, stored.closed_reason) == ("dropped", "discarded")
-    assert card_text(bot) == "Pendientes (1)\n\n1. otra\n\nDescartada · comprar pan"
+    assert card_text(bot) == "Pendientes (1)\n\n1. Otra\n\nDescartada · Comprar pan"
 
 
 def test_volver_regresa_a_la_lista_sin_cambiar_nada(bot, conn, clock):
@@ -250,7 +250,7 @@ def test_al_cerrar_la_ultima_tarea_queda_el_estado_vacio_sin_botones(bot, conn, 
     bot.tap("1")
     bot.tap("Hecha")
     assert fmt.plain(bot.last[1]) == (
-        "Pendientes (0)\n\nNo tienes tareas pendientes. Todo al día.\n\nHecha · única"
+        "Pendientes (0)\n\nNo tienes tareas pendientes. Todo al día.\n\nHecha · Única"
     )
     assert bot.last[2] == []
 
@@ -262,7 +262,7 @@ def test_con_area_la_lista_actualizada_conserva_el_filtro(bot, conn, clock):
     bot.say("/pendientes universidad")
     bot.tap("1")
     bot.tap("Hecha")
-    assert card_text(bot) == "Pendientes · universidad (1)\n\n1. uni 2\n\nHecha · uni 1"
+    assert card_text(bot) == "Pendientes · Universidad (1)\n\n1. Uni 2\n\nHecha · Uni 1"
 
 
 def test_un_numero_de_una_tarea_ya_cerrada_responde_con_el_aviso_y_actualiza_la_lista(
@@ -274,7 +274,7 @@ def test_un_numero_de_una_tarea_ya_cerrada_responde_con_el_aviso_y_actualiza_la_
     open_gone = bot.choice_id("1")
     tasks.mark_done(conn, gone.id, clock)
     assert bot.press(open_gone) == TOAST
-    assert card_text(bot) == "Pendientes (1)\n\n1. sigue"  # la lista ya no la muestra
+    assert card_text(bot) == "Pendientes (1)\n\n1. Sigue"  # la lista ya no la muestra
     assert bot.sent_count() == 1
 
 
@@ -360,8 +360,8 @@ def test_recordatorios_lista_pendientes_con_area_y_repeticion(bot, conn, clock):
     reminders.mark_done(conn, done.id)
     assert screen(bot, "/recordatorios") == (
         "Recordatorios\n\nPendientes (2)\n"
-        "- mañana, 8:00 am · llevar tarea · universidad\n"
-        "- lun 5 oct, 7:00 pm · regar plantas · Cada lunes"
+        "- mañana, 8:00 am · Llevar tarea · Universidad\n"
+        "- lun 5 oct, 7:00 pm · Regar plantas · Cada lunes"
     )
 
 
@@ -371,8 +371,8 @@ def test_recordatorios_separa_los_detenidos_en_su_propia_seccion(bot, conn, cloc
     stop(conn, blocked.id, "permanent:bot_blocked")
     text = screen(bot, "/recordatorios")
     assert text == (
-        "Recordatorios\n\nPendientes (1)\n- mañana, 8:00 am · llevar tarea\n\n"
-        "Detenidos (1)\n- hoy, 6:00 pm · llamar a mamá · Motivo: el bot está bloqueado en tu chat"
+        "Recordatorios\n\nPendientes (1)\n- mañana, 8:00 am · Llevar tarea\n\n"
+        "Detenidos (1)\n- hoy, 6:00 pm · Llamar a mamá · Motivo: el bot está bloqueado en tu chat"
     )
     pending_section, stopped_section = text.split("\n\n")[1:]
     assert "llamar a mamá" not in pending_section  # un detenido nunca va entre los pendientes
@@ -414,7 +414,7 @@ def test_los_detenidos_se_explican_en_lenguaje_claro(bot, conn, clock, code, exp
     stopped = add_reminder(conn, clock, "llevar tarea", "2026-10-04 08:00")
     stop(conn, stopped.id, code)
     text = screen(bot, "/recordatorios")
-    assert f"- mañana, 8:00 am · llevar tarea · Motivo: {expected}" in text
+    assert f"- mañana, 8:00 am · Llevar tarea · Motivo: {expected}" in text
     assert code not in text  # el código crudo nunca llega al usuario
 
 
@@ -447,7 +447,7 @@ def test_recordatorios_limita_cada_seccion(bot, conn, clock):
 def test_areas_lista_y_marca_las_que_no_tienen_descripcion(bot, conn, clock):
     areas.create_area(conn, "Salud", "", clock)
     assert screen(bot, "/areas") == (
-        "Áreas (5)\n\n- universidad\n- proyectos\n- iglesia\n- personal\n- Salud · sin descripción"
+        "Áreas (5)\n\n- Universidad\n- Proyectos\n- Iglesia\n- Personal\n- Salud · sin descripción"
     )
 
 
@@ -563,5 +563,5 @@ def test_hoy_un_aviso_a_las_00_00_exactas_ya_es_de_manana(bot, conn, clock):
     add_reminder(conn, clock, "justo a medianoche", "2026-10-04 00:00")
     add_reminder(conn, clock, "un minuto antes", "2026-10-03 23:59")
     text = screen(bot, "/hoy")
-    assert "un minuto antes" in text
+    assert "Un minuto antes" in text
     assert "justo a medianoche" not in text

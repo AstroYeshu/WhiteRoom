@@ -71,14 +71,14 @@ def test_tarea_pregunta_el_area_y_la_asigna(bot, conn):
     bot.say("comprar leche")
     bot.tap("Tarea")
     assert bot.labels() == [
-        "universidad",
-        "proyectos",
-        "iglesia",
-        "personal",
+        "Universidad",
+        "Proyectos",
+        "Iglesia",
+        "Personal",
         "Sin área",
         "Cancelar",
     ]
-    bot.tap("universidad")
+    bot.tap("Universidad")
     [task] = all_tasks(conn)
     assert task.status == "open"
     assert task.area_id == areas.find_area_by_name(conn, "universidad").id
@@ -103,7 +103,7 @@ def test_si_no_hay_areas_no_se_pregunta(bot, conn):
 def test_nota_crea_la_nota_y_cierra_la_tarea_como_convertida_no_como_hecha(bot, conn):
     bot.say("la clave del wifi es larga")
     bot.tap("Nota")
-    bot.tap("personal")
+    bot.tap("Personal")
     [note] = notes.list_notes(conn)
     assert note.text == "la clave del wifi es larga"
     assert note.area_id == areas.find_area_by_name(conn, "personal").id
@@ -118,12 +118,12 @@ def test_recordatorio_con_fecha_clara_confirma_con_dia_de_la_semana_y_botones(bo
     bot.say("mañana 8am llevar tarea")
     bot.tap("Recordatorio")
     assert pending(conn) == []  # aún falta el área
-    bot.tap("universidad")
+    bot.tap("Universidad")
     [reminder] = pending(conn)
     assert reminder.text == "llevar tarea" and local_hhmm(reminder) == "2026-10-04 08:00"
     assert reminder.area_id == areas.find_area_by_name(conn, "universidad").id
     text, _ = bot.question
-    assert "domingo 4 de octubre, 8:00 am" in text and "llevar tarea" in text
+    assert "domingo 4 de octubre, 8:00 am" in text and "Llevar tarea" in text
     assert bot.labels() == ["Cambiar", "Deshacer"]
     task = all_tasks(conn)[0]
     assert (task.status, task.closed_reason) == ("dropped", "converted_to_reminder")
@@ -358,7 +358,7 @@ def test_cambiar_deshace_y_pregunta_cuando_de_nuevo(bot, conn):
 def test_cambiar_conserva_el_area(bot, conn):
     bot.say("mañana 8am llevar tarea")
     bot.tap("Recordatorio")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     bot.tap("Cambiar")
     bot.tap("Mañana 9:00 am")
     assert pending(conn)[0].area_id == areas.find_area_by_name(conn, "iglesia").id
@@ -372,14 +372,14 @@ def test_un_mensaje_nuevo_a_mitad_de_pregunta_descarta_el_flujo_anterior_y_avisa
     old_button = bot.choice_id("Tarea")
     bot.say("sacar copias")
     first = fmt.plain(bot.text_of(bot.channel.refs[0]))  # la tarjeta vieja se editó
-    assert first.startswith("Sin terminar\n\ncomprar leche")
+    assert first.startswith("Sin terminar\n\nComprar leche")
     titles = [t.title for t in all_tasks(conn)]
     assert titles == ["comprar leche", "sacar copias"]
     assert all(t.status == "open" and t.area_id is None for t in all_tasks(conn))
     bot.press(old_button)  # botón viejo con un flujo nuevo: no toca nada
     assert handlers.STALE_CHOICE_TEXT in bot.last[1]
     # la pregunta vigente sigue siendo la nueva
-    assert fmt.plain(bot.question[0]).startswith("¿Qué es?\n\nsacar copias")
+    assert fmt.plain(bot.question[0]).startswith("¿Qué es?\n\nSacar copias")
     bot.tap("Nota")
     assert [n.text for n in notes.list_notes(conn)] == []  # aún falta el área
 
@@ -430,7 +430,7 @@ def test_cada_paso_renueva_la_caducidad(bot, conn, clock):
     clock.advance(minutes=9)
     bot.tap("Tarea")
     clock.advance(minutes=9)
-    bot.tap("personal")
+    bot.tap("Personal")
     assert "Tarea guardada" in bot.last[1]
 
 
@@ -520,7 +520,7 @@ def test_un_texto_sin_fecha_es_captura_nueva_y_avisa_que_se_descarto_la_pregunta
     first_id = waiting_for_when(bot)
     bot.say("comprar leche")
     first = fmt.plain(bot.text_of(bot.channel.refs[0]))
-    assert first.startswith("Sin terminar\n\nllamar al dentista")  # se avisa en la tarjeta vieja
+    assert first.startswith("Sin terminar\n\nLlamar al dentista")  # se avisa en la tarjeta vieja
     assert [t.title for t in all_tasks(conn)] == ["llamar al dentista", "comprar leche"]
     assert tasks.get_task(conn, first_id).status == "open"  # la primera sigue en la bandeja
     assert pending(conn) == []
@@ -573,13 +573,13 @@ def test_el_aviso_de_hora_pasada_tambien_invita_a_escribir(bot, clock):
 
 
 def test_mejor_como_tarea_conserva_el_area_y_no_crea_recordatorio(bot, conn):
-    first_id = waiting_for_when_in(bot, "iglesia")
+    first_id = waiting_for_when_in(bot, "Iglesia")
     bot.tap("Mejor como tarea")
     assert pending(conn) == []
     task = tasks.get_task(conn, first_id)
     assert (task.status, task.closed_reason) == ("open", None)
     assert task.area_id == areas.find_area_by_name(conn, "iglesia").id
-    assert fmt.plain(bot.last[1]) == "Tarea guardada\n\nllamar al dentista\n\nÁrea: iglesia"
+    assert fmt.plain(bot.last[1]) == "Tarea guardada\n\nLlamar al dentista\n\nÁrea: Iglesia"
     assert bot.conversation.current(bot.clock) is None
 
 
@@ -592,7 +592,7 @@ def test_mejor_como_tarea_sin_area(bot, conn):
 
 
 def test_mejor_como_tarea_dos_veces_no_da_error(bot, conn):
-    waiting_for_when_in(bot, "personal")
+    waiting_for_when_in(bot, "Personal")
     button = bot.choice_id("Mejor como tarea")
     bot.press(button)
     before = len(bot.channel.log)

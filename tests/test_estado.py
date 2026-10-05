@@ -73,7 +73,7 @@ def test_estado_completo(bot, conn, clock, status):
         "Último ciclo: hace 12 s\n"
         "Último aviso enviado: hoy, 2:58 pm\n"
         "Recordatorios: 2 pendientes · 1 detenido\n"
-        "Esquema: versión 5\n"
+        "Esquema: versión 6\n"
         "Base de datos: no disponible"
     )
 
@@ -87,7 +87,7 @@ def test_estado_sin_nada_que_mostrar(bot):
         "Último ciclo: todavía ninguno\n"
         "Último aviso enviado: ninguno todavía\n"
         "Recordatorios: 0 pendientes · 0 detenidos\n"
-        "Esquema: versión 5\n"
+        "Esquema: versión 6\n"
         "Base de datos: no disponible"
     )
 

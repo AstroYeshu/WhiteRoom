@@ -59,7 +59,7 @@ def test_hecho_marca_el_recordatorio_y_edita_el_mensaje_sin_teclado(
 ):
     press(conn, clock, channel, f"rem_done:{sent_reminder.id}")
     assert row(conn, sent_reminder.id).status == "done"
-    assert channel.edits == [(str(OWNER), REF, "<b>Hecho</b> · llevar tarea")]
+    assert channel.edits == [(str(OWNER), REF, "<b>Hecho</b> · Llevar tarea")]
     assert not channel.sent_anything  # se edita el mensaje, no se manda otro
 
 
@@ -70,7 +70,7 @@ def test_pulsar_hecho_dos_veces_no_da_error_y_dice_que_ya_no_esta_activo(
     press(conn, clock, channel, f"rem_done:{sent_reminder.id}")
     assert row(conn, sent_reminder.id).status == "done"
     assert "Ya no está activo" in edited(channel)[1]
-    assert "llevar tarea" in edited(channel)[1]
+    assert "Llevar tarea" in edited(channel)[1]
 
 
 def test_hecho_sobre_uno_pendiente_tambien_vale(conn, clock, channel):
@@ -94,7 +94,7 @@ def test_posponer_reprograma_y_dice_para_cuando_conservando_el_texto(
     assert (
         text.startswith("<b>Pospuesto</b> · ") and " · hoy, " in text
     )  # es hoy: no se repite el día completo
-    assert " · llevar tarea · hoy, " in text  # el texto del recordatorio se conserva
+    assert " · Llevar tarea · hoy, " in text  # el texto del recordatorio se conserva
 
 
 def test_posponer_dos_veces_no_da_error_ni_reprograma_otra_vez(conn, clock, channel, sent_reminder):
@@ -118,7 +118,7 @@ def test_manana_dice_el_dia_completo_si_no_es_hoy(conn, clock, channel, sent_rem
     press(conn, clock, channel, f"rem_tomorrow:{sent_reminder.id}")
     stored = row(conn, sent_reminder.id)
     assert from_utc_iso(stored.fire_at_utc) == local_to_utc(datetime(2026, 10, 4, 9, 0), TZ)
-    assert edited(channel) == ["<b>Pospuesto</b> · llevar tarea · domingo 4 de octubre, 9:00 am"]
+    assert edited(channel) == ["<b>Pospuesto</b> · Llevar tarea · domingo 4 de octubre, 9:00 am"]
 
 
 def test_manana_de_madrugada_es_hoy_y_el_texto_lo_dice(conn, clock, channel, sent_reminder):
@@ -126,7 +126,7 @@ def test_manana_de_madrugada_es_hoy_y_el_texto_lo_dice(conn, clock, channel, sen
     press(conn, clock, channel, f"rem_tomorrow:{sent_reminder.id}")
     stored = row(conn, sent_reminder.id)
     assert from_utc_iso(stored.fire_at_utc) == local_to_utc(datetime(2026, 10, 4, 9, 0), TZ)
-    assert edited(channel) == ["<b>Pospuesto</b> · llevar tarea · hoy, 9:00 am"]
+    assert edited(channel) == ["<b>Pospuesto</b> · Llevar tarea · hoy, 9:00 am"]
 
 
 def test_pulsar_manana_dos_veces_no_da_error(conn, clock, channel, sent_reminder):
@@ -183,4 +183,4 @@ def test_sin_referencia_al_mensaje_se_responde_con_un_mensaje_nuevo(
     """La consola no puede editar mensajes anteriores."""
     press(conn, clock, channel, f"rem_done:{sent_reminder.id}", ref=None)
     assert channel.edits == []
-    assert channel.texts == [(str(OWNER), "<b>Hecho</b> · llevar tarea", "reply")]
+    assert channel.texts == [(str(OWNER), "<b>Hecho</b> · Llevar tarea", "reply")]

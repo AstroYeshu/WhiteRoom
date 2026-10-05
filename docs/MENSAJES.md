@@ -2,7 +2,7 @@
 
 Generado por `python scripts/show_messages.py` con los manejadores reales, una base en memoria
 y un reloj fijo: **sábado 3 de octubre de 2026, 3:30 pm** (México). Las áreas son las iniciales
-(universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:
+(Universidad, Proyectos, Iglesia, Personal). Los textos se muestran como los recibe Telegram:
 HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones
 va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.
 «(edita el mismo mensaje)» es una edición: la captura es UN solo mensaje (la tarjeta) que cambia
@@ -18,7 +18,7 @@ _Mensaje libre: pregunta de tipo._
 ```text
 <b>¿Qué es?</b>
 
-comprar leche
+Comprar leche
 [Tarea][Recordatorio]
 [Nota][Cancelar]
 ```
@@ -29,11 +29,11 @@ _Se elige Tarea: la tarjeta se edita y pasa a la pregunta de área, con el tipo 
 (edita el mismo mensaje)
 <b>¿En qué área va?</b>
 
-comprar leche
+Comprar leche
 
 Tipo: Tarea
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```
 
@@ -43,9 +43,9 @@ _Se elige un área: la misma tarjeta queda como constancia._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-comprar leche
+Comprar leche
 
-Área: personal
+Área: Personal
 ```
 
 _Cancelar en cualquier pregunta: la tarea sigue en la bandeja._
@@ -54,7 +54,7 @@ _Cancelar en cualquier pregunta: la tarea sigue en la bandeja._
 (edita el mismo mensaje)
 <b>Cancelado</b>
 
-comprar leche
+Comprar leche
 
 Sigue en tu bandeja como tarea.
 ```
@@ -65,9 +65,9 @@ _Nota guardada con su área._
 (edita el mismo mensaje)
 <b>Nota guardada</b>
 
-la clave del wifi es larga
+La clave del wifi es larga
 
-Área: universidad
+Área: Universidad
 ```
 
 _Sin áreas disponibles no se pregunta el área._
@@ -76,7 +76,7 @@ _Sin áreas disponibles no se pregunta el área._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-comprar leche
+Comprar leche
 ```
 
 _Recordatorio con fecha clara: edición del área y confirmación con Cambiar/Deshacer._
@@ -85,10 +85,10 @@ _Recordatorio con fecha clara: edición del área y confirmación con Cambiar/De
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: domingo 4 de octubre, 8:00 am
-Área: universidad
+Área: Universidad
 [Cambiar][Deshacer]
 ```
 
@@ -96,7 +96,7 @@ _Deshacer: el recordatorio se cancela y la tarea vuelve a la bandeja._
 
 ```text
 (edita el mismo mensaje)
-<b>Deshecho</b> · llevar tarea · vuelve a tu bandeja como tarea
+<b>Deshecho</b> · Llevar tarea · vuelve a tu bandeja como tarea
 ```
 
 _Cambiar: se deshace y se vuelve a preguntar la fecha._
@@ -105,10 +105,10 @@ _Cambiar: se deshace y se vuelve a preguntar la fecha._
 (edita el mismo mensaje)
 <b>¿Cuándo?</b>
 
-llevar tarea
+Llevar tarea
 
 Tipo: Recordatorio
-Área: universidad
+Área: Universidad
 
 Pulsa una opción o escribe cuándo, p. ej. "en 2 horas" o "el viernes a las 5".
 [Hoy 6:00 pm][Mañana 9:00 am]
@@ -121,10 +121,10 @@ _Se responde la fecha escribiéndola._
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: lunes 5 de octubre, 10:00 am
-Área: universidad
+Área: Universidad
 [Cambiar][Deshacer]
 ```
 
@@ -134,7 +134,7 @@ _Fecha sin hora: la confirmación avisa de la hora por defecto._
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: domingo 4 de octubre, 9:00 am (hora por defecto)
 [Cambiar][Deshacer]
@@ -146,7 +146,7 @@ _Repetición: vista previa con la próxima fecha, sin guardar todavía._
 (edita el mismo mensaje)
 <b>¿Guardo esta repetición?</b>
 
-regar plantas
+Regar plantas
 
 Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
@@ -159,7 +159,7 @@ _Guardar la repetición: confirmación._
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-regar plantas
+Regar plantas
 
 Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
@@ -171,11 +171,11 @@ _Un texto que empieza por «recordar/recuérdame» salta la pregunta de tipo._
 ```text
 <b>¿En qué área va?</b>
 
-recuérdame llamar a mamá
+Recuérdame llamar a mamá
 
 Tipo: Recordatorio
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```
 
@@ -185,7 +185,7 @@ _Sin fecha: pregunta ¿cuándo? con opciones rápidas y «Mejor como tarea»._
 (edita el mismo mensaje)
 <b>¿Cuándo?</b>
 
-llamar a mamá
+Llamar a mamá
 
 Tipo: Recordatorio
 
@@ -200,7 +200,7 @@ _Se elige una opción rápida: confirmación._
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-llamar a mamá
+Llamar a mamá
 
 Cuándo: domingo 4 de octubre, 9:00 am
 [Cambiar][Deshacer]
@@ -212,9 +212,9 @@ _Mejor como tarea: queda como tarea con el área ya elegida, sin recordatorio._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-llamar al dentista
+Llamar al dentista
 
-Área: iglesia
+Área: Iglesia
 ```
 
 _En ¿cuándo?, un texto que no es fecha es una captura nueva: la tarjeta vieja queda «Sin terminar» y se abre otra._
@@ -223,13 +223,13 @@ _En ¿cuándo?, un texto que no es fecha es una captura nueva: la tarjeta vieja 
 (edita el mismo mensaje)
 <b>Sin terminar</b>
 
-llamar al dentista
+Llamar al dentista
 
 Sigue en tu bandeja como tarea.
 ---
 <b>¿Qué es?</b>
 
-comprar leche
+Comprar leche
 [Tarea][Recordatorio]
 [Nota][Cancelar]
 ```
@@ -247,7 +247,7 @@ _La opción «Hoy 6:00 pm» se pulsó cuando ya había pasado._
 (edita el mismo mensaje)
 <b>¿Cuándo?</b>
 
-llamar al dentista
+Llamar al dentista
 
 Tipo: Recordatorio
 
@@ -267,7 +267,7 @@ _Hora o cita bíblica (time_or_verse)._
 (edita el mismo mensaje)
 <b>¿Eso es una hora o una cita bíblica?</b>
 
-llamar a Juan 3:30
+Llamar a Juan 3:30
 
 Tipo: Recordatorio
 [Es una cita]
@@ -280,7 +280,7 @@ _Persona o día (name_or_day)._
 (edita el mismo mensaje)
 <b>¿«Domingo» es una persona o el día de la semana?</b>
 
-llamar a Domingo
+Llamar a Domingo
 
 Tipo: Recordatorio
 [Es un nombre]
@@ -317,7 +317,7 @@ _Fecha que no entiende (unsupported_date): opciones rápidas._
 (edita el mismo mensaje)
 <b>No entiendo esa fecha. ¿Qué día quieres?</b>
 
-pagar renta
+Pagar renta
 
 Tipo: Recordatorio
 [Hoy 6:00 pm][Mañana 9:00 am]
@@ -330,7 +330,7 @@ _Repetición que no sabe hacer (unrecognized_recurrence)._
 (edita el mismo mensaje)
 <b>Esa repetición no está entre las que sé hacer (todos los días, cada lunes, de lunes a viernes).</b>
 
-cada mes pagar renta
+Cada mes pagar renta
 
 Tipo: Recordatorio
 [Solo una vez…]
@@ -343,7 +343,7 @@ _Medianoche dudosa (ambiguous_time)._
 (edita el mismo mensaje)
 <b>¿Medianoche de qué día?</b>
 
-cena
+Cena
 
 Tipo: Recordatorio
 [mañana, 12:00 am][lun 5 oct, 12:00 am]
@@ -356,7 +356,7 @@ _Hora dudosa, dos lecturas (ambiguous_meridiem)._
 (edita el mismo mensaje)
 <b>¿A las 9 am o pm?</b>
 
-llevar tarea
+Llevar tarea
 
 Tipo: Recordatorio
 [mañana, 9:00 am][mañana, 9:00 pm]
@@ -369,7 +369,7 @@ _Hora dudosa, un solo candidato futuro (ambiguous_meridiem)._
 (edita el mismo mensaje)
 <b>¿A las 8:00 pm?</b>
 
-llevar tarea
+Llevar tarea
 
 Tipo: Recordatorio
 [hoy, 8:00 pm]
@@ -382,7 +382,7 @@ _Hora que ya pasó, con alternativa (past)._
 (edita el mismo mensaje)
 <b>Esa fecha ya pasó. ¿La dejo para domingo 4 de octubre, 10:00 am?</b>
 
-llevar tarea
+Llevar tarea
 
 Tipo: Recordatorio
 [mañana, 10:00 am]
@@ -395,7 +395,7 @@ _Día igual al de hoy (same_weekday)._
 (edita el mismo mensaje)
 <b>Hoy es ese día: ¿hoy o en 7 días?</b>
 
-llamar
+Llamar
 
 Tipo: Recordatorio
 [sáb 10 oct, 9:00 am]
@@ -408,7 +408,7 @@ _Pasada la medianoche, «mañana» dudoso (today_or_tomorrow)._
 (edita el mismo mensaje)
 <b>Ya pasó la medianoche: ¿«mañana» es hoy o mañana?</b>
 
-llevar tarea
+Llevar tarea
 
 Tipo: Recordatorio
 [hoy, 8:00 am][mañana, 8:00 am]
@@ -421,7 +421,7 @@ _Cualquier otra duda (texto genérico)._
 (edita el mismo mensaje)
 <b>No pude entender la fecha o la hora; escríbela de otra forma.</b>
 
-por la mañana llevar tarea
+Por la mañana llevar tarea
 
 Tipo: Recordatorio
 [Otra fecha][Cancelar]
@@ -435,9 +435,9 @@ Lo que sale cuando el motor envía un recordatorio (tipo de envío `reminder`).
 _Aviso a su hora, con el área entre corchetes._
 
 ```text
-<b>llevar tarea</b>
+<b>Llevar tarea</b>
 
-Recordatorio · universidad
+Recordatorio · Universidad
 [Hecho][+10 min]
 [+1 h][Mañana 9:00 am]
 ```
@@ -446,28 +446,28 @@ _Hecho._
 
 ```text
 (edita el mismo mensaje)
-<b>Hecho</b> · llevar tarea
+<b>Hecho</b> · Llevar tarea
 ```
 
 _+10 min: se reprograma para hoy._
 
 ```text
 (edita el mismo mensaje)
-<b>Pospuesto</b> · llamar a mamá · hoy, 3:41 pm
+<b>Pospuesto</b> · Llamar a mamá · hoy, 3:41 pm
 ```
 
 _Mañana 9:00 am: se reprograma para el día siguiente (día completo en la confirmación)._
 
 ```text
 (edita el mismo mensaje)
-<b>Pospuesto</b> · llamar a mamá · domingo 4 de octubre, 9:00 am
+<b>Pospuesto</b> · Llamar a mamá · domingo 4 de octubre, 9:00 am
 ```
 
 _Pulsar otra vez un botón de un aviso que ya no está activo._
 
 ```text
 (edita el mismo mensaje)
-<b>Hecho</b> · llamar a mamá
+<b>Hecho</b> · Llamar a mamá
 ```
 
 _Botón de un recordatorio que no existe._
@@ -480,7 +480,7 @@ _Botón de un recordatorio que no existe._
 _Aviso que salió tarde (caída, silencio o canal caído): «(retrasado)»._
 
 ```text
-<b>llamar a mamá</b>
+<b>Llamar a mamá</b>
 
 Recordatorio <i>(retrasado)</i>
 [Hecho][+10 min]
@@ -490,7 +490,7 @@ Recordatorio <i>(retrasado)</i>
 _De madrugada (antes de las 5:00) el botón dice «Hoy 9:00 am» en lugar de «Mañana 9:00 am»._
 
 ```text
-<b>revisar el horno</b>
+<b>Revisar el horno</b>
 
 Recordatorio
 [Hecho][+10 min]
@@ -502,7 +502,7 @@ _Aviso de preparación, un día antes de la fecha de una tarea._
 ```text
 <b>Mañana vence: entregar proyecto</b>
 
-Recordatorio · universidad
+Recordatorio · Universidad
 [Hecho][+10 min]
 [+1 h][Mañana 9:00 am]
 ```
@@ -512,7 +512,7 @@ _Aviso de preparación, una hora antes._
 ```text
 <b>En 1 hora vence: entregar proyecto</b>
 
-Recordatorio · universidad
+Recordatorio · Universidad
 [Hecho][+10 min]
 [+1 h][Mañana 9:00 am]
 ```
@@ -544,11 +544,11 @@ _Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de ba
 <b>Hoy · sábado 3 de octubre</b>
 
 <b>Tareas</b>
-- pagar luz · vencida vie 2 oct, 5:00 pm
-- entregar informe · hoy, 5:00 pm · universidad
+- Pagar luz · vencida vie 2 oct, 5:00 pm
+- Entregar informe · hoy, 5:00 pm · Universidad
 
 <b>Recordatorios</b>
-- hoy, 6:00 pm · llamar a mamá
+- hoy, 6:00 pm · Llamar a mamá
 
 2 en bandeja sin área
 ```
@@ -556,10 +556,10 @@ _Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de ba
 _Filtrado por área (sin la línea de bandeja)._
 
 ```text
-<b>Hoy · sábado 3 de octubre · universidad</b>
+<b>Hoy · sábado 3 de octubre · Universidad</b>
 
 <b>Tareas</b>
-- entregar informe · hoy, 5:00 pm
+- Entregar informe · hoy, 5:00 pm
 ```
 
 _Área que no existe._
@@ -586,10 +586,10 @@ _Lista numerada con un botón por número._
 ```text
 <b>Pendientes (4)</b>
 
-1. pagar luz · vie 2 oct, 5:00 pm
-2. entregar informe · universidad · hoy, 5:00 pm
-3. regar plantas · personal · mañana, 9:00 am
-4. comprar pan
+1. Pagar luz · vie 2 oct, 5:00 pm
+2. Entregar informe · Universidad · hoy, 5:00 pm
+3. Regar plantas · Personal · mañana, 9:00 am
+4. Comprar pan
 [1][2][3][4]
 ```
 
@@ -597,7 +597,7 @@ _Se pulsa un número: la tarea en el mismo mensaje._
 
 ```text
 (edita el mismo mensaje)
-<b>pagar luz</b>
+<b>Pagar luz</b>
 
 Vence: vie 2 oct, 5:00 pm
 
@@ -612,11 +612,11 @@ _Hecha: vuelve a la lista actualizada._
 (edita el mismo mensaje)
 <b>Pendientes (3)</b>
 
-1. entregar informe · universidad · hoy, 5:00 pm
-2. regar plantas · personal · mañana, 9:00 am
-3. comprar pan
+1. Entregar informe · Universidad · hoy, 5:00 pm
+2. Regar plantas · Personal · mañana, 9:00 am
+3. Comprar pan
 
-<b>Hecha</b> · pagar luz
+<b>Hecha</b> · Pagar luz
 [1][2][3]
 ```
 
@@ -624,9 +624,9 @@ _Otra tarea, Descartar._
 
 ```text
 (edita el mismo mensaje)
-<b>regar plantas</b>
+<b>Regar plantas</b>
 
-Área: personal
+Área: Personal
 Vence: mañana, 9:00 am
 
 ¿Qué hago con esta tarea?
@@ -640,10 +640,10 @@ _Descartar: vuelve a la lista actualizada._
 (edita el mismo mensaje)
 <b>Pendientes (2)</b>
 
-1. entregar informe · universidad · hoy, 5:00 pm
-2. comprar pan
+1. Entregar informe · Universidad · hoy, 5:00 pm
+2. Comprar pan
 
-<b>Descartada</b> · regar plantas
+<b>Descartada</b> · Regar plantas
 [1][2]
 ```
 
@@ -651,9 +651,9 @@ _Volver sin hacer nada._
 
 ```text
 (edita el mismo mensaje)
-<b>entregar informe</b>
+<b>Entregar informe</b>
 
-Área: universidad
+Área: Universidad
 Vence: hoy, 5:00 pm
 
 ¿Qué hago con esta tarea?
@@ -663,8 +663,8 @@ Vence: hoy, 5:00 pm
 (edita el mismo mensaje)
 <b>Pendientes (2)</b>
 
-1. entregar informe · universidad · hoy, 5:00 pm
-2. comprar pan
+1. Entregar informe · Universidad · hoy, 5:00 pm
+2. Comprar pan
 [1][2]
 ```
 
@@ -680,9 +680,9 @@ No tienes tareas pendientes. Todo al día.
 _Filtrado por área._
 
 ```text
-<b>Pendientes · universidad (1)</b>
+<b>Pendientes · Universidad (1)</b>
 
-1. entregar informe · hoy, 5:00 pm
+1. Entregar informe · hoy, 5:00 pm
 [1]
 ```
 
@@ -691,16 +691,16 @@ _Más de 10 tareas: se muestran 10 y se dice cuántas faltan._
 ```text
 <b>Pendientes (13)</b>
 
-1. tarea 1
-2. tarea 2
-3. tarea 3
-4. tarea 4
-5. tarea 5
-6. tarea 6
-7. tarea 7
-8. tarea 8
-9. tarea 9
-10. tarea 10
+1. Tarea 1
+2. Tarea 2
+3. Tarea 3
+4. Tarea 4
+5. Tarea 5
+6. Tarea 6
+7. Tarea 7
+8. Tarea 8
+9. Tarea 9
+10. Tarea 10
 
 y 3 más: filtra por área (/pendientes nombre)
 [1][2][3][4][5]
@@ -724,9 +724,9 @@ _Lista de pendientes, con área y repetición._
 <b>Recordatorios</b>
 
 <b>Pendientes (3)</b>
-- hoy, 6:00 pm · llamar a mamá
-- mañana, 8:00 am · llevar tarea · universidad
-- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
+- hoy, 6:00 pm · Llamar a mamá
+- mañana, 8:00 am · Llevar tarea · Universidad
+- mañana, 10:00 am · Ir a la iglesia · Iglesia · Cada domingo
 ```
 
 _Con detenidos: motivo conocido y motivo desconocido._
@@ -735,11 +735,11 @@ _Con detenidos: motivo conocido y motivo desconocido._
 <b>Recordatorios</b>
 
 <b>Pendientes (1)</b>
-- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
+- mañana, 10:00 am · Ir a la iglesia · Iglesia · Cada domingo
 
 <b>Detenidos (2)</b>
-- hoy, 6:00 pm · llamar a mamá · Motivo: el bot está bloqueado en tu chat
-- mañana, 8:00 am · llevar tarea · universidad · Motivo: motivo desconocido
+- hoy, 6:00 pm · Llamar a mamá · Motivo: el bot está bloqueado en tu chat
+- mañana, 8:00 am · Llevar tarea · Universidad · Motivo: motivo desconocido
 ```
 
 _Todos los motivos de detención que se explican._
@@ -748,19 +748,19 @@ _Todos los motivos de detención que se explican._
 <b>Recordatorios</b>
 
 <b>Pendientes (1)</b>
-- mañana, 10:00 am · ir a la iglesia · iglesia · Cada domingo
+- mañana, 10:00 am · Ir a la iglesia · Iglesia · Cada domingo
 
 <b>Detenidos (11)</b>
-- hoy, 6:00 pm · llamar a mamá · Motivo: el bot está bloqueado en tu chat
-- mañana, 8:00 am · llevar tarea · universidad · Motivo: motivo desconocido
-- lun 5 oct, 8:00 am · permanent:chat_not_found · Motivo: no se encontró tu chat
-- lun 5 oct, 8:00 am · permanent:message_too_long · Motivo: el mensaje era demasiado largo
-- lun 5 oct, 8:00 am · permanent:bad_request:cant_parse_entities · Motivo: Telegram no pudo leer el formato del texto
-- lun 5 oct, 8:00 am · permanent:bad_request:empty_text · Motivo: el texto estaba vacío
-- lun 5 oct, 8:00 am · permanent:bad_request:button_data_invalid · Motivo: un botón no era válido
-- lun 5 oct, 8:00 am · permanent:bad_request:other · Motivo: Telegram rechazó el mensaje
-- lun 5 oct, 8:00 am · horizon:telegram_down · Motivo: Telegram no respondió durante 24 horas
-- lun 5 oct, 8:00 am · legacy · Motivo: se detuvo en una versión anterior
+- hoy, 6:00 pm · Llamar a mamá · Motivo: el bot está bloqueado en tu chat
+- mañana, 8:00 am · Llevar tarea · Universidad · Motivo: motivo desconocido
+- lun 5 oct, 8:00 am · Permanent:chat_not_found · Motivo: no se encontró tu chat
+- lun 5 oct, 8:00 am · Permanent:message_too_long · Motivo: el mensaje era demasiado largo
+- lun 5 oct, 8:00 am · Permanent:bad_request:cant_parse_entities · Motivo: Telegram no pudo leer el formato del texto
+- lun 5 oct, 8:00 am · Permanent:bad_request:empty_text · Motivo: el texto estaba vacío
+- lun 5 oct, 8:00 am · Permanent:bad_request:button_data_invalid · Motivo: un botón no era válido
+- lun 5 oct, 8:00 am · Permanent:bad_request:other · Motivo: Telegram rechazó el mensaje
+- lun 5 oct, 8:00 am · Horizon:telegram_down · Motivo: Telegram no respondió durante 24 horas
+- lun 5 oct, 8:00 am · Legacy · Motivo: se detuvo en una versión anterior
 - lun 5 oct, 8:00 am · permanent:unexpected:KeyError · Motivo: error inesperado al enviar
 ```
 
@@ -778,11 +778,11 @@ _Con texto: se guarda en la bandeja y pregunta el área._
 ```text
 <b>¿En qué área va?</b>
 
-mañana 8am llevar tarea
+Mañana 8am llevar tarea
 
 Tipo: Recordatorio
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```
 
@@ -792,10 +792,10 @@ _Vista previa antes de guardar._
 (edita el mismo mensaje)
 <b>¿Guardo este recordatorio?</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: domingo 4 de octubre, 8:00 am
-Área: universidad
+Área: Universidad
 [Guardar][Cancelar]
 ```
 
@@ -805,10 +805,10 @@ _Guardar: confirmación._
 (edita el mismo mensaje)
 <b>Recordatorio guardado</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: domingo 4 de octubre, 8:00 am
-Área: universidad
+Área: Universidad
 [Cambiar][Deshacer]
 ```
 
@@ -818,7 +818,7 @@ _Con repetición: vista previa con la próxima fecha._
 (edita el mismo mensaje)
 <b>¿Guardo esta repetición?</b>
 
-regar plantas
+Regar plantas
 
 Repetición: Cada lunes
 Próxima: lunes 5 de octubre, 7:00 pm
@@ -831,7 +831,7 @@ _Con una duda del parser: se elige el candidato y luego se muestra la vista prev
 (edita el mismo mensaje)
 <b>¿Guardo este recordatorio?</b>
 
-llevar tarea
+Llevar tarea
 
 Cuándo: domingo 4 de octubre, 9:00 pm
 [Guardar][Cancelar]
@@ -851,11 +851,11 @@ _Con texto: pregunta solo el área._
 ```text
 <b>¿En qué área va?</b>
 
-comprar pan
+Comprar pan
 
 Tipo: Tarea
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```
 
@@ -865,9 +865,9 @@ _Área elegida._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-comprar pan
+Comprar pan
 
-Área: personal
+Área: Personal
 ```
 
 _Con una fecha clara en el texto: pregunta si es la fecha límite._
@@ -876,10 +876,10 @@ _Con una fecha clara en el texto: pregunta si es la fecha límite._
 (edita el mismo mensaje)
 <b>¿Es la fecha límite?</b>
 
-entregar informe
+Entregar informe
 
 Tipo: Tarea
-Área: universidad
+Área: Universidad
 Fecha: viernes 9 de octubre, 9:00 am (hora por defecto)
 [Sí][No]
 [Cancelar]
@@ -891,9 +891,9 @@ _Sí: título sin la fecha, con fecha de vencimiento._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-entregar informe
+Entregar informe
 
-Área: universidad
+Área: Universidad
 Vence: viernes 9 de octubre, 9:00 am (hora por defecto)
 ```
 
@@ -903,9 +903,9 @@ _No: queda con el texto completo y sin fecha._
 (edita el mismo mensaje)
 <b>Tarea guardada</b>
 
-entregar informe el viernes
+Entregar informe el viernes
 
-Área: universidad
+Área: Universidad
 ```
 
 
@@ -922,11 +922,11 @@ _Con texto: pregunta solo el área._
 ```text
 <b>¿En qué área va?</b>
 
-la clave del wifi
+La clave del wifi
 
 Tipo: Nota
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```
 
@@ -936,9 +936,9 @@ _Área elegida._
 (edita el mismo mensaje)
 <b>Nota guardada</b>
 
-la clave del wifi
+La clave del wifi
 
-Área: personal
+Área: Personal
 ```
 
 
@@ -949,10 +949,10 @@ _Lista de áreas._
 ```text
 <b>Áreas (4)</b>
 
-- universidad
-- proyectos
-- iglesia
-- personal
+- Universidad
+- Proyectos
+- Iglesia
+- Personal
 ```
 
 _Un área sin descripción se marca._
@@ -960,10 +960,10 @@ _Un área sin descripción se marca._
 ```text
 <b>Áreas (5)</b>
 
-- universidad
-- proyectos
-- iglesia
-- personal
+- Universidad
+- Proyectos
+- Iglesia
+- Personal
 - Salud · sin descripción
 ```
 
@@ -1026,7 +1026,7 @@ No se creó el área.
 _Nombre repetido (sin distinguir mayúsculas ni acentos)._
 
 ```text
-<b>Aviso</b> · Ya existe un área llamada «universidad».
+<b>Aviso</b> · Ya existe un área llamada «Universidad».
 ```
 
 _Nombre demasiado largo._
@@ -1088,7 +1088,7 @@ Encendido: 2 h 5 min
 Último ciclo: todavía ninguno
 Último aviso enviado: ninguno todavía
 Recordatorios: 0 pendientes · 0 detenidos
-Esquema: versión 5
+Esquema: versión 6
 Base de datos: no disponible
 ```
 
@@ -1103,7 +1103,7 @@ Encendido: 2 h 7 min
 Último ciclo: hace 12 s
 Último aviso enviado: hoy, 3:32 pm
 Recordatorios: 1 pendiente · 0 detenidos
-Esquema: versión 5
+Esquema: versión 6
 Base de datos: no disponible
 ```
 
@@ -1164,10 +1164,10 @@ No se creó el área.
 ---
 <b>¿En qué área va?</b>
 
-sacar copias
+Sacar copias
 
 Tipo: Tarea
-[universidad][proyectos]
-[iglesia][personal]
+[Universidad][Proyectos]
+[Iglesia][Personal]
 [Sin área][Cancelar]
 ```

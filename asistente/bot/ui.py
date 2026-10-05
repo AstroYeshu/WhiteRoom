@@ -5,16 +5,17 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from asistente.channels.base import Channel, Choice, IncomingChoice
-from asistente.formato import STALE_CHOICE
+from asistente.formato import STALE_CHOICE, cap_first
 
 STALE_CHOICE_TEXT = STALE_CHOICE
 MAX_SHOWN_CHARS = 120  # cuánto del texto del usuario se repite en un mensaje
 
 
 def shown(text: str) -> str:
-    """El texto del usuario recortado para repetirlo en un mensaje."""
+    """El texto del usuario recortado y con la primera letra en mayúscula, para repetirlo en un
+    mensaje (solo se muestra así: lo guardado no cambia)."""
     flat = " ".join(text.split())
-    return flat if len(flat) <= MAX_SHOWN_CHARS else flat[: MAX_SHOWN_CHARS - 1] + "…"
+    return cap_first(flat if len(flat) <= MAX_SHOWN_CHARS else flat[: MAX_SHOWN_CHARS - 1] + "…")
 
 
 async def show(

@@ -17,7 +17,8 @@ de vida diaria. Prioridades, en orden:
 ## 2. Contexto del usuario
 
 Estudiante universitario con proyectos personales y actividades de iglesia. Idioma: español.
-Áreas iniciales (editables): `universidad`, `proyectos`, `iglesia`, `personal`.
+Áreas iniciales (editables): `Universidad`, `Proyectos`, `Iglesia`, `Personal` (con la primera letra en mayúscula desde la
+migración 006; ver `docs/ESTILO.md`).
 Zona horaria configurable (`TZ_NAME`).
 
 ## 3. Principio de diseño: tres capas
@@ -89,7 +90,9 @@ class Channel(Protocol):
   antes de tratarlo como permanente (un recordatorio no se pierde por formato). Fechas: `fecha_corta` ("sáb 3 oct,
   6:00 pm", "hoy, 6:00 pm", "mañana, 8:00 am") en botones y listas; `fecha_larga` ("sábado 3 de octubre, 6:00 pm")
   solo en confirmaciones. Botones: filas de 2 como máximo (excepción: los números de `/pendientes` van de 5 en 5), acción principal primero, Cancelar al final y etiquetas
-  de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal.
+  de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal. Estilo (`docs/ESTILO.md`):
+  `cap_first` pone en mayúscula la primera letra de títulos, textos de recordatorios, notas y nombres de área SOLO al
+  mostrarlos (tarjetas, avisos, listas, botones); lo guardado no cambia (excepto el nombre de las áreas, que se normaliza al crearlas).
 - **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal
   decide cómo adornar, y WhatsApp o una consola sin fuentes no deben depender de ellos. Etiquetas en texto:
   `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00 am`, `Cancelar` (las horas llevan siempre am/pm). Lo vigila `tests/test_no_pictograms.py` (AST).
@@ -126,7 +129,7 @@ asistente/
 │  ├─ main.py                 # arranque: config, DB, bot, jobs
 │  ├─ config.py               # lee y valida .env
 │  ├─ db.py                   # conexión SQLite + runner de migraciones
-│  ├─ migrations/001_init.sql
+│  ├─ migrations/001_init.sql  # NNN_nombre.sql, o NNN_nombre.py con `upgrade(conn)` cuando SQL no alcanza (006)
 │  ├─ timeutil.py             # UTC <-> zona local, horas de silencio, reloj inyectable
 │  ├─ formato.py              # presentación pura (HTML mínimo, fechas, botones); NO importa bot/ ni core/
 │  ├─ choices.py              # ids de opciones como datos (`accion:parte:parte`, máx. 64 bytes); módulo neutral
@@ -300,7 +303,14 @@ CREATE TABLE classification_log (
 
 -- Migración 005: classification_log.capture_id INTEGER REFERENCES tasks(id) con índice ÚNICO: una fila por
 -- captura (la tarea de bandeja con la que nació). «Cambiar» actualiza esa fila (user_corrected = 1). NULL =
--- fila sin captura. (La migración 006 queda para el bloque 7c: `stop_notified_at`.)
+-- fila sin captura.
+
+-- Migración 006 (`006_capitalizar_areas.py`, en Python: SQL no sabe de acentos ni de mayúsculas fuera de ASCII):
+-- pone en mayúscula la primera letra de cada área (también las archivadas) solo si es minúscula y si el nombre nuevo
+-- no choca con OTRA área (sin distinguir mayúsculas ni acentos); las que chocan se dejan como están. Actualiza
+-- `classification_log.pred_area` y `final_area` de las áreas renombradas. Un área nueva se normaliza igual al crearse
+-- (recortar, colapsar espacios, `cap_first`; "iOS" y "UNAM" se respetan). La migración del bloque 7c
+-- (`stop_notified_at`) pasa a ser la **007**.
 
 CREATE TABLE learned_rules (
   id         INTEGER PRIMARY KEY,
@@ -363,7 +373,7 @@ Todo mensaje que no sea comando entra a este pipeline:
 3. Extraer montos con regex (`parsing/amounts.py`). Si hay más de un número candidato → preguntar.
 4. Clasificar (8.2).
 5. Crear la entidad (tarea, recordatorio, nota o gasto) y dejar la tarjeta como constancia (sección 3.1):
-   «Tarea guardada», el contenido y `Área: universidad`; un recordatorio lleva además `[Cambiar] [Deshacer]`.
+   «Tarea guardada», el contenido y `Área: Universidad`; un recordatorio lleva además `[Cambiar] [Deshacer]`.
 6. Si el tipo es recordatorio y no hay hora válida: preguntar "¿Cuándo?" con botones rápidos
    (Hoy 6 pm · Mañana {default_morning_time} · Elegir...).
 

@@ -69,7 +69,7 @@ def test_el_retrasado_se_calcula_con_la_hora_de_cada_envio(conn, clock, engine, 
     slow_first_send(channel, clock, minutes=3)  # b sale 3 min después de su hora
     assert tick(engine) == 2
     texts = [text for _, text, _, _ in channel.choices]
-    assert texts == ["<b>a</b>\n\nRecordatorio", "<b>b</b>\n\nRecordatorio <i>(retrasado)</i>"]
+    assert texts == ["<b>A</b>\n\nRecordatorio", "<b>B</b>\n\nRecordatorio <i>(retrasado)</i>"]
     assert row(conn, second.id).last_fired_at == to_utc_iso(clock())
 
 
@@ -88,7 +88,7 @@ def test_el_silencio_se_reevalua_en_cada_envio(conn, clock, engine, channel):
     assert tick(engine) == 1
     assert [text for _, text, _, _ in channel.choices][
         -1
-    ] == "<b>b</b>\n\nRecordatorio <i>(retrasado)</i>"
+    ] == "<b>B</b>\n\nRecordatorio <i>(retrasado)</i>"
 
 
 def test_la_espera_tras_un_fallo_cuenta_desde_el_momento_del_fallo(conn, clock, engine, channel):

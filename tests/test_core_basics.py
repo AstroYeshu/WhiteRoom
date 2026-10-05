@@ -27,13 +27,13 @@ def test_migracion_002_agrega_nag_count(conn):
 
 def test_areas_iniciales_y_busqueda_sin_acentos(conn):
     assert [a.name for a in areas.list_areas(conn)] == [
-        "universidad",
-        "proyectos",
-        "iglesia",
-        "personal",
+        "Universidad",
+        "Proyectos",
+        "Iglesia",
+        "Personal",
     ]
     found = areas.find_area_by_name(conn, "  UNIVERSIDAD ")
-    assert found is not None and found.name == "universidad"
+    assert found is not None and found.name == "Universidad"
 
 
 def test_crear_area_nueva_aparece_en_la_lista(conn, clock):
@@ -54,8 +54,8 @@ def test_area_invalida_se_rechaza(conn, clock, name, description):
 def test_archivar_area_no_la_borra(conn):
     target = areas.find_area_by_name(conn, "personal")
     areas.archive_area(conn, target.id)
-    assert "personal" not in [a.name for a in areas.list_areas(conn)]
-    assert "personal" in [a.name for a in areas.list_areas(conn, include_archived=True)]
+    assert "Personal" not in [a.name for a in areas.list_areas(conn)]
+    assert "Personal" in [a.name for a in areas.list_areas(conn, include_archived=True)]
     assert areas.get_area(conn, target.id).archived is True
 
 

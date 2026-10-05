@@ -1,0 +1,14 @@
+# Estilo de los mensajes
+
+Reglas de redacción para todo lo que ve el dueño (`formato.py` las aplica; el catálogo `docs/MENSAJES.md` es la prueba).
+
+- Las oraciones empiezan con mayúscula: "Ya existe un área llamada «Salud»."
+- Las áreas empiezan con mayúscula: "Universidad", "Proyectos". Un nombre con mayúsculas propias se respeta ("iOS", "UNAM").
+- Los días y los meses van en minúscula dentro de una frase ("vie 9 oct", "hoy, 5:00 pm"); con mayúscula solo al inicio de una línea.
+- Los títulos de tareas, textos de recordatorios y notas se muestran con la primera letra en mayúscula (`cap_first`);
+  lo guardado en la base no se modifica nunca.
+- Las etiquetas llevan dos puntos: "Área: Personal", "Vence: mañana, 9:00 am".
+- Sin emojis ni pictogramas (lo vigila `tests/test_no_pictograms.py`).
+- Puntuación: el punto medio · separa datos de una línea; la raya — separa una aclaración.
+- Los botones llevan como máximo 22 caracteres y la primera letra en mayúscula ("Mejor como tarea").
+- Cambiar un texto o una etiqueta a propósito obliga a regenerar `docs/MENSAJES.md` (`python scripts/show_messages.py`).

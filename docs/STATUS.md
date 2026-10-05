@@ -95,12 +95,17 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   (exige que existan los dos). 22 mutaciones sobre hooks e instalador, todas con 2 o más fallos. Pregunta 2 de `docs/PREGUNTAS.md` actualizada.
 - Filas de `classification_log` anteriores a la migración 005: NO se excluyen de `eval_classifier`; cuentan una a una (`capture_id` NULL).
 - Diseños aprobados (formato E de `/recordatorios` y aviso formato B) anotados en `docs/BACKLOG.md`, para tras una semana de uso.
+- Estilo, commit 1 HECHO: migración 006 (`006_capitalizar_areas.py`, la primera en Python; el ejecutor de `db.py` acepta `.sql` y `.py`)
+  pone en mayúscula la primera letra de las áreas sin pisar ninguna (colisión sin distinguir mayúsculas ni acentos = se deja) y sigue a
+  `classification_log.pred_area/final_area`; las áreas nuevas se normalizan al crearse; `formato.cap_first` capitaliza SOLO al mostrar
+  (tarjetas, avisos, listas, botones; lo guardado no cambia). `docs/ESTILO.md` nuevo. Pruebas: `tests/test_capitalizacion.py` (80) y
+  `tests/test_migration_006.py` (24); `pytest -q` 1792 passed, 29 skipped, 2 xfailed, ruff limpio. La migración del 7c pasa a ser la **007**.
 
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
    para la Fase 3).
-2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 006 `stop_notified_at`: la 005 ya es `capture_id`).
+2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 007 `stop_notified_at`: la 005 es `capture_id` y la 006 capitaliza las áreas).
 3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
 
 ## Decisiones recientes que afectan al siguiente paso

@@ -34,7 +34,7 @@ def test_crea_el_esquema_completo(conn):
 
 def test_areas_iniciales(conn):
     rows = conn.execute("SELECT name, description FROM areas ORDER BY id").fetchall()
-    assert [r["name"] for r in rows] == ["universidad", "proyectos", "iglesia", "personal"]
+    assert [r["name"] for r in rows] == ["Universidad", "Proyectos", "Iglesia", "Personal"]
     assert all(r["description"].strip() for r in rows)
 
 

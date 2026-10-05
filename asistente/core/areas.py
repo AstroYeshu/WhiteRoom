@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from asistente.formato import cap_first
 from asistente.parsing.dates import fold
 from asistente.timeutil import Clock, to_utc_iso
 
@@ -48,10 +49,13 @@ def find_area_by_name(conn: sqlite3.Connection, name: str) -> Area | None:
 def validate_new_name(conn: sqlite3.Connection, name: str) -> str:
     """El nombre normalizado de un área nueva, o `AreaError` (vacío, largo o repetido).
 
+    Normalizar = recortar, colapsar espacios y poner en mayúscula SOLO la primera letra si es
+    minúscula (`cap_first`: "iOS" y "UNAM" se respetan).
+
     Es único sin distinguir mayúsculas ni acentos, y las áreas archivadas también reservan su
     nombre (si no, habría dos «Viajes» y no se sabría a cuál se refiere el usuario).
     """
-    name = " ".join(name.split())
+    name = cap_first(" ".join(name.split()))
     if not name:
         raise AreaError("El área necesita un nombre.")
     if len(name) > MAX_NAME_LENGTH:
@@ -60,7 +64,7 @@ def validate_new_name(conn: sqlite3.Connection, name: str) -> str:
     for existing in list_areas(conn, include_archived=True):
         if fold(existing.name) == wanted:
             archived = " (archivada)" if existing.archived else ""
-            raise AreaError(f"Ya existe un área llamada «{existing.name}»{archived}.")
+            raise AreaError(f"Ya existe un área llamada «{cap_first(existing.name)}»{archived}.")
     return name
 
 

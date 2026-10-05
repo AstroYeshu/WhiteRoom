@@ -157,22 +157,22 @@ def test_rows_layout_filas_de_2_y_cancelar_al_final(count, last_alone, expected)
 
 def test_aviso_de_recordatorio_con_area():
     assert fmt.reminder_notice("llevar tarea", "universidad", False) == Html(
-        "<b>llevar tarea</b>\n\nRecordatorio · universidad"
+        "<b>Llevar tarea</b>\n\nRecordatorio · Universidad"
     )
 
 
 def test_aviso_de_recordatorio_sin_area_omite_la_linea_de_area():
     assert fmt.reminder_notice("llevar tarea", None, False) == Html(
-        "<b>llevar tarea</b>\n\nRecordatorio"
+        "<b>Llevar tarea</b>\n\nRecordatorio"
     )
 
 
 def test_aviso_retrasado_lleva_la_cursiva_al_final():
     assert fmt.reminder_notice("x", "iglesia", True) == Html(
-        "<b>x</b>\n\nRecordatorio · iglesia <i>(retrasado)</i>"
+        "<b>X</b>\n\nRecordatorio · Iglesia <i>(retrasado)</i>"
     )
     assert fmt.reminder_notice("x", None, True) == Html(
-        "<b>x</b>\n\nRecordatorio <i>(retrasado)</i>"
+        "<b>X</b>\n\nRecordatorio <i>(retrasado)</i>"
     )
 
 
@@ -180,7 +180,7 @@ def test_aviso_retrasado_lleva_la_cursiva_al_final():
 def test_el_aviso_escapa_el_texto_y_el_area(text):
     notice = fmt.reminder_notice(text, text, True)
     assert html_problems(notice) == []
-    assert text in fmt.plain(notice)
+    assert fmt.cap_first(text) in fmt.plain(notice)
 
 
 def test_la_distribucion_de_los_botones_del_aviso_es_2_por_2():
@@ -191,9 +191,9 @@ def test_la_distribucion_de_los_botones_del_aviso_es_2_por_2():
 
 
 def test_linea_de_estado_con_la_palabra_en_negrita():
-    assert fmt.state_line("Hecho", "llevar tarea") == Html("<b>Hecho</b> · llevar tarea")
+    assert fmt.state_line("Hecho", "llevar tarea") == Html("<b>Hecho</b> · Llevar tarea")
     assert fmt.state_line("Pospuesto", "x", "hoy, 3:40 pm") == Html(
-        "<b>Pospuesto</b> · x · hoy, 3:40 pm"
+        "<b>Pospuesto</b> · X · hoy, 3:40 pm"
     )
 
 
@@ -279,10 +279,10 @@ def test_las_piezas_de_las_vistas_escapan_el_texto(text):
 def test_pending_list_numera_pone_el_total_y_resume_las_que_faltan():
     rows = [fmt.PendingRow("uno", "uni", "hoy, 5:00 pm"), fmt.PendingRow("dos")]
     assert fmt.plain(fmt.pending_list(5, rows, None)) == (
-        "Pendientes (5)\n\n1. uno · uni · hoy, 5:00 pm\n2. dos\n\n"
+        "Pendientes (5)\n\n1. Uno · Uni · hoy, 5:00 pm\n2. Dos\n\n"
         "y 3 más: filtra por área (/pendientes nombre)"
     )
-    assert fmt.plain(fmt.pending_list(2, rows, "uni")).startswith("Pendientes · uni (2)\n\n")
+    assert fmt.plain(fmt.pending_list(2, rows, "uni")).startswith("Pendientes · Uni (2)\n\n")
     assert fmt.pending_list(0, [], None, note="x") == Html(
         "<b>Pendientes (0)</b>\n\nNo tienes tareas pendientes. Todo al día.\n\nx"
     )
@@ -291,5 +291,5 @@ def test_pending_list_numera_pone_el_total_y_resume_las_que_faltan():
 def test_pending_list_no_escapa_dos_veces():
     built = fmt.pending_list(1, [fmt.PendingRow("a & b <c>", "x&y", None)], None)
     assert html_problems(built) == []
-    assert fmt.plain(built).endswith("1. a & b <c> · x&y")
+    assert fmt.plain(built).endswith("1. A & b <c> · X&y")
     assert "&amp;amp;" not in built

@@ -40,12 +40,12 @@ def layouts_of_edits(bot: Bot):
 def test_una_tarea_es_un_solo_mensaje_que_evoluciona(bot, conn):
     bot.say("comprar leche")
     assert bot.sent_count() == 1
-    assert plain(bot) == "¿Qué es?\n\ncomprar leche"
+    assert plain(bot) == "¿Qué es?\n\nComprar leche"
     bot.tap("Tarea")
-    assert plain(bot) == "¿En qué área va?\n\ncomprar leche\n\nTipo: Tarea"
-    bot.tap("personal")
+    assert plain(bot) == "¿En qué área va?\n\nComprar leche\n\nTipo: Tarea"
+    bot.tap("Personal")
     assert bot.sent_count() == 1
-    assert plain(bot, card_ref(bot)) == "Tarea guardada\n\ncomprar leche\n\nÁrea: personal"
+    assert plain(bot, card_ref(bot)) == "Tarea guardada\n\nComprar leche\n\nÁrea: Personal"
     assert bot.channel.log[-1][2] == []  # la tarjeta final no lleva botones
     assert {ref for ref in bot.channel.refs} == {card_ref(bot)}  # todo pasó en el MISMO mensaje
 
@@ -53,36 +53,36 @@ def test_una_tarea_es_un_solo_mensaje_que_evoluciona(bot, conn):
 def test_una_nota_es_un_solo_mensaje(bot, conn):
     bot.say("la clave del wifi es larga")
     bot.tap("Nota")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert bot.sent_count() == 1
     assert plain(bot, card_ref(bot)) == (
-        "Nota guardada\n\nla clave del wifi es larga\n\nÁrea: universidad"
+        "Nota guardada\n\nLa clave del wifi es larga\n\nÁrea: Universidad"
     )
 
 
 def test_un_recordatorio_es_un_solo_mensaje_hasta_deshacer(bot, conn):
     bot.say("mañana 8am llevar tarea")
     bot.tap("Recordatorio")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert bot.sent_count() == 1
     assert plain(bot) == (
-        "Recordatorio guardado\n\nllevar tarea\n\n"
-        "Cuándo: domingo 4 de octubre, 8:00 am\nÁrea: universidad"
+        "Recordatorio guardado\n\nLlevar tarea\n\n"
+        "Cuándo: domingo 4 de octubre, 8:00 am\nÁrea: Universidad"
     )
     assert bot.labels() == ["Cambiar", "Deshacer"]
     assert layouts_of_edits(bot)[-1] == (2,)
     bot.tap("Deshacer")
     assert bot.sent_count() == 1
-    assert plain(bot, card_ref(bot)) == "Deshecho · llevar tarea · vuelve a tu bandeja como tarea"
+    assert plain(bot, card_ref(bot)) == "Deshecho · Llevar tarea · vuelve a tu bandeja como tarea"
 
 
 def test_cambiar_sigue_en_el_mismo_mensaje(bot, conn):
     bot.say("mañana 8am llevar tarea")
     bot.tap("Recordatorio")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     bot.tap("Cambiar")
     assert bot.sent_count() == 1
-    assert plain(bot).startswith("¿Cuándo?\n\nllevar tarea\n\nTipo: Recordatorio\nÁrea: iglesia")
+    assert plain(bot).startswith("¿Cuándo?\n\nLlevar tarea\n\nTipo: Recordatorio\nÁrea: Iglesia")
     bot.say("pasado mañana 10 am")
     assert bot.sent_count() == 1
     assert "Recordatorio guardado" in plain(bot, card_ref(bot))
@@ -94,7 +94,7 @@ def test_la_pregunta_del_parser_vive_en_la_misma_tarjeta_con_botones_de_dos_en_d
     bot.tap("Recordatorio")
     bot.tap("Sin área")
     assert bot.sent_count() == 1
-    assert plain(bot).startswith("¿A las 9 am o pm?\n\nllevar tarea")
+    assert plain(bot).startswith("¿A las 9 am o pm?\n\nLlevar tarea")
     assert bot.labels() == ["mañana, 9:00 am", "mañana, 9:00 pm", "Otra fecha", "Cancelar"]
     assert layouts_of_edits(bot)[-1] == (
         2,
@@ -107,7 +107,7 @@ def test_la_pregunta_del_parser_vive_en_la_misma_tarjeta_con_botones_de_dos_en_d
 
 def test_cada_comando_de_captura_es_un_solo_mensaje(bot, conn):
     bot.say("/tarea comprar pan")
-    bot.tap("personal")
+    bot.tap("Personal")
     bot.say("/nota la clave")
     bot.tap("Sin área")
     bot.say("/recordar mañana 8am llevar tarea")
@@ -121,10 +121,10 @@ def test_cada_comando_de_captura_es_un_solo_mensaje(bot, conn):
 
 def test_la_vista_previa_de_recordar_y_la_confirmacion_son_la_misma_tarjeta(bot, conn):
     bot.say("/recordar mañana 8am llevar tarea")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert plain(bot) == (
-        "¿Guardo este recordatorio?\n\nllevar tarea\n\n"
-        "Cuándo: domingo 4 de octubre, 8:00 am\nÁrea: universidad"
+        "¿Guardo este recordatorio?\n\nLlevar tarea\n\n"
+        "Cuándo: domingo 4 de octubre, 8:00 am\nÁrea: Universidad"
     )
     assert bot.labels() == ["Guardar", "Cancelar"]
     assert reminders.list_pending(conn) == []
@@ -138,7 +138,7 @@ def test_la_repeticion_muestra_la_interpretacion_en_la_tarjeta(bot, conn):
     bot.tap("Recordatorio")
     bot.tap("Sin área")
     assert plain(bot) == (
-        "¿Guardo esta repetición?\n\nregar plantas\n\n"
+        "¿Guardo esta repetición?\n\nRegar plantas\n\n"
         "Repetición: Cada lunes\nPróxima: lunes 5 de octubre, 7:00 pm"
     )
     bot.tap("Guardar")
@@ -161,7 +161,7 @@ def test_cancelar_deja_la_tarjeta_como_cancelada(bot, conn):
     bot.say("comprar leche")
     bot.tap("Cancelar")
     assert (
-        plain(bot, card_ref(bot)) == "Cancelado\n\ncomprar leche\n\nSigue en tu bandeja como tarea."
+        plain(bot, card_ref(bot)) == "Cancelado\n\nComprar leche\n\nSigue en tu bandeja como tarea."
     )
     assert bot.channel.log[-1][2] == []
     assert bot.sent_count() == 1
@@ -170,26 +170,26 @@ def test_cancelar_deja_la_tarjeta_como_cancelada(bot, conn):
 def test_mejor_como_tarea_cierra_la_tarjeta_como_tarea_guardada(bot, conn):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     assert bot.labels() == ["Hoy 6:00 pm", "Mañana 9:00 am", "Mejor como tarea", "Cancelar"]
     assert layouts_of_edits(bot)[-1] == (2, 2)
     bot.tap("Mejor como tarea")
-    assert plain(bot, card_ref(bot)) == "Tarea guardada\n\nllamar al dentista\n\nÁrea: iglesia"
+    assert plain(bot, card_ref(bot)) == "Tarea guardada\n\nLlamar al dentista\n\nÁrea: Iglesia"
     assert bot.sent_count() == 1
 
 
 def test_la_fecha_limite_tambien_vive_en_la_tarjeta(bot, conn):
     bot.say("/tarea entregar informe el viernes")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert plain(bot) == (
-        "¿Es la fecha límite?\n\nentregar informe\n\n"
-        "Tipo: Tarea\nÁrea: universidad\nFecha: viernes 9 de octubre, 9:00 am (hora por defecto)"
+        "¿Es la fecha límite?\n\nEntregar informe\n\n"
+        "Tipo: Tarea\nÁrea: Universidad\nFecha: viernes 9 de octubre, 9:00 am (hora por defecto)"
     )
     assert bot.labels() == ["Sí", "No", "Cancelar"]
     assert layouts_of_edits(bot)[-1] == (2, 1)
     bot.tap("Sí")
     assert bot.sent_count() == 1
-    assert plain(bot, card_ref(bot)).startswith("Tarea guardada\n\nentregar informe")
+    assert plain(bot, card_ref(bot)).startswith("Tarea guardada\n\nEntregar informe")
 
 
 def test_nuevaarea_tambien_es_una_tarjeta(bot, conn):
@@ -210,8 +210,8 @@ def test_un_mensaje_nuevo_marca_la_tarjeta_anterior_como_sin_terminar_sin_otro_m
     first = card_ref(bot)
     bot.say("sacar copias")
     assert bot.sent_count() == 2  # la tarjeta vieja se EDITA; solo se abre la nueva
-    assert plain(bot, first) == "Sin terminar\n\ncomprar leche\n\nSigue en tu bandeja como tarea."
-    assert plain(bot).startswith("¿Qué es?\n\nsacar copias")
+    assert plain(bot, first) == "Sin terminar\n\nComprar leche\n\nSigue en tu bandeja como tarea."
+    assert plain(bot).startswith("¿Qué es?\n\nSacar copias")
     assert [t.status for t in all_tasks(conn)] == ["open", "open"]
 
 
@@ -235,7 +235,7 @@ def test_un_boton_viejo_sobre_la_tarjeta_viva_se_ignora_en_silencio(bot, conn):
     bot.press(old_kind)  # el botón de tipo ya no es el vigente
     assert len(bot.channel.log) == before  # ni edición ni mensaje nuevo
     assert "¿En qué área va?" in plain(bot)
-    bot.tap("personal")  # y la tarjeta viva sigue funcionando
+    bot.tap("Personal")  # y la tarjeta viva sigue funcionando
     assert "¿Cuándo?" in plain(bot)
 
 
@@ -258,7 +258,7 @@ def test_un_boton_de_una_tarjeta_muerta_la_marca_como_no_disponible(bot, conn):
     bot.press(dead_button)
     assert plain(bot, first) == "Aviso · Esa opción ya no está disponible."
     assert bot.sent_count() == 2
-    assert plain(bot).startswith("¿Qué es?\n\nsacar copias")  # la tarjeta viva no se tocó
+    assert plain(bot).startswith("¿Qué es?\n\nSacar copias")  # la tarjeta viva no se tocó
     bot.tap("Tarea")
     assert "¿En qué área va?" in plain(bot)
 
@@ -294,7 +294,7 @@ def test_sin_edicion_el_flujo_se_completa_con_mensajes_nuevos(conn, clock):
     bot = Bot(conn, clock, editable=False)
     bot.say("mañana 8am llevar tarea")
     bot.tap("Recordatorio")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert bot.sent_count() == 3  # tarjeta, pregunta de área y confirmación
     [reminder] = reminders.list_pending(conn)
     assert reminder.text == "llevar tarea"
@@ -309,7 +309,7 @@ def test_si_la_edicion_falla_a_mitad_se_sigue_en_un_mensaje_nuevo(conn, clock):
     bot.say("comprar leche")
     bot.tap("Tarea")
     bot.channel.editable = False  # p. ej. Telegram no deja editar un mensaje muy viejo
-    bot.tap("personal")
+    bot.tap("Personal")
     assert "Tarea guardada" in fmt.plain(bot.last[1])
     assert bot.sent_count() == 2
 

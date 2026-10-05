@@ -249,7 +249,7 @@ def build() -> Catalog:
         "",
         "Generado por `python scripts/show_messages.py` con los manejadores reales, una base en memoria",
         "y un reloj fijo: **sábado 3 de octubre de 2026, 3:30 pm** (México). Las áreas son las iniciales",
-        "(universidad, proyectos, iglesia, personal). Los textos se muestran como los recibe Telegram:",
+        "(Universidad, Proyectos, Iglesia, Personal). Los textos se muestran como los recibe Telegram:",
         "HTML con solo `<b>`, `<i>` y `<code>` (la consola quita las etiquetas). Cada fila de botones",
         "va en una línea, como `[Etiqueta]`; `---` separa mensajes distintos de una misma respuesta.",
         "«(edita el mismo mensaje)» es una edición: la captura es UN solo mensaje (la tarjeta) que cambia",
@@ -288,7 +288,7 @@ def bandeja(cat: Catalog) -> None:
         lambda: s.tap("Tarea"),
     )
     cat.snap(
-        s, "Se elige un área: la misma tarjeta queda como constancia.", lambda: s.tap("personal")
+        s, "Se elige un área: la misma tarjeta queda como constancia.", lambda: s.tap("Personal")
     )
 
     s = Session()
@@ -302,7 +302,7 @@ def bandeja(cat: Catalog) -> None:
     s = Session()
     s.say("la clave del wifi es larga")
     s.tap("Nota")
-    cat.snap(s, "Nota guardada con su área.", lambda: s.tap("universidad"))
+    cat.snap(s, "Nota guardada con su área.", lambda: s.tap("Universidad"))
 
     s = Session()
     for area in areas.list_areas(s.conn):
@@ -316,7 +316,7 @@ def bandeja(cat: Catalog) -> None:
     cat.snap(
         s,
         "Recordatorio con fecha clara: edición del área y confirmación con Cambiar/Deshacer.",
-        lambda: s.tap("universidad"),
+        lambda: s.tap("Universidad"),
     )
     cat.snap(
         s,
@@ -327,7 +327,7 @@ def bandeja(cat: Catalog) -> None:
     s = Session()
     s.say("mañana 8am llevar tarea")
     s.tap("Recordatorio")
-    s.tap("universidad")
+    s.tap("Universidad")
     cat.snap(s, "Cambiar: se deshace y se vuelve a preguntar la fecha.", lambda: s.tap("Cambiar"))
     cat.snap(s, "Se responde la fecha escribiéndola.", lambda: s.say("pasado mañana 10 am"))
 
@@ -366,7 +366,7 @@ def bandeja(cat: Catalog) -> None:
     s = Session()
     s.say("llamar al dentista")
     s.tap("Recordatorio")
-    s.tap("iglesia")
+    s.tap("Iglesia")
     cat.snap(
         s,
         "Mejor como tarea: queda como tarea con el área ya elegida, sin recordatorio.",
@@ -634,7 +634,7 @@ def recordar(cat: Catalog) -> None:
         "Con texto: se guarda en la bandeja y pregunta el área.",
         lambda: s.say("/recordar mañana 8am llevar tarea"),
     )
-    cat.snap(s, "Vista previa antes de guardar.", lambda: s.tap("universidad"))
+    cat.snap(s, "Vista previa antes de guardar.", lambda: s.tap("Universidad"))
     cat.snap(s, "Guardar: confirmación.", lambda: s.tap("Guardar"))
     s = Session()
     s.say("/recordar todos los lunes a las 7 pm regar plantas")
@@ -654,18 +654,18 @@ def tarea(cat: Catalog) -> None:
     s = Session()
     cat.snap(s, "Sin texto.", lambda: s.say("/tarea"))
     cat.snap(s, "Con texto: pregunta solo el área.", lambda: s.say("/tarea comprar pan"))
-    cat.snap(s, "Área elegida.", lambda: s.tap("personal"))
+    cat.snap(s, "Área elegida.", lambda: s.tap("Personal"))
     s = Session()
     s.say("/tarea entregar informe el viernes")
     cat.snap(
         s,
         "Con una fecha clara en el texto: pregunta si es la fecha límite.",
-        lambda: s.tap("universidad"),
+        lambda: s.tap("Universidad"),
     )
     cat.snap(s, "Sí: título sin la fecha, con fecha de vencimiento.", lambda: s.tap("Sí"))
     s = Session()
     s.say("/tarea entregar informe el viernes")
-    s.tap("universidad")
+    s.tap("Universidad")
     cat.snap(s, "No: queda con el texto completo y sin fecha.", lambda: s.tap("No"))
 
 
@@ -674,7 +674,7 @@ def nota(cat: Catalog) -> None:
     s = Session()
     cat.snap(s, "Sin texto.", lambda: s.say("/nota"))
     cat.snap(s, "Con texto: pregunta solo el área.", lambda: s.say("/nota la clave del wifi"))
-    cat.snap(s, "Área elegida.", lambda: s.tap("personal"))
+    cat.snap(s, "Área elegida.", lambda: s.tap("Personal"))
 
 
 def areas_y_nuevaarea(cat: Catalog) -> None:

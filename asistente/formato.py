@@ -85,6 +85,28 @@ def plain(text: str) -> str:
     return html.unescape(_OWN_TAGS.sub("", text))
 
 
+_OPENING_MARKS = "¿¡"  # signos de apertura: la mayúscula va en la primera letra tras ellos
+
+
+def cap_first(text: str) -> str:
+    """Pone en mayúscula la primera letra SOLO si es una letra minúscula; el resto no se toca.
+
+    Es para MOSTRAR (nunca se guarda así). Salta los "¿" y "¡" iniciales ("¿qué?" -> "¿Qué?");
+    no cambia números ni símbolos ("123 a" queda igual). Una primera palabra con mayúsculas
+    propias ("iOS", "iPhone") se respeta: ya está escrita como su dueño la quiere.
+    """
+    start = len(text) - len(text.lstrip(_OPENING_MARKS))
+    if start == len(text) or not text[start].islower():
+        return text
+    first_word = text[start:].split(maxsplit=1)[0]
+    if any(char.isupper() for char in first_word[1:]):
+        return text
+    upper = text[start].upper()
+    if len(upper) != 1:  # "ß".upper() es "SS": no cambia la longitud del texto
+        return text
+    return text[:start] + upper + text[start + 1 :]
+
+
 def label(text: str) -> str:
     """Etiqueta de botón: como máximo `MAX_LABEL` caracteres (corta con puntos suspensivos)."""
     flat = " ".join(text.split())
@@ -157,15 +179,15 @@ REMINDER_LAYOUT = (2, 2)  # Hecho · +10 min / +1 h · Mañana 9:00
 
 def reminder_notice(text: str, area: str | None, delayed: bool) -> Html:
     """Contenido en negrita y, aparte, "Recordatorio · área" ("(retrasado)" en cursiva)."""
-    detail = "Recordatorio" + (f"{SEP}{esc(area)}" if area else "")
+    detail = "Recordatorio" + (f"{SEP}{esc(cap_first(area))}" if area else "")
     if delayed:
         detail += f" {italic('(retrasado)')}"
-    return paragraphs(bold(text), Html(detail))
+    return paragraphs(bold(cap_first(text)), Html(detail))
 
 
 def state_line(state: str, text: str, detail: str | None = None) -> Html:
     """Confirmación de una acción en una línea: la palabra de estado en negrita y luego el texto."""
-    parts: list[str] = [bold(state), text]
+    parts: list[str] = [bold(state), cap_first(text)]
     if detail:
         parts.append(detail)
     return join(parts, SEP)
@@ -330,11 +352,19 @@ def pending_list(
     total: int, rows: Sequence[PendingRow], area: str | None, note: str | None = None
 ) -> Html:
     """/pendientes: título con el total, lista numerada y, si faltan, cuántas más hay."""
-    title = "Pendientes" + (f"{SEP}{area}" if area else "") + f" ({total})"
+    title = "Pendientes" + (f"{SEP}{cap_first(area)}" if area else "") + f" ({total})"
     if total == 0:
         return screen(title, NOTHING_PENDING, note)
     items = [
-        join([part for part in (clip(row.title), row.area, row.when) if part], SEP) for row in rows
+        join(
+            [
+                part
+                for part in (cap_first(clip(row.title)), cap_first(row.area or ""), row.when)
+                if part
+            ],
+            SEP,
+        )
+        for row in rows
     ]
     extra = total - len(rows)
     footer = f"y {extra} más: filtra por área (/pendientes nombre)" if extra > 0 else None
@@ -345,10 +375,10 @@ def pending_detail(row: PendingRow) -> Html:
     """Una tarea abierta desde la lista: su título y sus datos con etiqueta."""
     details = []
     if row.area:
-        details.append(detail("Área", row.area))
+        details.append(detail("Área", cap_first(row.area)))
     if row.when:
         details.append(detail("Vence", row.when))
-    return card(row.title, None, details, note=TASK_PROMPT)
+    return card(cap_first(row.title), None, details, note=TASK_PROMPT)
 
 
 def _help_group(title: str, *lines: str) -> Html:

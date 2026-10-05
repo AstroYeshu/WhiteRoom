@@ -47,7 +47,7 @@ def test_existe_el_archivo_005_y_es_el_siguiente_numero_libre():
 def test_aplica_solo_la_005_a_una_base_en_la_004(tmp_path):
     connection = old_database(tmp_path)
     assert "capture_id" not in columns(connection)
-    assert db.migrate(connection) == [5]
+    assert db.migrate(connection) == [5, 6]
     assert "capture_id" in columns(connection)
     assert db.migrate(connection) == []  # no se repite
 

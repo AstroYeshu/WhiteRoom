@@ -158,7 +158,7 @@ def test_editar_tambien_reintenta_en_texto_plano(channel, monkeypatch):
     run(channel.edit_text("1", "77", fmt.state_line("Hecho", "a <b> c")))
     assert len(wire.edits) == 2
     assert wire.edits[1].get("parse_mode") is None
-    assert wire.edits[1]["text"] == "Hecho · a <b> c"
+    assert wire.edits[1]["text"] == "Hecho · A <b> c"
 
 
 def test_editar_con_doble_fallo_no_lanza(channel, monkeypatch):
@@ -191,9 +191,9 @@ def test_la_consola_muestra_texto_sin_etiquetas():
     run(console.send_text("1", fmt.reminder_notice("a <b> & c", "iglesia", True)))
     run(console.send_choices("1", fmt.bold("Elige"), [Choice("a:1", "A"), Choice("b:1", "B")]))
     run(console.edit_text("1", "77", fmt.state_line("Hecho", "x")))
-    assert printed[0] == "a <b> & c\n\nRecordatorio · iglesia (retrasado)"
+    assert printed[0] == "A <b> & c\n\nRecordatorio · Iglesia (retrasado)"
     assert printed[1:4] == ["Elige", "  1) A", "  2) B"]
-    assert printed[4] == "[editado] Hecho · x"
+    assert printed[4] == "[editado] Hecho · X"
 
 
 # --- Corte 2: referencias de mensaje y edición con botones ---------------------------------------

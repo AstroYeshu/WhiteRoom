@@ -50,12 +50,12 @@ def test_normalize_text(text, expected):
 def test_una_tarea_con_area(bot, conn, clock):
     bot.say("/tarea Comprar PAN")
     assert rows(conn) == []  # nada hasta que la tarjeta se completa
-    bot.tap("personal")
+    bot.tap("Personal")
     [row] = rows(conn)
     assert row["source"] == "user"
     assert row["capture_id"] == only_task_id(conn)
     assert row["text_norm"] == "comprar pan"
-    assert (row["final_kind"], row["final_area"]) == ("task", "personal")
+    assert (row["final_kind"], row["final_area"]) == ("task", "Personal")
     assert row["user_corrected"] == 0
     assert row["ts_utc"] == clock.current.isoformat(timespec="seconds")
     for column in ("pred_kind", "pred_kind_conf", "pred_area", "pred_area_conf", "latency_ms"):
@@ -73,33 +73,33 @@ def test_un_mensaje_libre_donde_el_dueno_elige_nota(bot, conn):
     bot.say("la clave del wifi es azul")
     bot.tap("Nota")
     assert rows(conn) == []
-    bot.tap("personal")
+    bot.tap("Personal")
     [row] = rows(conn)
-    assert (row["final_kind"], row["final_area"], row["user_corrected"]) == ("note", "personal", 0)
+    assert (row["final_kind"], row["final_area"], row["user_corrected"]) == ("note", "Personal", 0)
     assert row["text_norm"] == "la clave del wifi es azul"
 
 
 def test_un_mensaje_libre_donde_el_dueno_elige_tarea(bot, conn):
     bot.say("estudiar calculo")
     bot.tap("Tarea")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     [row] = rows(conn)
     assert (row["final_kind"], row["final_area"], row["user_corrected"]) == (
         "task",
-        "universidad",
+        "Universidad",
         0,
     )
 
 
 def test_un_recordatorio_se_registra_al_guardar_con_el_titulo_sin_fecha_ni_numeros(bot, conn):
     bot.say("/recordar mañana 8am llevar tarea de calculo")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert rows(conn) == []  # falta confirmar
     bot.tap("Guardar")
     [row] = rows(conn)
     assert (row["final_kind"], row["final_area"], row["user_corrected"]) == (
         "reminder",
-        "universidad",
+        "Universidad",
         0,
     )
     assert row["text_norm"] == "llevar tarea de calculo"
@@ -109,27 +109,27 @@ def test_un_recordatorio_se_registra_al_guardar_con_el_titulo_sin_fecha_ni_numer
 def test_un_recordatorio_con_pregunta_de_fecha_se_registra_al_crearse(bot, conn):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     assert rows(conn) == []
     bot.tap("Mañana")
     [row] = rows(conn)
-    assert (row["final_kind"], row["final_area"]) == ("reminder", "iglesia")
+    assert (row["final_kind"], row["final_area"]) == ("reminder", "Iglesia")
     assert row["text_norm"] == "llamar al dentista"
 
 
 def test_una_tarea_con_fecha_limite_aceptada_registra_el_titulo_limpio(bot, conn):
     bot.say("/tarea entregar informe el viernes")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     assert rows(conn) == []
     bot.tap("Sí")
     [row] = rows(conn)
-    assert (row["final_kind"], row["final_area"]) == ("task", "universidad")
+    assert (row["final_kind"], row["final_area"]) == ("task", "Universidad")
     assert "viernes" not in row["text_norm"] and "entregar informe" in row["text_norm"]
 
 
 def test_una_tarea_con_fecha_limite_rechazada_registra_el_texto_completo(bot, conn):
     bot.say("/tarea entregar informe el viernes")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     bot.tap("No")
     [row] = rows(conn)
     assert row["final_kind"] == "task"
@@ -142,15 +142,15 @@ def test_una_tarea_con_fecha_limite_rechazada_registra_el_texto_completo(bot, co
 def test_mejor_como_tarea_tras_recordatorio_es_una_correccion(bot, conn):
     bot.say("llamar al dentista")
     bot.tap("Recordatorio")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     bot.tap("Mejor como tarea")
     [row] = rows(conn)
-    assert (row["final_kind"], row["final_area"], row["user_corrected"]) == ("task", "iglesia", 1)
+    assert (row["final_kind"], row["final_area"], row["user_corrected"]) == ("task", "Iglesia", 1)
 
 
 def test_un_recordatorio_detectado_por_el_verbo_y_cambiado_a_tarea_es_correccion(bot, conn):
     bot.say("recordar llamar a mamá")  # el verbo ya dice qué es: no se pregunta el tipo
-    bot.tap("personal")
+    bot.tap("Personal")
     bot.tap("Mejor como tarea")
     [row] = rows(conn)
     assert (row["final_kind"], row["user_corrected"]) == ("task", 1)
@@ -158,7 +158,7 @@ def test_un_recordatorio_detectado_por_el_verbo_y_cambiado_a_tarea_es_correccion
 
 def test_cambiar_actualiza_la_misma_fila_y_la_marca_corregida(bot, conn, clock):
     bot.say("recordar llamar a mamá mañana 8am")
-    bot.tap("personal")
+    bot.tap("Personal")
     [first] = rows(conn)
     assert first["user_corrected"] == 0
     clock.advance(minutes=5)
@@ -172,7 +172,7 @@ def test_cambiar_actualiza_la_misma_fila_y_la_marca_corregida(bot, conn, clock):
 
 def test_cambiar_dos_veces_sigue_siendo_una_sola_fila(bot, conn):
     bot.say("recordar llamar a mamá mañana 8am")
-    bot.tap("personal")
+    bot.tap("Personal")
     bot.tap("Cambiar")
     bot.tap("Hoy")
     bot.tap("Cambiar")
@@ -183,7 +183,7 @@ def test_cambiar_dos_veces_sigue_siendo_una_sola_fila(bot, conn):
 
 def test_cambiar_y_terminar_como_tarea_es_correccion_en_la_misma_fila(bot, conn):
     bot.say("recordar llamar a mamá mañana 8am")
-    bot.tap("personal")
+    bot.tap("Personal")
     [first] = rows(conn)
     bot.tap("Cambiar")
     bot.tap("Mejor como tarea")
@@ -210,7 +210,7 @@ def test_una_captura_abandonada_no_registra_nada(bot, conn):
 
 def test_deshacer_no_registra_una_fila_nueva(bot, conn):
     bot.say("recordar llamar a mamá mañana 8am")
-    bot.tap("personal")
+    bot.tap("Personal")
     before = len(rows(conn))
     bot.tap("Deshacer")
     assert len(rows(conn)) == before
@@ -229,7 +229,7 @@ def test_un_extrano_no_registra_nada(bot, conn):
 
 def test_la_doble_pulsacion_no_duplica_la_fila(bot, conn):
     bot.say("/tarea comprar pan")
-    button = bot.choice_id("personal")
+    button = bot.choice_id("Personal")
     bot.press(button)
     bot.press(button)
     assert len(rows(conn)) == 1
@@ -242,10 +242,10 @@ def test_el_texto_solo_va_a_la_base_nunca_al_log(bot, conn, caplog):
     secret = "secretoultraprivado"
     with caplog.at_level(logging.DEBUG):
         bot.say(f"/tarea {secret} uno")
-        bot.tap("personal")
+        bot.tap("Personal")
         bot.say(f"{secret} dos")
         bot.tap("Nota")
-        bot.tap("personal")
+        bot.tap("Personal")
     assert secret not in caplog.text
     assert [row["text_norm"] for row in rows(conn)] == [f"{secret} uno", f"{secret} dos"]
 
@@ -254,7 +254,7 @@ def test_si_no_se_puede_registrar_la_captura_igual_se_completa(bot, conn, caplog
     conn.execute("DROP TABLE classification_log")
     with caplog.at_level(logging.WARNING):
         bot.say("/tarea comprar pan")
-        bot.tap("personal")
+        bot.tap("Personal")
     [(title, area)] = conn.execute("SELECT title, area_id FROM tasks").fetchall()
     assert title == "comprar pan" and area is not None
     assert "comprar pan" not in caplog.text
@@ -312,7 +312,7 @@ def test_fecha_limite_aceptada_sin_area(bot, conn):
 
 def test_recordar_con_comando_y_mejor_como_tarea_es_correccion(bot, conn):
     bot.say("/recordar llamar al dentista")
-    bot.tap("iglesia")
+    bot.tap("Iglesia")
     bot.tap("Mejor como tarea")
     [row] = rows(conn)
     assert (row["final_kind"], row["user_corrected"]) == ("task", 1)
@@ -320,7 +320,7 @@ def test_recordar_con_comando_y_mejor_como_tarea_es_correccion(bot, conn):
 
 def test_cambiar_tras_guardar_con_vista_previa_y_terminar_como_tarea(bot, conn):
     bot.say("/recordar mañana 8am llevar tarea")
-    bot.tap("universidad")
+    bot.tap("Universidad")
     bot.tap("Guardar")
     bot.tap("Cambiar")
     bot.tap("Mejor como tarea")
@@ -336,11 +336,11 @@ def test_si_falla_el_registro_la_nota_y_el_recordatorio_igual_se_guardan(bot, co
         if path == "nota":
             bot.say(f"{secret} nota")
             bot.tap("Nota")
-            bot.tap("personal")
+            bot.tap("Personal")
             assert conn.execute("SELECT count(*) FROM notes").fetchone()[0] == 1
         else:
             bot.say(f"/recordar mañana 8am {secret}")
-            bot.tap("personal")
+            bot.tap("Personal")
             bot.tap("Guardar")
             assert conn.execute("SELECT count(*) FROM reminders").fetchone()[0] == 1
     assert secret not in caplog.text
@@ -352,9 +352,9 @@ def test_si_falla_el_registro_la_nota_y_el_recordatorio_igual_se_guardan(bot, co
 
 def test_dos_capturas_distintas_son_dos_filas_con_su_propia_captura(bot, conn):
     bot.say("/tarea comprar pan")
-    bot.tap("personal")
+    bot.tap("Personal")
     bot.say("/tarea sacar la basura")
-    bot.tap("personal")
+    bot.tap("Personal")
     first, second = rows(conn)
     task_ids = [r["id"] for r in conn.execute("SELECT id FROM tasks ORDER BY id")]
     assert [first["capture_id"], second["capture_id"]] == task_ids
@@ -393,7 +393,7 @@ def test_una_captura_ya_corregida_sigue_corregida(conn, clock):
 def test_el_registro_apunta_a_la_tarea_de_bandeja(bot, conn):
     bot.say("la clave del wifi es azul")
     bot.tap("Nota")
-    bot.tap("personal")
+    bot.tap("Personal")
     [row] = rows(conn)
     [task] = conn.execute("SELECT id, status, closed_reason FROM tasks").fetchall()
     assert row["capture_id"] == task["id"]
