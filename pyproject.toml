@@ -9,3 +9,6 @@ select = ["E", "F", "I", "UP", "B"]
 pythonpath = ["."]
 testpaths = ["tests"]
 faulthandler_timeout = 60
+markers = [
+    "slow: pruebas lentas (barridos largos); la suite rapida es `pytest -m \"not slow\"`",
+]

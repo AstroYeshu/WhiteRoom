@@ -1,0 +1,26 @@
+#!/bin/sh
+# Hook de pre-push del proyecto (completo): la suite entera, incluidas las pruebas lentas.
+# BLOQUEA el push si falla. Se activa junto con el de pre-commit: `python scripts/install_hooks.py`.
+# Funciona con el entorno virtual de Windows (venv/Scripts) o de Linux (venv/bin).
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+py=""
+for candidate in venv/Scripts/python.exe venv/Scripts/python venv/bin/python; do
+  if [ -f "$candidate" ]; then
+    py="$candidate"
+    break
+  fi
+done
+if [ -z "$py" ]; then
+  echo "pre-push: no encuentro el entorno virtual (venv/Scripts o venv/bin); push bloqueado." >&2
+  exit 1
+fi
+
+"$py" -m pytest -q
+code=$?
+if [ "$code" -ne 0 ]; then
+  echo "pre-push: pytest falló; push bloqueado." >&2
+fi
+exit $code

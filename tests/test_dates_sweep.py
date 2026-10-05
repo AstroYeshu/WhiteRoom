@@ -106,7 +106,15 @@ def _violations(
     return problems
 
 
-@pytest.mark.parametrize(("name", "tz", "first_day", "days"), WINDOWS, ids=[w[0] for w in WINDOWS])
+# Solo la semana de México corre en la suite rápida (-m "not slow"); el resto (~7 s) va en la
+# completa.
+_RAPIDA = "semana-mexico"
+_VENTANAS = [
+    pytest.param(*w, id=w[0], marks=() if w[0] == _RAPIDA else pytest.mark.slow) for w in WINDOWS
+]
+
+
+@pytest.mark.parametrize(("name", "tz", "first_day", "days"), _VENTANAS)
 def test_barrido_de_reloj(name, tz, first_day, days):
     zone = ZoneInfo(tz)
     dst_days = set(DST_DAYS[tz])
