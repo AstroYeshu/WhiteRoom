@@ -1088,7 +1088,7 @@ Encendido: 2 h 5 min
 Último ciclo: todavía ninguno
 Último aviso enviado: ninguno todavía
 Recordatorios: 0 pendientes · 0 detenidos
-Esquema: versión 4
+Esquema: versión 5
 Base de datos: no disponible
 ```
 
@@ -1103,7 +1103,7 @@ Encendido: 2 h 7 min
 Último ciclo: hace 12 s
 Último aviso enviado: hoy, 3:32 pm
 Recordatorios: 1 pendiente · 0 detenidos
-Esquema: versión 4
+Esquema: versión 5
 Base de datos: no disponible
 ```
 

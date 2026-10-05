@@ -15,6 +15,11 @@ def bot(conn, clock) -> Bot:
     return Bot(conn, clock)
 
 
+def only_task_id(conn) -> int:
+    [row] = conn.execute("SELECT id FROM tasks").fetchall()
+    return row["id"]
+
+
 def rows(conn) -> list[dict]:
     cursor = conn.execute("SELECT * FROM classification_log ORDER BY id")
     return [dict(row) for row in cursor]
@@ -48,6 +53,7 @@ def test_una_tarea_con_area(bot, conn, clock):
     bot.tap("personal")
     [row] = rows(conn)
     assert row["source"] == "user"
+    assert row["capture_id"] == only_task_id(conn)
     assert row["text_norm"] == "comprar pan"
     assert (row["final_kind"], row["final_area"]) == ("task", "personal")
     assert row["user_corrected"] == 0
@@ -150,24 +156,39 @@ def test_un_recordatorio_detectado_por_el_verbo_y_cambiado_a_tarea_es_correccion
     assert (row["final_kind"], row["user_corrected"]) == ("task", 1)
 
 
-def test_cambiar_y_volver_a_guardar_un_recordatorio_no_es_correccion(bot, conn):
+def test_cambiar_actualiza_la_misma_fila_y_la_marca_corregida(bot, conn, clock):
     bot.say("recordar llamar a mamá mañana 8am")
     bot.tap("personal")
     [first] = rows(conn)
     assert first["user_corrected"] == 0
+    clock.advance(minutes=5)
     bot.tap("Cambiar")
     bot.tap("Hoy")
-    second = rows(conn)[-1]
-    assert (second["final_kind"], second["user_corrected"]) == ("reminder", 0)
-    assert len(rows(conn)) == 2
+    [second] = rows(conn)  # la MISMA fila, no una nueva
+    assert second["id"] == first["id"] and second["capture_id"] == first["capture_id"]
+    assert (second["final_kind"], second["user_corrected"]) == ("reminder", 1)
+    assert second["ts_utc"] > first["ts_utc"]
 
 
-def test_cambiar_y_terminar_como_tarea_es_correccion(bot, conn):
+def test_cambiar_dos_veces_sigue_siendo_una_sola_fila(bot, conn):
     bot.say("recordar llamar a mamá mañana 8am")
     bot.tap("personal")
     bot.tap("Cambiar")
+    bot.tap("Hoy")
+    bot.tap("Cambiar")
+    bot.tap("Mañana")
+    [row] = rows(conn)
+    assert row["user_corrected"] == 1
+
+
+def test_cambiar_y_terminar_como_tarea_es_correccion_en_la_misma_fila(bot, conn):
+    bot.say("recordar llamar a mamá mañana 8am")
+    bot.tap("personal")
+    [first] = rows(conn)
+    bot.tap("Cambiar")
     bot.tap("Mejor como tarea")
-    last = rows(conn)[-1]
+    [last] = rows(conn)
+    assert last["id"] == first["id"]
     assert (last["final_kind"], last["user_corrected"]) == ("task", 1)
 
 
@@ -304,7 +325,7 @@ def test_cambiar_tras_guardar_con_vista_previa_y_terminar_como_tarea(bot, conn):
     bot.tap("Cambiar")
     bot.tap("Mejor como tarea")
     kinds = [(row["final_kind"], row["user_corrected"]) for row in rows(conn)]
-    assert kinds == [("reminder", 0), ("task", 1)]
+    assert kinds == [("task", 1)]
 
 
 @pytest.mark.parametrize("path", ["nota", "recordatorio"])
@@ -324,3 +345,92 @@ def test_si_falla_el_registro_la_nota_y_el_recordatorio_igual_se_guardan(bot, co
             assert conn.execute("SELECT count(*) FROM reminders").fetchone()[0] == 1
     assert secret not in caplog.text
     assert any("etiqueta" in r.getMessage() for r in caplog.records)
+
+
+# --- Una fila por captura (capture_id) -----------------------------------------------------------
+
+
+def test_dos_capturas_distintas_son_dos_filas_con_su_propia_captura(bot, conn):
+    bot.say("/tarea comprar pan")
+    bot.tap("personal")
+    bot.say("/tarea sacar la basura")
+    bot.tap("personal")
+    first, second = rows(conn)
+    task_ids = [r["id"] for r in conn.execute("SELECT id FROM tasks ORDER BY id")]
+    assert [first["capture_id"], second["capture_id"]] == task_ids
+    assert first["user_corrected"] == second["user_corrected"] == 0
+
+
+def test_log_user_decision_con_la_misma_captura_actualiza_y_marca_corregida(conn, clock):
+    from asistente.core import tasks
+
+    task = tasks.create_task(conn, "x", clock)
+    classification.log_user_decision(conn, clock, "uno", "task", "personal", False, task.id)
+    clock.advance(minutes=1)
+    classification.log_user_decision(conn, clock, "dos 2", "reminder", None, False, task.id)
+    [row] = rows(conn)
+    assert (row["text_norm"], row["final_kind"], row["final_area"]) == ("dos", "reminder", None)
+    assert row["user_corrected"] == 1  # decidir de nuevo la misma captura es una corrección
+    assert row["ts_utc"] == clock.current.isoformat(timespec="seconds")
+
+
+def test_log_user_decision_sin_captura_siempre_anade_fila(conn, clock):
+    classification.log_user_decision(conn, clock, "a", "note", None, False)
+    classification.log_user_decision(conn, clock, "a", "note", None, False)
+    assert len(rows(conn)) == 2
+
+
+def test_una_captura_ya_corregida_sigue_corregida(conn, clock):
+    from asistente.core import tasks
+
+    task = tasks.create_task(conn, "x", clock)
+    classification.log_user_decision(conn, clock, "a", "task", None, True, task.id)
+    classification.log_user_decision(conn, clock, "a", "task", None, False, task.id)
+    [row] = rows(conn)
+    assert row["user_corrected"] == 1
+
+
+def test_el_registro_apunta_a_la_tarea_de_bandeja(bot, conn):
+    bot.say("la clave del wifi es azul")
+    bot.tap("Nota")
+    bot.tap("personal")
+    [row] = rows(conn)
+    [task] = conn.execute("SELECT id, status, closed_reason FROM tasks").fetchall()
+    assert row["capture_id"] == task["id"]
+    assert task["closed_reason"] == "converted_to_note"  # la fila sigue ligada a la tarea cerrada
+
+
+def decide_twice(conn, clock, first: tuple, second: tuple) -> dict:
+    from asistente.core import tasks
+
+    task = tasks.create_task(conn, "x", clock)
+    for text, kind, area in (first, second):
+        classification.log_user_decision(conn, clock, text, kind, area, False, task.id)
+    [row] = rows(conn)
+    return row
+
+
+def test_decidir_otra_vez_actualiza_el_area(conn, clock):
+    row = decide_twice(conn, clock, ("a", "task", "personal"), ("a", "task", "iglesia"))
+    assert row["final_area"] == "iglesia"
+
+
+def test_decidir_otra_vez_actualiza_el_texto(conn, clock):
+    row = decide_twice(conn, clock, ("primero", "task", None), ("segundo", "task", None))
+    assert row["text_norm"] == "segundo"
+
+
+def test_decidir_otra_vez_actualiza_el_tipo(conn, clock):
+    row = decide_twice(conn, clock, ("a", "task", None), ("a", "note", None))
+    assert row["final_kind"] == "note"
+
+
+def test_decidir_otra_vez_actualiza_la_hora(conn, clock):
+    from asistente.core import tasks
+
+    task = tasks.create_task(conn, "x", clock)
+    classification.log_user_decision(conn, clock, "a", "task", None, False, task.id)
+    first = rows(conn)[0]["ts_utc"]
+    clock.advance(hours=2)
+    classification.log_user_decision(conn, clock, "a", "task", None, False, task.id)
+    assert rows(conn)[0]["ts_utc"] > first

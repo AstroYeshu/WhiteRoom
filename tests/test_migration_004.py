@@ -43,7 +43,7 @@ def _old_database(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migra_datos_viejos_sin_centinela(tmp_path):
     connection = _old_database(tmp_path)
-    assert db.migrate(connection) == [4]
+    assert db.migrate(connection) == [4, 5]
 
     stopped, retrying = connection.execute("SELECT * FROM reminders ORDER BY id").fetchall()
     assert (stopped["stop_reason"], stopped["attempts"]) == ("legacy", 0)

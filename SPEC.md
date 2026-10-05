@@ -299,6 +299,10 @@ CREATE TABLE classification_log (
   user_corrected   INTEGER NOT NULL DEFAULT 0
 );
 
+-- Migración 005: classification_log.capture_id INTEGER REFERENCES tasks(id) con índice ÚNICO: una fila por
+-- captura (la tarea de bandeja con la que nació). «Cambiar» actualiza esa fila (user_corrected = 1). NULL =
+-- fila sin captura. (La migración 006 queda para el bloque 7c: `stop_notified_at`.)
+
 CREATE TABLE learned_rules (
   id         INTEGER PRIMARY KEY,
   text_norm  TEXT NOT NULL UNIQUE,                    -- texto normalizado sin fechas ni números
@@ -415,7 +419,7 @@ botones y se inserta en `areas`; desde la siguiente petición ya forma parte de 
 confirmaciones idénticas del mismo `text_norm` (sin fechas ni números) se crea una fila en
 `learned_rules`.
 
-**`scripts/eval_classifier.py`:** lee `classification_log` con etiquetas finales, ejecuta cada
+**`scripts/eval_classifier.py`:** (hoy solo resume las etiquetas del dueño, una por captura; lo demás llega con la Fase 2.) Lee `classification_log` con etiquetas finales, ejecuta cada
 clasificador disponible y reporta exactitud, matriz de confusión, latencia media y calibración
 (exactitud por tramo de confianza). Sirve para comparar Jev contra Haiku con datos propios.
 

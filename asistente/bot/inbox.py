@@ -151,6 +151,7 @@ def _record_decision(ctx: Ctx, flow: Flow, kind: str, text: str) -> None:
             KIND_NAMES[kind],
             _area_name(ctx, flow.area_id),
             user_corrected=flow.first_kind is not None and flow.first_kind != kind,
+            capture_id=flow.task_id or None,
         )
     except sqlite3.Error as error:
         logger.warning("No se pudo guardar la etiqueta de clasificación: %s", type(error).__name__)

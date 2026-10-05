@@ -84,11 +84,14 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 
 - Auditoría con columna de resolución: 11 discrepancias resueltas editando el SPEC; quedan la 7 y la 10 como preguntas (`docs/PREGUNTAS.md`).
 
+- `classification_log.capture_id` (migración 005): una fila por captura, ligada a la tarea de bandeja; «Cambiar» actualiza la misma fila con
+  `user_corrected=1`. `scripts/eval_classifier.py` resume las etiquetas (una por captura). 16 mutaciones, todas con 2 o más fallos.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
    para la Fase 3).
-2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 005 `stop_notified_at`).
+2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 006 `stop_notified_at`: la 005 ya es `capture_id`).
 3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
 
 ## Decisiones recientes que afectan al siguiente paso
