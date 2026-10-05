@@ -161,6 +161,18 @@ def fecha_vencida(moment_utc: datetime, tz_name: str, now: Clock) -> str:
     return f"{WEEKDAYS_SHORT[local.weekday()]} {local.day} {month}"
 
 
+def vencimiento(moment_utc: datetime, tz_name: str, now: Clock, hour_today: bool = False) -> str:
+    """La fecha límite de una tarea en las listas: "venció vie 2 oct" si ya pasó (solo el día;
+    "venció hoy"; con año si es de otro año) o `fecha_corta` si todavía no. Con `hour_today`, lo
+    que venció hoy lleva la hora: "venció hoy, 1:00 pm". Es la única redacción de lo vencido."""
+    if moment_utc >= now():
+        return fecha_corta(moment_utc, tz_name, now)
+    text = f"venció {fecha_vencida(moment_utc, tz_name, now)}"
+    if hour_today and to_local(moment_utc, tz_name).date() == to_local(now(), tz_name).date():
+        text += f", {hora(moment_utc, tz_name)}"
+    return text
+
+
 def fecha_larga(moment_utc: datetime, tz_name: str, now: Clock) -> str:
     """Solo para confirmaciones: "sábado 3 de octubre, 6:00 pm"."""
     return format_when(moment_utc, tz_name, now)

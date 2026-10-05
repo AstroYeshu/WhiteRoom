@@ -3,7 +3,10 @@
 **Norte:** un recordatorio creado desde Telegram suena a su hora en la Raspberry Pi.
 
 ## Fase y bloque
-Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; bloque 7 en curso: 7a (bandeja) y 7b (comandos) HECHOS; sigue 7c (am/pm, "el N" y aviso de recuperación).
+Fase 1 (núcleo determinista, sin LLM). Bloques 0–6 terminados; bloque 7: 7a (bandeja) y 7b (comandos) HECHOS, rediseño de mensajes (cortes 1-3), kit de despliegue,
+estilo (áreas en mayúscula, `cap_first`), listas agrupadas por área y una sola redacción de lo vencido («venció vie 2 oct») también HECHOS. El 7c (am/pm, "el N"
+y aviso de recuperación, migración 007) sigue EN PAUSA y no está entre los 3 pasos siguientes: se retoma después de la semana de uso, si hace falta.
+Estado: `pytest -q` y `ruff check .` en 0 (0 omitidas, 2 xfailed), hooks de pre-commit y pre-push activos, esquema en la versión 6, sin push pendiente de pedir.
 Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas aparcadas: `docs/BACKLOG.md`.
 
 ## Hecho
@@ -116,11 +119,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - `cap_first`: la regla real (primera palabra con otra mayúscula = no se toca) documentada en `docs/ESTILO.md` y probada con iOS, eBay, iPhone, UNAM y Ya.
 
 ## Siguiente (3 pasos)
-1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
-   `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
-   para la Fase 3).
-2. Bloque 7c: "Cambiar a am/pm", "el N" con candidato, aviso de recuperación (migración 007 `stop_notified_at`: la 005 es `capture_id` y la 006 capitaliza las áreas).
-3. Bloque 8: README, verificación final y manual en `--dry-run`. Fase 2 (clasificación) NO empieza sin pedirlo.
+1. **Despliegue en la Raspberry Pi** con el checklist del README (`scripts/check_env.py`, `deploy/asistente.service`, respaldo). Falta solo la verificación real en la Pi.
+2. **Una semana de uso real** del bot (dev y prod con bases separadas); anotar en `docs/BACKLOG.md` lo que moleste o falte. Fase 2 (clasificación) NO empieza sin pedirlo.
+3. **Construir los diseños aprobados** de `docs/BACKLOG.md` («Diseños aprobados, pendientes de construir tras una semana de uso»): `/recordatorios` formato E y aviso formato B.
 
 ## Decisiones recientes que afectan al siguiente paso
 - Los botones EDITAN el mensaje (`Channel.edit_text`, `IncomingChoice.message_ref`); sin `message_ref` se manda uno nuevo.

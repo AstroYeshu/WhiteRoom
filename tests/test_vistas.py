@@ -67,7 +67,7 @@ def test_hoy_con_secciones_horas_cortas_y_bandeja(bot, conn, clock):
         "Universidad\n"
         "- Entregar informe · hoy, 5:00 pm\n\n"
         "Sin área\n"
-        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "- Pagar luz · venció vie 2 oct\n\n"
         "Recordatorios\n"
         "- hoy, 6:00 pm · Llamar a mamá\n\n"
         "3 en bandeja sin área"
@@ -135,8 +135,8 @@ def test_hoy_pasada_la_medianoche_ya_es_otro_dia(bot, conn, clock):
     add_task(conn, clock, "mañana a las 00", "2026-10-05 00:00")
     text = screen(bot, "/hoy")
     assert text.startswith("Hoy · domingo 4 de octubre\n")
-    assert "- De anoche · vencida sáb 3 oct, 11:59 pm" in text
-    assert "- Recién empezado · hoy, 12:05 am" in text
+    assert "- De anoche · venció sáb 3 oct" in text
+    assert "- Recién empezado · venció hoy, 12:05 am" in text
     assert "- Fin del día · hoy, 11:59 pm" in text
     assert "mañana a las 00" not in text
 

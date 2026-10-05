@@ -569,12 +569,12 @@ def test_hoy_agrupa_las_tareas_por_area_y_deja_los_recordatorios_en_orden_cronol
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
         "Universidad\n"
-        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Leer · venció vie 2 oct\n"
         "- Entregar informe · hoy, 5:00 pm\n\n"
         "Personal\n"
         "- Regar plantas · hoy, 8:00 pm\n\n"
         "Sin área\n"
-        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "- Pagar luz · venció vie 2 oct\n\n"
         "Recordatorios\n"
         "- hoy, 4:00 pm · Gimnasio\n"
         "- hoy, 6:00 pm · Llamar a mamá · Personal\n\n"
@@ -597,7 +597,7 @@ def test_hoy_con_filtro_no_hay_encabezados_de_area(bot, conn, clock):
     assert text == (
         "Hoy · sábado 3 de octubre · Universidad\n\n"
         "Tareas\n"
-        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Leer · venció vie 2 oct\n"
         "- Entregar informe · hoy, 5:00 pm"
     )
 
@@ -785,12 +785,12 @@ def test_hoy_usa_vinetas_y_no_numeros(bot, conn, clock):
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
         "Universidad\n"
-        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Leer · venció vie 2 oct\n"
         "- Entregar informe · hoy, 5:00 pm\n\n"
         "Personal\n"
         "- Regar plantas · hoy, 8:00 pm\n\n"
         "Sin área\n"
-        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "- Pagar luz · venció vie 2 oct\n\n"
         "Recordatorios\n"
         "- hoy, 4:00 pm · Gimnasio\n"
         "- hoy, 6:00 pm · Llamar a mamá · Personal\n\n"
@@ -804,7 +804,7 @@ def test_hoy_con_filtro_usa_vinetas_sin_encabezados(bot, conn, clock):
     assert listing(bot, "/hoy universidad") == (
         "Hoy · sábado 3 de octubre · Universidad\n\n"
         "Tareas\n"
-        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Leer · venció vie 2 oct\n"
         "- Entregar informe · hoy, 5:00 pm"
     )
 
@@ -872,3 +872,39 @@ def test_hoy_sin_filtro_y_16_tareas_el_pie_sugiere_filtrar(bot, conn, clock):
     for number in range(16):
         add_task(conn, clock, f"tarea {number:02d}", "2026-10-03 17:00", "personal")
     assert listing(bot, "/hoy").endswith("y 1 más: filtra por área (/hoy nombre)")
+
+
+# --- Una sola redacción para lo vencido: /hoy y /pendientes -------------------------------
+
+
+def test_hoy_lo_vencido_hoy_dice_venció_hoy_con_la_hora(bot, conn, clock):
+    add_task(conn, clock, "temprano", "2026-10-03 13:00", "personal")
+    add_task(conn, clock, "mas tarde", "2026-10-03 17:00", "personal")
+    text = listing(bot, "/hoy")
+    assert "- Temprano · venció hoy, 1:00 pm" in text
+    assert "- Mas tarde · hoy, 5:00 pm" in text
+
+
+def test_hoy_lo_de_otro_dia_no_lleva_hora_y_lo_de_otro_anio_lleva_anio(bot, conn, clock):
+    add_task(conn, clock, "ayer", "2026-10-02 17:00", "personal")
+    add_task(conn, clock, "antigua", "2025-03-14 09:00", "personal")
+    text = listing(bot, "/hoy")
+    assert "- Antigua · venció 14 mar 2025" in text
+    assert "- Ayer · venció vie 2 oct" in text
+    assert "vencida" not in text
+
+
+def test_hoy_con_filtro_tambien_usa_venció(bot, conn, clock):
+    add_task(conn, clock, "ayer", "2026-10-02 17:00", "personal")
+    assert listing(bot, "/hoy personal").endswith("- Ayer · venció vie 2 oct")
+
+
+def test_lo_que_vence_justo_ahora_no_esta_vencido_en_hoy(bot, conn, clock):
+    add_task(conn, clock, "justo ahora", "2026-10-03 15:30", "personal")
+    assert "- Justo ahora · hoy, 3:30 pm" in listing(bot, "/hoy")
+
+
+def test_hoy_y_pendientes_dicen_lo_mismo_de_lo_vencido_otro_dia(bot, conn, clock):
+    add_task(conn, clock, "ayer", "2026-10-02 17:00", "personal")
+    assert "Ayer · venció vie 2 oct" in listing(bot, "/hoy")
+    assert "Ayer · venció vie 2 oct" in listing(bot, "/pendientes")

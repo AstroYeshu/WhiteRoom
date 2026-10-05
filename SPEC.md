@@ -99,7 +99,7 @@ class Channel(Protocol):
   las activas); las tareas sin área van al final bajo «Sin área». Orden de las áreas: el de `/areas` (por id). Dentro del área: primero las que
   tienen fecha (las vencidas abren la lista), por fecha, y al final las que no la tienen, por creación. Con filtro de área (`/pendientes nombre`)
   no hay encabezados y el título es «Pendientes · Área (n)». Lo vencido se marca en la línea («venció vie 2 oct», solo el día; «venció hoy»;
-  con año si es de otro año); lo que vence justo ahora todavía no lo está. Límite de 15 tareas: lo que se corta es el final del orden y se avisa con
+  con año si es de otro año; en `/hoy`, lo que venció hoy lleva la hora: «venció hoy, 1:00 pm»). `/hoy` y `/pendientes` usan la misma redacción (`formato.vencimiento`). Lo que vence justo ahora todavía no lo está. Límite de 15 tareas: lo que se corta es el final del orden y se avisa con
   «y N más: filtra por área (/pendientes nombre)» (con filtro ya activo, solo «y N más»); `/hoy` usa viñetas «-» en lugar de números (no tiene botones); un área cuyas tareas se cortan todas pierde su encabezado. La agrupación es una función pura
   (`formato.group_tasks`, sin base ni reloj) que reutilizará «¿Quitas alguna?» (Fase 3). Tras Hecha o Descartar la lista vuelve actualizada y
   renumerada; un número de una lista vieja abre la tarea por su id y, si ya no está abierta, da un aviso breve y actualiza la lista.

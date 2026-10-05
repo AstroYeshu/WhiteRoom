@@ -548,7 +548,7 @@ _Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de ba
 - Entregar informe · hoy, 5:00 pm
 
 <b>Sin área</b>
-- Pagar luz · vencida vie 2 oct, 5:00 pm
+- Pagar luz · venció vie 2 oct
 
 <b>Recordatorios</b>
 - hoy, 6:00 pm · Llamar a mamá

@@ -56,3 +56,6 @@ Aprobados por el dueño; no se construyen hasta que haya usado el bot una semana
 - `/hoy` numera las tareas pero no tiene botones: decidir si los números le sirven o si basta con viñetas bajo cada encabezado.
 - Con filtro de área el pie dice «filtra por área»: tiene poco sentido; quizá debería decir solo «y N más».
 - Si lo único que hay son tareas sin área, el encabezado «Sin área» sobra; decidir si se omite en ese caso.
+
+## Surgido al unificar lo vencido
+- Huella de las migraciones: `schema_migrations` no guarda un hash del archivo aplicado; una migración editada después de aplicarse no se detecta (ver DECISIONS, «La migración 006 se reescribió DESPUÉS de aplicarse»). Añadir `checksum` con una migración nueva y avisar al arrancar si no coincide.
