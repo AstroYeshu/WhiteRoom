@@ -30,3 +30,20 @@ Sin compromiso ni fecha. Nada de aquí se implementa sin que el dueño lo pida. 
 - `today_or_tomorrow` sin candidatos: hoy se pide escribir el día con la hora; el plan quería armar los dos días y luego
   preguntar la hora.
 
+
+## Diseños aprobados, pendientes de construir tras una semana de uso
+Aprobados por el dueño; no se construyen hasta que haya usado el bot una semana. Sin cambiar el motor de avisos salvo lo indicado.
+
+### a) `/recordatorios`, formato E
+- **Secciones, en este orden:** En espera, Hoy, Mañana, Esta semana, Más adelante, Detenidos.
+- **Lista numerada** (una sola numeración) con un botón por número, como en `/pendientes`.
+- **Detalle** de un recordatorio: [Cambiar fecha] [Cancelar] [Volver]. En series NO aparece [Cambiar fecha].
+- **[Deshacer]** tras cancelar (patrón de Deshacer de la captura).
+- **[Reintentar]** en los detenidos (llama a `reminders.reactivate`).
+- **Motor:** nueva función `reschedule_reminder` en `core/reminders.py` (cambia `fire_at_utc`, reinicia intentos y `stop_reason`, nada se borra).
+
+### b) Aviso del recordatorio, formato B
+- **Cuerpo:** título «Recordatorio», el texto, «hora · Área» y los botones [Hecho] [Posponer].
+- **Posponer** abre: [+10 min] [+1 h] [Mañana 9:00 am] (o «Hoy» en vez de «Mañana» antes de las 05:00) [Elegir hora] [Volver].
+- **Variantes** en cursiva: «Retrasado» (umbral actual de 2 min) y «Aviso 2 de 3» (reintentos).
+- **Compatibilidad:** los ids viejos `rem_done`, `rem_snooze` y `rem_tomorrow` siguen funcionando (mensajes ya enviados con botones viejos).

@@ -232,3 +232,9 @@ El siguiente número libre era el 005 (`005_classification_capture_id.sql`): `ca
 
 ## Decisiones del dueño que cierran preguntas
 (a) La captura PERMANECE en `bot/inbox.py`; el SPEC se actualizó (§5 sin `core/capture.py`, §8.1). La parte pura (reglas aprendidas, clasificadores y regla de decisión) irá en `classify/` cuando llegue la Fase 2, sin conversación dentro. (b) «¿Quitas alguna?» (Fase 3) reutiliza el patrón de `/pendientes`: lista numerada, un botón por número y, al abrir una tarea, `Hecha · Descartar · Posponer · Volver` en el mismo mensaje, volviendo a la lista actualizada; SPEC §8.4 actualizado. (c) `time-sync.target` queda por verificar en la Pi (sigue en la unidad con el comentario «verificar en la Pi»). Auditoría 7 y 10 marcadas como resueltas. Quedan abiertas en PREGUNTAS.md: el `.env` real y si se activa el hook.
+
+## Suite rápida (`slow`) y hooks en dos niveles
+La suite tardaba ~118 s por un coste de setup (certificados SSL de httpx, ~0,4 s x 2 por canal construido): se comparte un contexto SSL en `tests/conftest.py`, sin tocar código de producción. Además, `-m "not slow"` (~19 s) deja fuera los barridos de reloj largos y `test_hooks.py`; la rápida cubre motor, parser, formato y handlers. pre-commit = ruff + rápida; pre-push = completa. Descartado: dejar un solo hook de ~2 min (nadie lo activaría) y recortar los barridos (se perdería cobertura).
+
+## Etiquetas anteriores a la migración 005
+Siguen en `classification_log` con `capture_id` NULL y `eval_classifier` las cuenta una a una (no se excluyen). Límite conocido: una captura vieja corregida con «Cambiar» antes de la 005 tiene dos filas y cuenta dos veces. Descartado: excluirlas (se perderían etiquetas reales del dueño).

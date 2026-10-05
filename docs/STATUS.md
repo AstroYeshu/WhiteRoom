@@ -87,6 +87,15 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 - `classification_log.capture_id` (migración 005): una fila por captura, ligada a la tarea de bandeja; «Cambiar» actualiza la misma fila con
   `user_corrected=1`. `scripts/eval_classifier.py` resume las etiquetas (una por captura). 16 mutaciones, todas con 2 o más fallos.
 
+- Suite lenta diagnosticada y arreglada: pasó de ~10 s a 110-124 s porque cada `TelegramChannel(...)` crea 2 clientes httpx y cada uno carga el
+  almacén de certificados (~0,4 s en Windows; ~130 construcciones = ~84 s de «setup»). `tests/conftest.py` comparte un contexto SSL
+  (solo en pruebas): suite completa 118 s -> ~30-37 s, misma cobertura (1717 pruebas). Marcador `slow` (11 barridos de fecha, menos «semana-mexico»,
+  y `test_hooks.py`, 46): `pytest -q -m "not slow"` ~19 s (1660 pruebas).
+- Hooks en dos niveles, SIN activar: pre-commit = `ruff check .` + suite rápida; pre-push = `pytest -q`. `install_hooks.py` instala ambos
+  (exige que existan los dos). 22 mutaciones sobre hooks e instalador, todas con 2 o más fallos. Pregunta 2 de `docs/PREGUNTAS.md` actualizada.
+- Filas de `classification_log` anteriores a la migración 005: NO se excluyen de `eval_classifier`; cuentan una a una (`capture_id` NULL).
+- Diseños aprobados (formato E de `/recordatorios` y aviso formato B) anotados en `docs/BACKLOG.md`, para tras una semana de uso.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda
