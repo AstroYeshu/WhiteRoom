@@ -109,6 +109,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   deja de coincidir con `docs/FLUJO.md` (valor 0) y prohíbe `pytest.skip()`. Los hooks de pre-commit y pre-push están ACTIVOS (desde la sesión
   anterior); antes decía «sin activar».
 
+- Listas: `/pendientes` marca lo vencido («venció vie 2 oct»), el pie sugiere filtrar solo sin filtro y `/hoy` usa viñetas «-». Mutaciones (9): 2 o más fallos cada una.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda

@@ -329,7 +329,7 @@ def test_hoy_muestra_tareas_recordatorios_y_areas_con_mayuscula(bot, conn, clock
     add_reminder(conn, clock, "llamar a mamá", "2026-10-03 18:00", "personal")
     assert fmt.plain(bot.reply("/hoy")) == (
         "Hoy · sábado 3 de octubre\n\n"
-        "Tareas\nUniversidad\n1. Entregar informe · hoy, 5:00 pm\n\n"
+        "Tareas\nUniversidad\n- Entregar informe · hoy, 5:00 pm\n\n"
         "Recordatorios\n- hoy, 6:00 pm · Llamar a mamá · Personal"
     )
 
@@ -463,7 +463,7 @@ def test_hoy_con_un_area_guardada_en_minuscula_la_muestra_con_mayuscula(bot, con
     )
     assert fmt.plain(bot.reply("/hoy")) == (
         "Hoy · sábado 3 de octubre\n\n"
-        "Tareas\nViajes\n1. Reservar hotel · hoy, 5:00 pm\n\n"
+        "Tareas\nViajes\n- Reservar hotel · hoy, 5:00 pm\n\n"
         "Recordatorios\n- hoy, 4:30 pm · Llamar a la aerolínea · Viajes"
     )
     assert fmt.plain(bot.reply("/hoy viajes")).startswith("Hoy · sábado 3 de octubre · Viajes\n")

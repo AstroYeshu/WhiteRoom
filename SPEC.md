@@ -98,8 +98,9 @@ class Channel(Protocol):
   y un botón por número que conserva el id de la tarea. Las áreas sin tareas no aparecen; las áreas archivadas con tareas abiertas SÍ (después de
   las activas); las tareas sin área van al final bajo «Sin área». Orden de las áreas: el de `/areas` (por id). Dentro del área: primero las que
   tienen fecha (las vencidas abren la lista), por fecha, y al final las que no la tienen, por creación. Con filtro de área (`/pendientes nombre`)
-  no hay encabezados y el título es «Pendientes · Área (n)». Límite de 15 tareas: lo que se corta es el final del orden y se avisa con
-  «y N más: filtra por área (/pendientes nombre)»; un área cuyas tareas se cortan todas pierde su encabezado. La agrupación es una función pura
+  no hay encabezados y el título es «Pendientes · Área (n)». Lo vencido se marca en la línea («venció vie 2 oct», solo el día; «venció hoy»;
+  con año si es de otro año); lo que vence justo ahora todavía no lo está. Límite de 15 tareas: lo que se corta es el final del orden y se avisa con
+  «y N más: filtra por área (/pendientes nombre)» (con filtro ya activo, solo «y N más»); `/hoy` usa viñetas «-» en lugar de números (no tiene botones); un área cuyas tareas se cortan todas pierde su encabezado. La agrupación es una función pura
   (`formato.group_tasks`, sin base ni reloj) que reutilizará «¿Quitas alguna?» (Fase 3). Tras Hecha o Descartar la lista vuelve actualizada y
   renumerada; un número de una lista vieja abre la tarea por su id y, si ya no está abierta, da un aviso breve y actualiza la lista.
 - **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal

@@ -65,9 +65,9 @@ def test_hoy_con_secciones_horas_cortas_y_bandeja(bot, conn, clock):
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
         "Universidad\n"
-        "1. Entregar informe · hoy, 5:00 pm\n\n"
+        "- Entregar informe · hoy, 5:00 pm\n\n"
         "Sin área\n"
-        "2. Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
         "Recordatorios\n"
         "- hoy, 6:00 pm · Llamar a mamá\n\n"
         "3 en bandeja sin área"
@@ -121,7 +121,7 @@ def test_hoy_cerca_de_medianoche_el_dia_termina_a_las_00_00_locales(bot, conn, c
     add_reminder(conn, clock, "aviso de hoy", "2026-10-03 23:55")
     add_reminder(conn, clock, "aviso de mañana", "2026-10-04 00:05")
     text = screen(bot, "/hoy")
-    assert "Sin área\n1. Justo antes · hoy, 11:59 pm" in text
+    assert "Sin área\n- Justo antes · hoy, 11:59 pm" in text
     assert "- hoy, 11:55 pm · Aviso de hoy" in text
     assert "justo a medianoche" not in text and "ya es mañana" not in text
     assert "aviso de mañana" not in text
@@ -135,9 +135,9 @@ def test_hoy_pasada_la_medianoche_ya_es_otro_dia(bot, conn, clock):
     add_task(conn, clock, "mañana a las 00", "2026-10-05 00:00")
     text = screen(bot, "/hoy")
     assert text.startswith("Hoy · domingo 4 de octubre\n")
-    assert "1. De anoche · vencida sáb 3 oct, 11:59 pm" in text
-    assert "2. Recién empezado · hoy, 12:05 am" in text
-    assert "3. Fin del día · hoy, 11:59 pm" in text
+    assert "- De anoche · vencida sáb 3 oct, 11:59 pm" in text
+    assert "- Recién empezado · hoy, 12:05 am" in text
+    assert "- Fin del día · hoy, 11:59 pm" in text
     assert "mañana a las 00" not in text
 
 

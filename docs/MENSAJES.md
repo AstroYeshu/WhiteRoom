@@ -545,10 +545,10 @@ _Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de ba
 
 <b>Tareas</b>
 <b>Universidad</b>
-1. Entregar informe · hoy, 5:00 pm
+- Entregar informe · hoy, 5:00 pm
 
 <b>Sin área</b>
-2. Pagar luz · vencida vie 2 oct, 5:00 pm
+- Pagar luz · vencida vie 2 oct, 5:00 pm
 
 <b>Recordatorios</b>
 - hoy, 6:00 pm · Llamar a mamá
@@ -562,7 +562,7 @@ _Filtrado por área (sin la línea de bandeja)._
 <b>Hoy · sábado 3 de octubre · Universidad</b>
 
 <b>Tareas</b>
-1. Entregar informe · hoy, 5:00 pm
+- Entregar informe · hoy, 5:00 pm
 ```
 
 _Área que no existe._
@@ -596,7 +596,7 @@ _Lista agrupada por área con un botón por número._
 2. Regar plantas · mañana, 9:00 am
 
 <b>Sin área</b>
-3. Pagar luz · vie 2 oct, 5:00 pm
+3. Pagar luz · venció vie 2 oct
 4. Comprar pan
 [1][2][3][4]
 ```
@@ -625,7 +625,7 @@ _Hecha: vuelve a la lista actualizada._
 1. Regar plantas · mañana, 9:00 am
 
 <b>Sin área</b>
-2. Pagar luz · vie 2 oct, 5:00 pm
+2. Pagar luz · venció vie 2 oct
 3. Comprar pan
 
 <b>Hecha</b> · Entregar informe

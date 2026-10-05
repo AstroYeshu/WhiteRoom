@@ -149,6 +149,18 @@ def fecha_corta(moment_utc: datetime, tz_name: str, now: Clock) -> str:
     return f"{WEEKDAYS_SHORT[local.weekday()]} {local.day} {month}, {_hour(local)}"
 
 
+def fecha_vencida(moment_utc: datetime, tz_name: str, now: Clock) -> str:
+    """Solo el día de lo que ya venció, para «venció ...»: "hoy", "vie 2 oct", "14 mar 2025"."""
+    local = to_local(moment_utc, tz_name)
+    today = to_local(now(), tz_name).date()
+    if local.date() == today:
+        return "hoy"
+    month = MONTHS_SHORT[local.month - 1]
+    if local.year != today.year:
+        return f"{local.day} {month} {local.year}"
+    return f"{WEEKDAYS_SHORT[local.weekday()]} {local.day} {month}"
+
+
 def fecha_larga(moment_utc: datetime, tz_name: str, now: Clock) -> str:
     """Solo para confirmaciones: "sábado 3 de octubre, 6:00 pm"."""
     return format_when(moment_utc, tz_name, now)
@@ -435,9 +447,10 @@ def group_tasks(
 NO_AREA_HEADER = "Sin área"
 
 
-def task_list_block(groups: TaskGroups, headers: bool = True) -> Html:
-    """Las tareas en lista numerada con numeración continua. Con `headers`, cada área lleva su
-    encabezado en negrita (y un renglón en blanco entre áreas); sin ellos, una sola lista."""
+def task_list_block(groups: TaskGroups, headers: bool = True, numbered: bool = True) -> Html:
+    """Las tareas en lista numerada con numeración continua (o con viñetas "-" si `numbered` es
+    False). Con `headers`, cada área lleva su encabezado en negrita (y un renglón en blanco entre
+    áreas); sin ellos, una sola lista."""
     number = 0
     blocks: list[str] = []
     for group in groups.groups:
@@ -447,22 +460,27 @@ def task_list_block(groups: TaskGroups, headers: bool = True) -> Html:
         for one in group.items:
             number += 1
             parts = [part for part in (cap_first(clip(one.title)), one.when) if part]
-            lines.append(Html(f"{number}. " + join(parts, SEP)))
+            mark = f"{number}. " if numbered else "- "
+            lines.append(Html(mark + join(parts, SEP)))
         blocks.append(block(*lines))
     return paragraphs(*blocks) if headers else block(*blocks)
 
 
-def task_list_footer(groups: TaskGroups, command: str) -> str | None:
-    """«y N más: filtra por área (/comando nombre)» si el límite dejó tareas fuera."""
+def task_list_footer(groups: TaskGroups, command: str, filtered: bool = False) -> str | None:
+    """Si el límite dejó tareas fuera: «y N más: filtra por área (/comando nombre)»; con filtro de
+    área ya activo, solo «y N más»."""
     if groups.hidden <= 0:
         return None
+    if filtered:
+        return f"y {groups.hidden} más"
     return f"y {groups.hidden} más: filtra por área ({command} nombre)"
 
 
 def task_section(title: str, groups: TaskGroups, headers: bool, command: str) -> Html:
-    """La sección de tareas de /hoy: su título en negrita y la lista agrupada."""
-    lines: list[str] = [bold(title), task_list_block(groups, headers)]
-    footer = task_list_footer(groups, command)
+    """La sección de tareas de /hoy: su título en negrita y la lista agrupada, con viñetas (sin
+    botones no hay nada que numerar). Sin encabezados es que hay filtro de área."""
+    lines: list[str] = [bold(title), task_list_block(groups, headers, numbered=False)]
+    footer = task_list_footer(groups, command, filtered=not headers)
     if footer:
         lines += ["", footer]
     return block(*lines)
@@ -475,7 +493,8 @@ def pending_list(groups: TaskGroups, area: str | None, note: str | None = None) 
     if groups.total == 0:
         return screen(title, NOTHING_PENDING, note)
     body = task_list_block(groups, headers=area is None)
-    return screen(title, body, task_list_footer(groups, "/pendientes"), note)
+    footer = task_list_footer(groups, "/pendientes", filtered=area is not None)
+    return screen(title, body, footer, note)
 
 
 def pending_detail(row: PendingRow) -> Html:

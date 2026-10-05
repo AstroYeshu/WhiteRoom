@@ -16,7 +16,7 @@ from asistente.choices import decode_choice_id
 from asistente.core import areas, tasks
 from tests.botkit import Bot, module_loop  # noqa: F401
 from tests.htmlcheck import html_problems
-from tests.test_commands import add_reminder, add_task
+from tests.test_commands import add_reminder, add_task, local
 from tests.test_telegram_real import RealPath
 
 TOAST = "Esa opción ya no aplica"
@@ -169,13 +169,13 @@ def test_pendientes_agrupa_por_area_con_numeracion_continua(bot, conn, clock):
     assert listing(bot) == (
         "Pendientes (6)\n\n"
         "Universidad\n"
-        "1. Leer · vie 2 oct, 9:00 am\n"
+        "1. Leer · venció vie 2 oct\n"
         "2. Entregar informe · hoy, 5:00 pm\n"
         "3. Estudiar\n\n"
         "Personal\n"
         "4. Regar plantas · mañana, 9:00 am\n\n"
         "Sin área\n"
-        "5. Pagar luz · vie 2 oct, 5:00 pm\n"
+        "5. Pagar luz · venció vie 2 oct\n"
         "6. Comprar pan"
     )
 
@@ -262,7 +262,7 @@ def test_pendientes_dentro_del_area_vencidas_primero_luego_fecha_y_sin_fecha(bot
     add_task(conn, clock, "sin fecha dos", None, "personal")
     assert listing(bot) == (
         "Pendientes (5)\n\nPersonal\n"
-        "1. Vencida · jue 1 oct, 9:00 am\n"
+        "1. Vencida · venció jue 1 oct\n"
         "2. Hoy · hoy, 6:00 pm\n"
         "3. Mañana · mañana, 9:00 am\n"
         "4. Sin fecha uno\n"
@@ -337,7 +337,7 @@ def test_con_filtro_no_hay_encabezados_y_el_titulo_lleva_el_area_y_el_total(bot,
     seed(conn, clock)
     assert listing(bot, "/pendientes universidad") == (
         "Pendientes · Universidad (3)\n\n"
-        "1. Leer · vie 2 oct, 9:00 am\n"
+        "1. Leer · venció vie 2 oct\n"
         "2. Entregar informe · hoy, 5:00 pm\n"
         "3. Estudiar"
     )
@@ -421,7 +421,7 @@ def test_el_limite_tambien_rige_con_filtro(bot, conn, clock):
     text = listing(bot, "/pendientes personal")
     assert text.startswith("Pendientes · Personal (16)\n\n1. Tarea 00")
     assert "15. Tarea 14" in text and "Tarea 15" not in text
-    assert text.endswith("y 1 más: filtra por área (/pendientes nombre)")
+    assert text.endswith("\n\ny 1 más")  # con filtro ya activo no sugiere filtrar
 
 
 # --- Escape: nombres de área y textos del usuario -------------------------------------------------
@@ -569,12 +569,12 @@ def test_hoy_agrupa_las_tareas_por_area_y_deja_los_recordatorios_en_orden_cronol
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
         "Universidad\n"
-        "1. Leer · vencida vie 2 oct, 9:00 am\n"
-        "2. Entregar informe · hoy, 5:00 pm\n\n"
+        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Entregar informe · hoy, 5:00 pm\n\n"
         "Personal\n"
-        "3. Regar plantas · hoy, 8:00 pm\n\n"
+        "- Regar plantas · hoy, 8:00 pm\n\n"
         "Sin área\n"
-        "4. Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
         "Recordatorios\n"
         "- hoy, 4:00 pm · Gimnasio\n"
         "- hoy, 6:00 pm · Llamar a mamá · Personal\n\n"
@@ -586,8 +586,8 @@ def test_hoy_los_encabezados_van_en_negrita(bot, conn, clock):
     seed_today(conn, clock)
     bot.say("/hoy")
     html = bot.channel.log[-1][1]
-    assert "<b>Tareas</b>\n<b>Universidad</b>\n1. Leer" in html
-    assert "<b>Sin área</b>\n4. Pagar luz" in html
+    assert "<b>Tareas</b>\n<b>Universidad</b>\n- Leer" in html
+    assert "<b>Sin área</b>\n- Pagar luz" in html
     assert html_problems(html) == []
 
 
@@ -597,8 +597,8 @@ def test_hoy_con_filtro_no_hay_encabezados_de_area(bot, conn, clock):
     assert text == (
         "Hoy · sábado 3 de octubre · Universidad\n\n"
         "Tareas\n"
-        "1. Leer · vencida vie 2 oct, 9:00 am\n"
-        "2. Entregar informe · hoy, 5:00 pm"
+        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Entregar informe · hoy, 5:00 pm"
     )
 
 
@@ -612,7 +612,7 @@ def test_hoy_limita_las_tareas_a_15_con_el_pie_de_hoy(bot, conn, clock):
     for number in range(17):
         add_task(conn, clock, f"tarea {number:02d}", "2026-10-03 17:00", "personal")
     text = listing(bot, "/hoy")
-    assert "15. Tarea 14" in text and "Tarea 15" not in text
+    assert "- Tarea 14" in text and "Tarea 15" not in text
     assert "y 2 más: filtra por área (/hoy nombre)" in text
 
 
@@ -621,7 +621,7 @@ def test_hoy_escapa_el_area_y_el_titulo(bot, conn, clock):
     add_task(conn, clock, "<b>t</b> & x", "2026-10-03 17:00", "r&d <x>")
     bot.say("/hoy")
     html = bot.channel.log[-1][1]
-    assert "<b>R&amp;d &lt;x&gt;</b>\n1. &lt;b&gt;t&lt;/b&gt; &amp; x" in html
+    assert "<b>R&amp;d &lt;x&gt;</b>\n- &lt;b&gt;t&lt;/b&gt; &amp; x" in html
     assert html_problems(html) == []
 
 
@@ -630,7 +630,7 @@ def test_hoy_un_area_archivada_con_tareas_se_muestra(bot, conn, clock):
     tasks.create_task(conn, "de antes", clock, area_id=old.id)
     with conn:
         conn.execute("UPDATE tasks SET due_at_utc = '2026-10-03T23:00:00+00:00'")
-    assert "Antigua\n1. De antes · hoy, 5:00 pm" in listing(bot, "/hoy")
+    assert "Antigua\n- De antes · hoy, 5:00 pm" in listing(bot, "/hoy")
 
 
 # --- Con la librería REAL (Update.de_json) --------------------------------------------------------
@@ -691,7 +691,7 @@ def test_real_hoy_agrupado(conn, clock, monkeypatch):
     add_task(conn, clock, "entregar informe", "2026-10-03 17:00", "universidad")
     real = RealPath(conn, monkeypatch)
     real.say("/hoy")
-    assert "<b>Tareas</b>\n<b>Universidad</b>\n1. Entregar informe" in real.sends[-1]["text"]
+    assert "<b>Tareas</b>\n<b>Universidad</b>\n- Entregar informe" in real.sends[-1]["text"]
 
 
 # --- Reutilizable: la misma función sirve a otros llamadores --------------------------------------
@@ -717,4 +717,158 @@ def test_hoy_las_areas_archivadas_van_despues_de_las_activas(bot, conn, clock):
     with conn:
         conn.execute("UPDATE tasks SET due_at_utc = '2026-10-03T23:00:00+00:00'")
     text = listing(bot, "/hoy")
-    assert text.index("Arte\n1. Dibujar") < text.index("Antigua\n2. De antes")
+    assert text.index("Arte\n- Dibujar") < text.index("Antigua\n- De antes")
+
+
+# --- Vencidas marcadas, pie según el filtro y /hoy con viñetas -----------------------------------
+
+
+def test_fecha_vencida_es_solo_el_dia(clock):
+    def when(text: str) -> str:
+        return fmt.fecha_vencida(local(text), "America/Mexico_City", clock)
+
+    assert when("2026-10-02 17:00") == "vie 2 oct"
+    assert when("2026-10-03 13:00") == "hoy"
+    assert when("2026-09-20 09:00") == "dom 20 sep"
+    assert when("2025-03-14 09:00") == "14 mar 2025"
+
+
+def test_pendientes_marca_lo_vencido_en_cada_linea(bot, conn, clock):
+    add_task(conn, clock, "vencida ayer", "2026-10-02 17:00", "personal")
+    add_task(conn, clock, "vencida hoy", "2026-10-03 13:00", "personal")
+    add_task(conn, clock, "de hoy", "2026-10-03 17:00", "personal")
+    add_task(conn, clock, "de mañana", "2026-10-04 09:00", "personal")
+    add_task(conn, clock, "sin fecha", None, "personal")
+    assert listing(bot) == (
+        "Pendientes (5)\n\nPersonal\n"
+        "1. Vencida ayer · venció vie 2 oct\n"
+        "2. Vencida hoy · venció hoy\n"
+        "3. De hoy · hoy, 5:00 pm\n"
+        "4. De mañana · mañana, 9:00 am\n"
+        "5. Sin fecha"
+    )
+
+
+def test_pendientes_con_filtro_tambien_marca_lo_vencido(bot, conn, clock):
+    add_task(conn, clock, "vencida", "2026-10-02 17:00", "personal")
+    assert listing(bot, "/pendientes personal") == (
+        "Pendientes · Personal (1)\n\n1. Vencida · venció vie 2 oct"
+    )
+
+
+def test_lo_vencido_es_justo_en_el_limite_del_momento(bot, conn, clock):
+    add_task(conn, clock, "ahora mismo", "2026-10-03 15:30", "personal")
+    add_task(conn, clock, "un minuto despues", "2026-10-03 15:31", "personal")
+    text = listing(bot)
+    assert "Ahora mismo · hoy, 3:30 pm" in text  # justo ahora todavía no está vencida
+    assert "Un minuto despues · hoy, 3:31 pm" in text
+
+
+def test_el_pie_sin_filtro_sugiere_filtrar_por_area(bot, conn, clock):
+    for number in range(16):
+        add_task(conn, clock, f"tarea {number:02d}", None, "personal")
+    assert listing(bot).endswith("\n\ny 1 más: filtra por área (/pendientes nombre)")
+
+
+def test_el_pie_con_filtro_solo_dice_cuantas_mas(bot, conn, clock):
+    for number in range(17):
+        add_task(conn, clock, f"tarea {number:02d}", None, "personal")
+    text = listing(bot, "/pendientes personal")
+    assert text.endswith("\n\ny 2 más")
+    assert "filtra" not in text
+
+
+def test_hoy_usa_vinetas_y_no_numeros(bot, conn, clock):
+    seed_today(conn, clock)
+    text = listing(bot, "/hoy")
+    assert text == (
+        "Hoy · sábado 3 de octubre\n\n"
+        "Tareas\n"
+        "Universidad\n"
+        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Entregar informe · hoy, 5:00 pm\n\n"
+        "Personal\n"
+        "- Regar plantas · hoy, 8:00 pm\n\n"
+        "Sin área\n"
+        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
+        "Recordatorios\n"
+        "- hoy, 4:00 pm · Gimnasio\n"
+        "- hoy, 6:00 pm · Llamar a mamá · Personal\n\n"
+        "1 en bandeja sin área"
+    )
+    assert not any(line[:1].isdigit() and ". " in line[:4] for line in text.splitlines())
+
+
+def test_hoy_con_filtro_usa_vinetas_sin_encabezados(bot, conn, clock):
+    seed_today(conn, clock)
+    assert listing(bot, "/hoy universidad") == (
+        "Hoy · sábado 3 de octubre · Universidad\n\n"
+        "Tareas\n"
+        "- Leer · vencida vie 2 oct, 9:00 am\n"
+        "- Entregar informe · hoy, 5:00 pm"
+    )
+
+
+def test_hoy_el_pie_sin_filtro_y_con_filtro(bot, conn, clock):
+    for number in range(17):
+        add_task(conn, clock, f"tarea {number:02d}", "2026-10-03 17:00", "personal")
+    assert "y 2 más: filtra por área (/hoy nombre)" in listing(bot, "/hoy")
+    filtered = listing(bot, "/hoy personal")
+    assert "y 2 más" in filtered and "filtra" not in filtered
+
+
+def test_hoy_no_numera_pero_sus_tareas_siguen_ordenadas_por_area_y_fecha(bot, conn, clock):
+    seed_today(conn, clock)
+    text = listing(bot, "/hoy")
+    assert text.index("Leer") < text.index("Entregar informe") < text.index("Regar plantas")
+    assert text.index("Regar plantas") < text.index("Pagar luz")
+
+
+def test_la_lista_pura_con_numeracion_apagada_usa_el_guion():
+    groups = fmt.group_tasks([item(1, "a", 1, when="hoy"), item(2, "b")], AREAS)
+    assert fmt.plain(fmt.task_list_block(groups, headers=True, numbered=False)) == (
+        "Universidad\n- A · hoy\n\nSin área\n- B"
+    )
+    assert fmt.plain(fmt.task_list_block(groups, headers=False, numbered=False)) == "- A · hoy\n- B"
+
+
+def test_el_pie_puro_depende_del_filtro():
+    groups = fmt.group_tasks([item(n, area=1) for n in range(1, 19)], AREAS)
+    assert fmt.task_list_footer(groups, "/pendientes", filtered=False) == (
+        "y 3 más: filtra por área (/pendientes nombre)"
+    )
+    assert fmt.task_list_footer(groups, "/pendientes", filtered=True) == "y 3 más"
+    assert fmt.task_list_footer(fmt.group_tasks([item(1)], AREAS), "/hoy", filtered=False) is None
+
+
+def test_pendientes_con_filtro_lo_que_vence_justo_ahora_no_esta_vencido(bot, conn, clock):
+    add_task(conn, clock, "justo ahora", "2026-10-03 15:30", "personal")
+    assert listing(bot, "/pendientes personal") == (
+        "Pendientes · Personal (1)\n\n1. Justo ahora · hoy, 3:30 pm"
+    )
+
+
+def test_pendientes_lo_vencido_hace_horas_el_mismo_dia_dice_hoy(bot, conn, clock):
+    add_task(conn, clock, "temprano", "2026-10-03 08:00", "personal")
+    assert listing(bot, "/pendientes personal") == (
+        "Pendientes · Personal (1)\n\n1. Temprano · venció hoy"
+    )
+
+
+def test_pendientes_lo_vencido_de_otro_anio_lleva_el_anio(bot, conn, clock):
+    add_task(conn, clock, "antigua", "2025-03-14 09:00", "personal")
+    assert listing(bot, "/pendientes") == (
+        "Pendientes (1)\n\nPersonal\n1. Antigua · venció 14 mar 2025"
+    )
+
+
+def test_hoy_con_filtro_y_16_tareas_el_pie_es_solo_y_1_mas(bot, conn, clock):
+    for number in range(16):
+        add_task(conn, clock, f"tarea {number:02d}", "2026-10-03 17:00", "personal")
+    assert listing(bot, "/hoy personal").endswith("- Tarea 14 · hoy, 5:00 pm\n\ny 1 más")
+
+
+def test_hoy_sin_filtro_y_16_tareas_el_pie_sugiere_filtrar(bot, conn, clock):
+    for number in range(16):
+        add_task(conn, clock, f"tarea {number:02d}", "2026-10-03 17:00", "personal")
+    assert listing(bot, "/hoy").endswith("y 1 más: filtra por área (/hoy nombre)")

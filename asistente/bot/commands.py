@@ -146,7 +146,12 @@ def _pending_view(
     items = []
     for task in tasks.list_open(ctx.conn, area_id, limit=10_000):
         due = from_utc_iso(task.due_at_utc) if task.due_at_utc else None
-        when = fmt.fecha_corta(due, ctx.tz_name, ctx.now) if due else None
+        when = None
+        if due is not None:
+            if due < ctx.now():
+                when = f"venció {fmt.fecha_vencida(due, ctx.tz_name, ctx.now)}"
+            else:
+                when = fmt.fecha_corta(due, ctx.tz_name, ctx.now)
         items.append(_task_item(ctx, task, when))
     groups = fmt.group_tasks(items, _areas_in_order(ctx))
     text = fmt.pending_list(groups, _area_name(ctx, area_id), note)
