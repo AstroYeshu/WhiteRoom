@@ -496,3 +496,37 @@ def test_areas_con_solo_un_area_en_minuscula_la_lista_con_mayuscula(bot, conn):
         conn.execute("UPDATE areas SET archived = 1")
     legacy_area(conn, "viajes")
     assert fmt.plain(bot.reply("/areas")) == "Áreas (1)\n\n- Viajes · sin descripción"
+
+
+# --- La regla real de cap_first está documentada y probada con sus casos ---------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("iOS", "iOS"),
+        ("eBay", "eBay"),
+        ("iPhone", "iPhone"),
+        ("UNAM", "UNAM"),
+        ("Ya", "Ya"),
+        ("ya", "Ya"),
+        ("iphone", "Iphone"),
+        ("ebay vende", "Ebay vende"),
+        ("iOS nuevo", "iOS nuevo"),
+        ("compré un iPhone", "Compré un iPhone"),
+        ("¿iOS o Android?", "¿iOS o Android?"),
+    ],
+)
+def test_cap_first_respeta_una_primera_palabra_con_otra_mayuscula(text, expected):
+    assert fmt.cap_first(text) == expected
+
+
+def test_estilo_documenta_la_regla_real_de_cap_first():
+    from pathlib import Path
+
+    estilo = (Path(__file__).resolve().parent.parent / "docs" / "ESTILO.md").read_text(
+        encoding="utf-8"
+    )
+    assert len(estilo.splitlines()) <= 25
+    for expected in ("cap_first", "iOS", "eBay", "iPhone", "UNAM", "Ya", "otra mayúscula"):
+        assert expected in estilo, expected

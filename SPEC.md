@@ -91,7 +91,7 @@ class Channel(Protocol):
   6:00 pm", "hoy, 6:00 pm", "mañana, 8:00 am") en botones y listas; `fecha_larga` ("sábado 3 de octubre, 6:00 pm")
   solo en confirmaciones. Botones: filas de 2 como máximo (excepción: los números de `/pendientes` van de 5 en 5), acción principal primero, Cancelar al final y etiquetas
   de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal. Estilo (`docs/ESTILO.md`):
-  `cap_first` pone en mayúscula la primera letra de títulos, textos de recordatorios, notas y nombres de área SOLO al
+  `cap_first` (no toca una primera palabra con otra mayúscula, p. ej. "iOS") pone en mayúscula la primera letra de títulos, textos de recordatorios, notas y nombres de área SOLO al
   mostrarlos (tarjetas, avisos, listas, botones); lo guardado no cambia (excepto el nombre de las áreas, que se normaliza al crearlas).
 - **Listas de tareas agrupadas por área** (`/pendientes` y la sección Tareas de `/hoy`; los recordatorios no cambian, van en orden
   cronológico). Cada área con tareas abiertas es un encabezado en negrita y debajo va su lista numerada, con numeración continua en toda la lista
