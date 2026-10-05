@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 ACTION_PENDING = "pd"  # pd:o:AREA:TAREA | pd:h:AREA:TAREA | pd:d:AREA:TAREA | pd:b:AREA
 VERB_OPEN, VERB_DONE, VERB_DROP, VERB_BACK = "o", "h", "d", "b"
-PENDING_LIMIT = fmt.PENDING_LIMIT
 NUMBERS_PER_ROW = 5
 
 # Códigos estables de `reminders.stop_reason` -> lenguaje claro. Nunca se muestra el código crudo.
@@ -62,6 +61,18 @@ def _area_name(ctx: Ctx, area_id: int | None) -> str | None:
     return fmt.cap_first(area.name) if area is not None else None
 
 
+def _areas_in_order(ctx: Ctx) -> list[fmt.AreaRef]:
+    """Las áreas en el orden de /areas (por id); las archivadas, que /areas no lista, al final."""
+    everything = areas.list_areas(ctx.conn, include_archived=True)
+    ordered = [a for a in everything if not a.archived] + [a for a in everything if a.archived]
+    return [fmt.AreaRef(a.id, a.name) for a in ordered]
+
+
+def _task_item(ctx: Ctx, task: tasks.Task, when: str | None) -> fmt.TaskItem:
+    due = from_utc_iso(task.due_at_utc) if task.due_at_utc else None
+    return fmt.TaskItem(task.id, task.title, task.area_id, due, from_utc_iso(task.created_at), when)
+
+
 async def _area_filter(ctx: Ctx, args: str) -> tuple[bool, int | None]:
     """(sigue, area_id). Sin argumento no hay filtro; un área desconocida se avisa y se corta."""
     name = args.strip()
@@ -87,15 +98,14 @@ async def today(ctx: Ctx, args: str) -> None:
     # El día termina a las 00:00 LOCALES de mañana (no a medianoche UTC).
     day_end = local_to_utc(datetime.combine(today_local + timedelta(days=1), time(0)), ctx.tz_name)
 
-    task_items: list[fmt.Html] = []
+    task_items: list[fmt.TaskItem] = []
     for task in tasks.list_due_before(ctx.conn, day_end, area_id):
         assert task.due_at_utc is not None
         due = from_utc_iso(task.due_at_utc)
         when = fmt.fecha_corta(due, ctx.tz_name, ctx.now)
         if to_local(due, ctx.tz_name).date() < today_local:
             when = f"vencida {when}"
-        area = None if area_id is not None else _area_name(ctx, task.area_id)
-        task_items.append(fmt.bullet(fmt.cap_first(fmt.clip(task.title)), when, area))
+        task_items.append(_task_item(ctx, task, when))
 
     reminder_items: list[fmt.Html] = []
     for reminder in reminders.list_pending(ctx.conn):
@@ -114,7 +124,8 @@ async def today(ctx: Ctx, args: str) -> None:
         title += f"{fmt.SEP}{_area_name(ctx, area_id)}"
     blocks: list[str | None] = []
     if task_items:
-        blocks.append(fmt.section("Tareas", task_items, fmt.TODAY_LIMIT))
+        groups = fmt.group_tasks(task_items, _areas_in_order(ctx))
+        blocks.append(fmt.task_section("Tareas", groups, area_id is None, "/hoy"))
     if reminder_items:
         blocks.append(fmt.section("Recordatorios", reminder_items, fmt.TODAY_LIMIT))
     if not blocks:
@@ -132,22 +143,16 @@ def _pending_view(
     ctx: Ctx, area_id: int | None, note: str | None = None
 ) -> tuple[fmt.Html, list[Choice], tuple[int, ...] | None]:
     """La lista (texto, un botón por número y su distribución); sin tareas, sin botones."""
-    open_tasks = tasks.list_open(ctx.conn, area_id, limit=10_000)
-    shown_tasks = open_tasks[:PENDING_LIMIT]
-    rows = []
-    for task in shown_tasks:
+    items = []
+    for task in tasks.list_open(ctx.conn, area_id, limit=10_000):
         due = from_utc_iso(task.due_at_utc) if task.due_at_utc else None
-        rows.append(
-            fmt.PendingRow(
-                task.title,
-                None if area_id is not None else _area_name(ctx, task.area_id),
-                fmt.fecha_corta(due, ctx.tz_name, ctx.now) if due else None,
-            )
-        )
-    text = fmt.pending_list(len(open_tasks), rows, _area_name(ctx, area_id), note)
+        when = fmt.fecha_corta(due, ctx.tz_name, ctx.now) if due else None
+        items.append(_task_item(ctx, task, when))
+    groups = fmt.group_tasks(items, _areas_in_order(ctx))
+    text = fmt.pending_list(groups, _area_name(ctx, area_id), note)
     choices = [
-        Choice(encode_choice_id(ACTION_PENDING, VERB_OPEN, area_id or 0, task.id), str(number))
-        for number, task in enumerate(shown_tasks, start=1)
+        Choice(encode_choice_id(ACTION_PENDING, VERB_OPEN, area_id or 0, one.id), str(number))
+        for number, one in enumerate(groups.shown, start=1)
     ]
     layout = fmt.rows_layout(len(choices), per_row=NUMBERS_PER_ROW) if choices else None
     return text, choices, layout

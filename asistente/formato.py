@@ -343,32 +343,139 @@ NO_AREAS = "No hay áreas. Crea una con /nuevaarea nombre."
 BTN_DONE = "Hecha"
 BTN_DROP = "Descartar"
 BTN_BACK = "Volver"
-PENDING_LIMIT = 10  # tareas por mensaje de /pendientes
+TASK_LIST_LIMIT = 15  # tareas por lista (/pendientes y la sección Tareas de /hoy)
 LIST_LIMIT = 20  # líneas por sección de /recordatorios
 TODAY_LIMIT = 15  # líneas por sección de /hoy
 
 
-def pending_list(
-    total: int, rows: Sequence[PendingRow], area: str | None, note: str | None = None
-) -> Html:
-    """/pendientes: título con el total, lista numerada y, si faltan, cuántas más hay."""
-    title = "Pendientes" + (f"{SEP}{cap_first(area)}" if area else "") + f" ({total})"
-    if total == 0:
-        return screen(title, NOTHING_PENDING, note)
-    items = [
-        join(
-            [
-                part
-                for part in (cap_first(clip(row.title)), cap_first(row.area or ""), row.when)
-                if part
-            ],
-            SEP,
-        )
-        for row in rows
+# --- Listas de tareas agrupadas por área (pura y reutilizable) -----------------------------------
+
+
+@dataclass(frozen=True)
+class AreaRef:
+    """Un área tal como la necesita la agrupación: su id y su nombre."""
+
+    id: int
+    name: str
+
+
+@dataclass(frozen=True)
+class TaskItem:
+    """Una tarea abierta para una lista. `when` ya viene en texto (`fecha_corta`)."""
+
+    id: int
+    title: str
+    area_id: int | None
+    due: datetime | None
+    created: datetime
+    when: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskGroup:
+    """Las tareas mostradas de un área; `area` es None para «Sin área»."""
+
+    area: str | None
+    items: tuple[TaskItem, ...]
+
+
+@dataclass(frozen=True)
+class TaskGroups:
+    """El resultado de `group_tasks`: los grupos con algo que mostrar y cuántas tareas había."""
+
+    groups: tuple[TaskGroup, ...]
+    total: int
+
+    @property
+    def shown(self) -> tuple[TaskItem, ...]:
+        """Las tareas mostradas en el orden de la numeración (1, 2, 3...)."""
+        return tuple(one for group in self.groups for one in group.items)
+
+    @property
+    def hidden(self) -> int:
+        return self.total - len(self.shown)
+
+
+def _task_order(one: TaskItem) -> tuple:
+    """Dentro de un área: primero las que tienen fecha (las vencidas, al ser más antiguas, abren la
+    lista), por fecha; luego las que no tienen, por creación. El id desempata."""
+    if one.due is None:
+        return (1, one.created, one.id)
+    return (0, one.due, one.created, one.id)
+
+
+def group_tasks(
+    items: Iterable[TaskItem], areas_in_order: Sequence[AreaRef], limit: int = TASK_LIST_LIMIT
+) -> TaskGroups:
+    """Agrupa tareas por área en un orden estable y corta en `limit`.
+
+    Las áreas salen en el orden de `areas_in_order` (el mismo de /areas, con las archivadas al
+    final); solo aparecen las que tienen tareas. Las tareas sin área (o con un área que no está en
+    `areas_in_order`) van al final, bajo `area=None`. Lo que se corta por el límite es siempre el
+    final de ese orden, y un área que se queda sin tareas mostradas pierde su grupo.
+    """
+    known = {area.id for area in areas_in_order}
+    ordered = sorted(items, key=_task_order)
+    groups: list[TaskGroup] = []
+    remaining = limit
+    sections = [
+        (area.name, [one for one in ordered if one.area_id == area.id]) for area in areas_in_order
     ]
-    extra = total - len(rows)
-    footer = f"y {extra} más: filtra por área (/pendientes nombre)" if extra > 0 else None
-    return screen(title, numbered(items), footer, note)
+    sections.append((None, [one for one in ordered if one.area_id not in known]))
+    total = 0
+    for name, members in sections:
+        total += len(members)
+        kept = members[: max(remaining, 0)]
+        remaining -= len(kept)
+        if kept:
+            groups.append(TaskGroup(name, tuple(kept)))
+    return TaskGroups(tuple(groups), total)
+
+
+NO_AREA_HEADER = "Sin área"
+
+
+def task_list_block(groups: TaskGroups, headers: bool = True) -> Html:
+    """Las tareas en lista numerada con numeración continua. Con `headers`, cada área lleva su
+    encabezado en negrita (y un renglón en blanco entre áreas); sin ellos, una sola lista."""
+    number = 0
+    blocks: list[str] = []
+    for group in groups.groups:
+        lines: list[str] = []
+        if headers:
+            lines.append(bold(cap_first(group.area) if group.area else NO_AREA_HEADER))
+        for one in group.items:
+            number += 1
+            parts = [part for part in (cap_first(clip(one.title)), one.when) if part]
+            lines.append(Html(f"{number}. " + join(parts, SEP)))
+        blocks.append(block(*lines))
+    return paragraphs(*blocks) if headers else block(*blocks)
+
+
+def task_list_footer(groups: TaskGroups, command: str) -> str | None:
+    """«y N más: filtra por área (/comando nombre)» si el límite dejó tareas fuera."""
+    if groups.hidden <= 0:
+        return None
+    return f"y {groups.hidden} más: filtra por área ({command} nombre)"
+
+
+def task_section(title: str, groups: TaskGroups, headers: bool, command: str) -> Html:
+    """La sección de tareas de /hoy: su título en negrita y la lista agrupada."""
+    lines: list[str] = [bold(title), task_list_block(groups, headers)]
+    footer = task_list_footer(groups, command)
+    if footer:
+        lines += ["", footer]
+    return block(*lines)
+
+
+def pending_list(groups: TaskGroups, area: str | None, note: str | None = None) -> Html:
+    """/pendientes: título con el total y la lista agrupada. Con `area` (filtro) no hay
+    encabezados; si el límite dejó tareas fuera, cuántas más hay."""
+    title = "Pendientes" + (f"{SEP}{cap_first(area)}" if area else "") + f" ({groups.total})"
+    if groups.total == 0:
+        return screen(title, NOTHING_PENDING, note)
+    body = task_list_block(groups, headers=area is None)
+    return screen(title, body, task_list_footer(groups, "/pendientes"), note)
 
 
 def pending_detail(row: PendingRow) -> Html:

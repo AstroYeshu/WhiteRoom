@@ -544,8 +544,11 @@ _Con secciones, tareas vencidas y de hoy, recordatorios de hoy y la línea de ba
 <b>Hoy · sábado 3 de octubre</b>
 
 <b>Tareas</b>
-- Pagar luz · vencida vie 2 oct, 5:00 pm
-- Entregar informe · hoy, 5:00 pm · Universidad
+<b>Universidad</b>
+1. Entregar informe · hoy, 5:00 pm
+
+<b>Sin área</b>
+2. Pagar luz · vencida vie 2 oct, 5:00 pm
 
 <b>Recordatorios</b>
 - hoy, 6:00 pm · Llamar a mamá
@@ -559,7 +562,7 @@ _Filtrado por área (sin la línea de bandeja)._
 <b>Hoy · sábado 3 de octubre · Universidad</b>
 
 <b>Tareas</b>
-- Entregar informe · hoy, 5:00 pm
+1. Entregar informe · hoy, 5:00 pm
 ```
 
 _Área que no existe._
@@ -571,7 +574,7 @@ _Área que no existe._
 
 ## /pendientes [área]
 
-Un solo mensaje: lista numerada y un botón por número; el mismo mensaje muestra la tarea elegida y vuelve a la lista.
+Un solo mensaje: las tareas agrupadas por área (encabezado en negrita y lista numerada con numeración continua) y un botón por número; el mismo mensaje muestra la tarea elegida y vuelve a la lista. Las áreas sin tareas no aparecen y «Sin área» va al final.
 
 _Sin tareas._
 
@@ -581,14 +584,19 @@ _Sin tareas._
 No tienes tareas pendientes. Todo al día.
 ```
 
-_Lista numerada con un botón por número._
+_Lista agrupada por área con un botón por número._
 
 ```text
 <b>Pendientes (4)</b>
 
-1. Pagar luz · vie 2 oct, 5:00 pm
-2. Entregar informe · Universidad · hoy, 5:00 pm
-3. Regar plantas · Personal · mañana, 9:00 am
+<b>Universidad</b>
+1. Entregar informe · hoy, 5:00 pm
+
+<b>Personal</b>
+2. Regar plantas · mañana, 9:00 am
+
+<b>Sin área</b>
+3. Pagar luz · vie 2 oct, 5:00 pm
 4. Comprar pan
 [1][2][3][4]
 ```
@@ -597,9 +605,10 @@ _Se pulsa un número: la tarea en el mismo mensaje._
 
 ```text
 (edita el mismo mensaje)
-<b>Pagar luz</b>
+<b>Entregar informe</b>
 
-Vence: vie 2 oct, 5:00 pm
+Área: Universidad
+Vence: hoy, 5:00 pm
 
 ¿Qué hago con esta tarea?
 [Hecha][Descartar]
@@ -612,11 +621,14 @@ _Hecha: vuelve a la lista actualizada._
 (edita el mismo mensaje)
 <b>Pendientes (3)</b>
 
-1. Entregar informe · Universidad · hoy, 5:00 pm
-2. Regar plantas · Personal · mañana, 9:00 am
+<b>Personal</b>
+1. Regar plantas · mañana, 9:00 am
+
+<b>Sin área</b>
+2. Pagar luz · vie 2 oct, 5:00 pm
 3. Comprar pan
 
-<b>Hecha</b> · Pagar luz
+<b>Hecha</b> · Entregar informe
 [1][2][3]
 ```
 
@@ -624,10 +636,9 @@ _Otra tarea, Descartar._
 
 ```text
 (edita el mismo mensaje)
-<b>Regar plantas</b>
+<b>Pagar luz</b>
 
-Área: Personal
-Vence: mañana, 9:00 am
+Vence: vie 2 oct, 5:00 pm
 
 ¿Qué hago con esta tarea?
 [Hecha][Descartar]
@@ -640,10 +651,13 @@ _Descartar: vuelve a la lista actualizada._
 (edita el mismo mensaje)
 <b>Pendientes (2)</b>
 
-1. Entregar informe · Universidad · hoy, 5:00 pm
+<b>Personal</b>
+1. Regar plantas · mañana, 9:00 am
+
+<b>Sin área</b>
 2. Comprar pan
 
-<b>Descartada</b> · Regar plantas
+<b>Descartada</b> · Pagar luz
 [1][2]
 ```
 
@@ -651,10 +665,10 @@ _Volver sin hacer nada._
 
 ```text
 (edita el mismo mensaje)
-<b>Entregar informe</b>
+<b>Regar plantas</b>
 
-Área: Universidad
-Vence: hoy, 5:00 pm
+Área: Personal
+Vence: mañana, 9:00 am
 
 ¿Qué hago con esta tarea?
 [Hecha][Descartar]
@@ -663,7 +677,10 @@ Vence: hoy, 5:00 pm
 (edita el mismo mensaje)
 <b>Pendientes (2)</b>
 
-1. Entregar informe · Universidad · hoy, 5:00 pm
+<b>Personal</b>
+1. Regar plantas · mañana, 9:00 am
+
+<b>Sin área</b>
 2. Comprar pan
 [1][2]
 ```
@@ -686,11 +703,25 @@ _Filtrado por área._
 [1]
 ```
 
-_Más de 10 tareas: se muestran 10 y se dice cuántas faltan._
+_Un área archivada con tareas abiertas SÍ aparece (después de las activas); las áreas sin tareas no; el texto del usuario va escapado._
 
 ```text
-<b>Pendientes (13)</b>
+<b>Pendientes (2)</b>
 
+<b>Personal</b>
+1. Revisar &lt;b&gt;informe&lt;/b&gt; &amp; cuentas
+
+<b>Viajes</b>
+2. Reservar hotel
+[1][2]
+```
+
+_Más de 15 tareas: se muestran 15 (se corta el final del orden) y se dice cuántas faltan; los números van de 5 en 5._
+
+```text
+<b>Pendientes (16)</b>
+
+<b>Universidad</b>
 1. Tarea 1
 2. Tarea 2
 3. Tarea 3
@@ -699,12 +730,37 @@ _Más de 10 tareas: se muestran 10 y se dice cuántas faltan._
 6. Tarea 6
 7. Tarea 7
 8. Tarea 8
-9. Tarea 9
-10. Tarea 10
 
-y 3 más: filtra por área (/pendientes nombre)
+<b>Personal</b>
+9. Cosa 1
+10. Cosa 2
+11. Cosa 3
+12. Cosa 4
+13. Cosa 5
+14. Cosa 6
+15. Cosa 7
+
+y 1 más: filtra por área (/pendientes nombre)
 [1][2][3][4][5]
 [6][7][8][9][10]
+[11][12][13][14][15]
+```
+
+_Con filtro de área: sin encabezados._
+
+```text
+<b>Pendientes · Personal (8)</b>
+
+1. Cosa 1
+2. Cosa 2
+3. Cosa 3
+4. Cosa 4
+5. Cosa 5
+6. Cosa 6
+7. Cosa 7
+8. Cosa 8
+[1][2][3][4][5]
+[6][7][8]
 ```
 
 

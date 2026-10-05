@@ -93,6 +93,15 @@ class Channel(Protocol):
   de 22 caracteres como máximo. El punto medio (·) y la raya (—) son puntuación normal. Estilo (`docs/ESTILO.md`):
   `cap_first` pone en mayúscula la primera letra de títulos, textos de recordatorios, notas y nombres de área SOLO al
   mostrarlos (tarjetas, avisos, listas, botones); lo guardado no cambia (excepto el nombre de las áreas, que se normaliza al crearlas).
+- **Listas de tareas agrupadas por área** (`/pendientes` y la sección Tareas de `/hoy`; los recordatorios no cambian, van en orden
+  cronológico). Cada área con tareas abiertas es un encabezado en negrita y debajo va su lista numerada, con numeración continua en toda la lista
+  y un botón por número que conserva el id de la tarea. Las áreas sin tareas no aparecen; las áreas archivadas con tareas abiertas SÍ (después de
+  las activas); las tareas sin área van al final bajo «Sin área». Orden de las áreas: el de `/areas` (por id). Dentro del área: primero las que
+  tienen fecha (las vencidas abren la lista), por fecha, y al final las que no la tienen, por creación. Con filtro de área (`/pendientes nombre`)
+  no hay encabezados y el título es «Pendientes · Área (n)». Límite de 15 tareas: lo que se corta es el final del orden y se avisa con
+  «y N más: filtra por área (/pendientes nombre)»; un área cuyas tareas se cortan todas pierde su encabezado. La agrupación es una función pura
+  (`formato.group_tasks`, sin base ni reloj) que reutilizará «¿Quitas alguna?» (Fase 3). Tras Hecha o Descartar la lista vuelve actualizada y
+  renumerada; un número de una lista vieja abre la tarea por su id y, si ya no está abierta, da un aviso breve y actualiza la lista.
 - **Sin emojis ni pictogramas** en ningún mensaje ni etiqueta (`Choice.label`, textos, consola): cada canal
   decide cómo adornar, y WhatsApp o una consola sin fuentes no deben depender de ellos. Etiquetas en texto:
   `Hecho`, `+10 min`, `+1 h`, `Mañana 9:00 am`, `Cancelar` (las horas llevan siempre am/pm). Lo vigila `tests/test_no_pictograms.py` (AST).
@@ -483,8 +492,8 @@ clasificador disponible y reporta exactitud, matriz de confusión, latencia medi
 A `briefing_time`:
 1. **Mensaje 1 — resumen por área**: vencidas, de hoy, recordatorios de hoy, y elementos de la bandeja
    con más de 2 días sin resolver.
-2. **Mensaje 2 — ¿Quitas alguna?**: reutiliza el patrón de `/pendientes`: UN mensaje con la lista numerada (hasta 10
-   tareas) y un botón por número; al pulsar un número, la tarea se abre en el MISMO mensaje con
+2. **Mensaje 2 — ¿Quitas alguna?**: reutiliza el patrón de `/pendientes`: UN mensaje con la lista agrupada por área
+   (`formato.group_tasks`, hasta 15 tareas) y un botón por número; al pulsar un número, la tarea se abre en el MISMO mensaje con
    `Hecha · Descartar · Posponer · Volver` y, tras la acción, vuelve a la lista ya actualizada. "Posponer" ofrece
    mañana / elegir fecha. "Descartar" es soft delete (`status='dropped'`).
 3. Si el usuario no responde, **silencio**: no se insiste.

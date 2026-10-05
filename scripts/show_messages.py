@@ -560,13 +560,14 @@ def hoy(cat: Catalog) -> None:
 def pendientes(cat: Catalog) -> None:
     cat.section(
         "/pendientes [área]",
-        "Un solo mensaje: lista numerada y un botón por número; el mismo mensaje muestra la tarea "
-        "elegida y vuelve a la lista.",
+        "Un solo mensaje: las tareas agrupadas por área (encabezado en negrita y lista numerada con "
+        "numeración continua) y un botón por número; el mismo mensaje muestra la tarea elegida y "
+        "vuelve a la lista. Las áreas sin tareas no aparecen y «Sin área» va al final.",
     )
     s = Session()
     cat.snap(s, "Sin tareas.", lambda: s.say("/pendientes"))
     s = seeded()
-    cat.snap(s, "Lista numerada con un botón por número.", lambda: s.say("/pendientes"))
+    cat.snap(s, "Lista agrupada por área con un botón por número.", lambda: s.say("/pendientes"))
     cat.snap(s, "Se pulsa un número: la tarea en el mismo mensaje.", lambda: s.tap("1"))
     cat.snap(s, "Hecha: vuelve a la lista actualizada.", lambda: s.tap("Hecha"))
     cat.snap(s, "Otra tarea, Descartar.", lambda: s.tap("2"))
@@ -583,13 +584,43 @@ def pendientes(cat: Catalog) -> None:
     s = seeded()
     cat.snap(s, "Filtrado por área.", lambda: s.say("/pendientes universidad"))
     s = Session()
-    for number in range(13):
-        tasks.create_task(s.conn, f"tarea {number + 1}", s.clock)
+    new_area = areas.create_area(s.conn, "Viajes", "", s.clock)
+    areas.archive_area(s.conn, new_area.id)
+    tasks.create_task(s.conn, "reservar hotel", s.clock, area_id=new_area.id)
+    tasks.create_task(
+        s.conn,
+        "revisar <b>informe</b> & cuentas",
+        s.clock,
+        area_id=areas.find_area_by_name(s.conn, "personal").id,
+    )
     cat.snap(
         s,
-        "Más de 10 tareas: se muestran 10 y se dice cuántas faltan.",
+        "Un área archivada con tareas abiertas SÍ aparece (después de las activas); las áreas "
+        "sin tareas no; el texto del usuario va escapado.",
         lambda: s.say("/pendientes"),
     )
+    s = Session()
+    for number in range(8):
+        tasks.create_task(
+            s.conn,
+            f"tarea {number + 1}",
+            s.clock,
+            area_id=areas.find_area_by_name(s.conn, "universidad").id,
+        )
+    for number in range(8):
+        tasks.create_task(
+            s.conn,
+            f"cosa {number + 1}",
+            s.clock,
+            area_id=areas.find_area_by_name(s.conn, "personal").id,
+        )
+    cat.snap(
+        s,
+        "Más de 15 tareas: se muestran 15 (se corta el final del orden) y se dice cuántas faltan; "
+        "los números van de 5 en 5.",
+        lambda: s.say("/pendientes"),
+    )
+    cat.snap(s, "Con filtro de área: sin encabezados.", lambda: s.say("/pendientes personal"))
 
 
 def recordatorios(cat: Catalog) -> None:

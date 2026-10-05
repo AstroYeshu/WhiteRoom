@@ -207,7 +207,7 @@ def test_mostrar_un_area_guardada_en_minuscula_no_la_modifica(bot, conn, clock):
     old = legacy_area(conn, "viajes")
     tasks.create_task(conn, "reservar hotel", clock, area_id=old)
     text = fmt.plain(bot.reply("/pendientes"))
-    assert "1. Reservar hotel · Viajes" in text
+    assert "Viajes\n1. Reservar hotel" in text
     assert stored_area_name(conn, old) == "viajes"
     assert conn.execute("SELECT title FROM tasks").fetchone()["title"] == "reservar hotel"
 
@@ -302,7 +302,8 @@ def test_pendientes_muestra_titulos_y_areas_con_mayuscula(bot, conn, clock):
     add_task(conn, clock, "sin fecha")
     text = fmt.plain(bot.reply("/pendientes"))
     assert text == (
-        "Pendientes (2)\n\n1. Entregar informe · Universidad · lun 5 oct, 5:00 pm\n2. Sin fecha"
+        "Pendientes (2)\n\nUniversidad\n1. Entregar informe · lun 5 oct, 5:00 pm\n\n"
+        "Sin área\n2. Sin fecha"
     )
 
 
@@ -328,7 +329,7 @@ def test_hoy_muestra_tareas_recordatorios_y_areas_con_mayuscula(bot, conn, clock
     add_reminder(conn, clock, "llamar a mamá", "2026-10-03 18:00", "personal")
     assert fmt.plain(bot.reply("/hoy")) == (
         "Hoy · sábado 3 de octubre\n\n"
-        "Tareas\n- Entregar informe · hoy, 5:00 pm · Universidad\n\n"
+        "Tareas\nUniversidad\n1. Entregar informe · hoy, 5:00 pm\n\n"
         "Recordatorios\n- hoy, 6:00 pm · Llamar a mamá · Personal"
     )
 
@@ -352,7 +353,7 @@ def test_nombres_con_simbolos_se_escapan_y_se_capitalizan(bot, conn, clock):
     add_task(conn, clock, "<b>probar</b> & medir", None, "r&d <x>")
     html = bot.reply("/pendientes")
     assert "1. <b>probar</b>" not in html
-    assert "1. &lt;b&gt;probar&lt;/b&gt; &amp; medir · R&amp;d &lt;x&gt;" in html
+    assert "<b>R&amp;d &lt;x&gt;</b>\n1. &lt;b&gt;probar&lt;/b&gt; &amp; medir" in html
     assert created.name == "R&d <x>"
 
 
@@ -462,7 +463,7 @@ def test_hoy_con_un_area_guardada_en_minuscula_la_muestra_con_mayuscula(bot, con
     )
     assert fmt.plain(bot.reply("/hoy")) == (
         "Hoy · sábado 3 de octubre\n\n"
-        "Tareas\n- Reservar hotel · hoy, 5:00 pm · Viajes\n\n"
+        "Tareas\nViajes\n1. Reservar hotel · hoy, 5:00 pm\n\n"
         "Recordatorios\n- hoy, 4:30 pm · Llamar a la aerolínea · Viajes"
     )
     assert fmt.plain(bot.reply("/hoy viajes")).startswith("Hoy · sábado 3 de octubre · Viajes\n")

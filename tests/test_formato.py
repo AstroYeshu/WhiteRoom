@@ -5,7 +5,7 @@ texto del usuario SIEMPRE escapado, fechas corta (botones y listas) y larga (con
 cuadrícula de botones como dato, etiquetas de botón de 22 caracteres como máximo.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -276,20 +276,29 @@ def test_las_piezas_de_las_vistas_escapan_el_texto(text):
     assert text in fmt.plain(built)
 
 
-def test_pending_list_numera_pone_el_total_y_resume_las_que_faltan():
-    rows = [fmt.PendingRow("uno", "uni", "hoy, 5:00 pm"), fmt.PendingRow("dos")]
-    assert fmt.plain(fmt.pending_list(5, rows, None)) == (
-        "Pendientes (5)\n\n1. Uno · Uni · hoy, 5:00 pm\n2. Dos\n\n"
-        "y 3 más: filtra por área (/pendientes nombre)"
+def _groups(*specs, limit=fmt.TASK_LIST_LIMIT):
+    """TaskGroups con un área «uni» (id 1): cada spec es (id, título, id de área, cuándo)."""
+    stamp = datetime(2026, 10, 3, 21, 30, tzinfo=UTC)
+    items = [fmt.TaskItem(i, title, area, None, stamp, when) for i, title, area, when in specs]
+    return fmt.group_tasks(items, [fmt.AreaRef(1, "uni")], limit)
+
+
+def test_pending_list_agrupa_numera_pone_el_total_y_resume_las_que_faltan():
+    groups = _groups(
+        (1, "uno", 1, "hoy, 5:00 pm"), (2, "dos", None, None), (3, "tres", None, None), limit=2
     )
-    assert fmt.plain(fmt.pending_list(2, rows, "uni")).startswith("Pendientes · Uni (2)\n\n")
-    assert fmt.pending_list(0, [], None, note="x") == Html(
+    assert fmt.plain(fmt.pending_list(groups, None)) == (
+        "Pendientes (3)\n\nUni\n1. Uno · hoy, 5:00 pm\n\nSin área\n2. Dos\n\n"
+        "y 1 más: filtra por área (/pendientes nombre)"
+    )
+    assert fmt.plain(fmt.pending_list(groups, "uni")).startswith("Pendientes · Uni (3)\n\n1. Uno")
+    assert fmt.pending_list(_groups(), None, note="x") == Html(
         "<b>Pendientes (0)</b>\n\nNo tienes tareas pendientes. Todo al día.\n\nx"
     )
 
 
 def test_pending_list_no_escapa_dos_veces():
-    built = fmt.pending_list(1, [fmt.PendingRow("a & b <c>", "x&y", None)], None)
+    built = fmt.pending_list(_groups((1, "a & b <c>", None, "x&y")), None)
     assert html_problems(built) == []
-    assert fmt.plain(built).endswith("1. A & b <c> · X&y")
+    assert fmt.plain(built).endswith("1. A & b <c> · x&y")
     assert "&amp;amp;" not in built

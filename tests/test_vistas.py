@@ -64,8 +64,10 @@ def test_hoy_con_secciones_horas_cortas_y_bandeja(bot, conn, clock):
     assert screen(bot, "/hoy") == (
         "Hoy · sábado 3 de octubre\n\n"
         "Tareas\n"
-        "- Pagar luz · vencida vie 2 oct, 5:00 pm\n"
-        "- Entregar informe · hoy, 5:00 pm · Universidad\n\n"
+        "Universidad\n"
+        "1. Entregar informe · hoy, 5:00 pm\n\n"
+        "Sin área\n"
+        "2. Pagar luz · vencida vie 2 oct, 5:00 pm\n\n"
         "Recordatorios\n"
         "- hoy, 6:00 pm · Llamar a mamá\n\n"
         "3 en bandeja sin área"
@@ -119,7 +121,7 @@ def test_hoy_cerca_de_medianoche_el_dia_termina_a_las_00_00_locales(bot, conn, c
     add_reminder(conn, clock, "aviso de hoy", "2026-10-03 23:55")
     add_reminder(conn, clock, "aviso de mañana", "2026-10-04 00:05")
     text = screen(bot, "/hoy")
-    assert "- Justo antes · hoy, 11:59 pm" in text
+    assert "Sin área\n1. Justo antes · hoy, 11:59 pm" in text
     assert "- hoy, 11:55 pm · Aviso de hoy" in text
     assert "justo a medianoche" not in text and "ya es mañana" not in text
     assert "aviso de mañana" not in text
@@ -133,9 +135,9 @@ def test_hoy_pasada_la_medianoche_ya_es_otro_dia(bot, conn, clock):
     add_task(conn, clock, "mañana a las 00", "2026-10-05 00:00")
     text = screen(bot, "/hoy")
     assert text.startswith("Hoy · domingo 4 de octubre\n")
-    assert "- De anoche · vencida sáb 3 oct, 11:59 pm" in text
-    assert "- Recién empezado · hoy, 12:05 am" in text
-    assert "- Fin del día · hoy, 11:59 pm" in text
+    assert "1. De anoche · vencida sáb 3 oct, 11:59 pm" in text
+    assert "2. Recién empezado · hoy, 12:05 am" in text
+    assert "3. Fin del día · hoy, 11:59 pm" in text
     assert "mañana a las 00" not in text
 
 
@@ -156,7 +158,7 @@ def test_pendientes_es_un_solo_mensaje_con_lista_numerada_y_un_boton_por_numero(
     bot.say("/pendientes")
     assert bot.sent_count() == 1
     assert fmt.plain(bot.messages()[0]) == (
-        "Pendientes (2)\n\n1. Con fecha · Universidad · mañana, 9:00 am\n2. Sin fecha"
+        "Pendientes (2)\n\nUniversidad\n1. Con fecha · mañana, 9:00 am\n\nSin área\n2. Sin fecha"
     )
     assert "<b>Pendientes (2)</b>" in bot.messages()[0]
     assert bot.labels() == ["1", "2"]
@@ -172,16 +174,16 @@ def test_pendientes_con_un_area_que_no_existe(bot):
     assert screen(bot, "/pendientes nada").startswith("Aviso · No encuentro el área")
 
 
-def test_pendientes_limita_a_10_y_avisa_cuantas_faltan(bot, conn, clock):
-    for number in range(13):
-        add_task(conn, clock, f"tarea {number}")
+def test_pendientes_limita_a_15_y_avisa_cuantas_faltan(bot, conn, clock):
+    for number in range(18):
+        add_task(conn, clock, f"tarea {number:02d}")
     bot.say("/pendientes")
     text = fmt.plain(bot.messages()[0])
-    assert text.startswith("Pendientes (13)\n\n1. Tarea 0\n")
-    assert "10. Tarea 9" in text and "11." not in text
+    assert text.startswith("Pendientes (18)\n\nSin área\n1. Tarea 00\n")
+    assert "15. Tarea 14" in text and "16." not in text
     assert text.endswith("y 3 más: filtra por área (/pendientes nombre)")
-    assert bot.labels() == [str(n) for n in range(1, 11)]
-    assert bot.channel.layouts[-1] == (5, 5)  # los números van de a 5 por fila
+    assert bot.labels() == [str(n) for n in range(1, 16)]
+    assert bot.channel.layouts[-1] == (5, 5, 5)  # los números van de a 5 por fila
 
 
 def test_un_numero_muestra_la_tarea_en_el_mismo_mensaje_con_hecha_descartar_y_volver(
@@ -208,7 +210,9 @@ def test_hecha_cierra_esa_tarea_y_vuelve_a_la_lista_actualizada(bot, conn, clock
     bot.tap("Hecha")
     assert tasks.get_task(conn, second.id).status == "done"
     assert open_titles(conn) == ["primera", "tercera"]  # solo cayó esa
-    assert card_text(bot) == "Pendientes (2)\n\n1. Primera\n2. Tercera\n\nHecha · Segunda"
+    assert card_text(bot) == (
+        "Pendientes (2)\n\nSin área\n1. Primera\n2. Tercera\n\nHecha · Segunda"
+    )
     assert bot.labels() == ["1", "2"]
     assert bot.sent_count() == 1
 
@@ -230,7 +234,7 @@ def test_descartar_es_soft_delete_con_motivo_y_vuelve_a_la_lista(bot, conn, cloc
     bot.tap("Descartar")
     stored = tasks.get_task(conn, task.id)
     assert (stored.status, stored.closed_reason) == ("dropped", "discarded")
-    assert card_text(bot) == "Pendientes (1)\n\n1. Otra\n\nDescartada · Comprar pan"
+    assert card_text(bot) == "Pendientes (1)\n\nSin área\n1. Otra\n\nDescartada · Comprar pan"
 
 
 def test_volver_regresa_a_la_lista_sin_cambiar_nada(bot, conn, clock):
@@ -274,7 +278,7 @@ def test_un_numero_de_una_tarea_ya_cerrada_responde_con_el_aviso_y_actualiza_la_
     open_gone = bot.choice_id("1")
     tasks.mark_done(conn, gone.id, clock)
     assert bot.press(open_gone) == TOAST
-    assert card_text(bot) == "Pendientes (1)\n\n1. Sigue"  # la lista ya no la muestra
+    assert card_text(bot) == "Pendientes (1)\n\nSin área\n1. Sigue"  # la lista ya no la muestra
     assert bot.sent_count() == 1
 
 

@@ -100,6 +100,9 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `classification_log.pred_area/final_area`; las áreas nuevas se normalizan al crearse; `formato.cap_first` capitaliza SOLO al mostrar
   (tarjetas, avisos, listas, botones; lo guardado no cambia). `docs/ESTILO.md` nuevo. Pruebas: `tests/test_capitalizacion.py` (80) y
   `tests/test_migration_006.py` (24); `pytest -q` 1792 passed, 29 skipped, 2 xfailed, ruff limpio. La migración del 7c pasa a ser la **007**.
+- Estilo, commit 2 HECHO: listas de tareas agrupadas por área (`formato.group_tasks`, función pura y reutilizable para «¿Quitas alguna?»), en
+  `/pendientes` y en la sección Tareas de `/hoy`; límite 15 (antes 10); encabezado «Sin área» al final; archivadas con tareas visibles; sin
+  «[área]» en cada línea. Pruebas: `tests/test_listas_agrupadas.py` (65). Mutaciones (19), todas con 2 o más fallos; `pytest -q` 1857 passed, 29 skipped, 2 xfailed; ruff limpio.
 
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,

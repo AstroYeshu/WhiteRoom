@@ -51,3 +51,8 @@ Aprobados por el dueño; no se construyen hasta que haya usado el bot una semana
 ## Surgido en el commit de estilo (capitalización)
 - La descripción de un área se muestra tal cual la escribió el dueño (no pasa por `cap_first`): decidir si también debe capitalizarse al mostrar.
 - Dos áreas que ya chocaban entre sí antes de la migración 006 (sin distinguir acentos o mayúsculas) quedan ambas como estaban; no hay herramienta para fusionarlas (nada se borra).
+
+## Surgido en el commit de listas agrupadas
+- `/hoy` numera las tareas pero no tiene botones: decidir si los números le sirven o si basta con viñetas bajo cada encabezado.
+- Con filtro de área el pie dice «filtra por área»: tiene poco sentido; quizá debería decir solo «y N más».
+- Si lo único que hay son tareas sin área, el encabezado «Sin área» sobra; decidir si se omite en ese caso.
