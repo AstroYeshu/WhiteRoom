@@ -38,7 +38,8 @@ Comandos, pruebas y ritmo de trabajo en detalle: `docs/FLUJO.md`.
 ## Flujo de trabajo (resumen)
 - Al empezar: lee `docs/STATUS.md` y `git log -n 10`. Plan primero: propón el plan y espera aprobación.
 - La prueba se escribe y se ve fallar antes del código. Cada mutación crítica falla con al menos 2 pruebas.
-- Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin pipes. Commits pequeños; sin push.
+- Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin pipes (hook opcional: `scripts/install_hooks.py`).
+  Commits pequeños; sin push.
 - Alcance: solo lo pedido; lo demás a `docs/BACKLOG.md`. Al terminar un bloque, actualiza
   `docs/STATUS.md` y `docs/DECISIONS.md`.
 - Al parar: "RESUMEN PARA REVISIÓN" de máx. 20 líneas. Explica el código nuevo en lenguaje simple.

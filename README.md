@@ -36,6 +36,18 @@ ruff check .
 ruff format .
 ```
 
+## Hook de pre-commit (opcional)
+
+El repositorio trae un hook que corre `pytest -q` y `ruff check .` antes de cada commit y bloquea el commit si alguno falla
+(`.githooks/pre-commit`; usa `venv/Scripts/python` en Windows o `venv/bin/python` en Linux). Para activarlo, una vez por clon:
+
+```
+python scripts/install_hooks.py
+```
+
+Solo cambia la configuración local de este repositorio (`git config core.hooksPath .githooks`). La suite completa tarda
+alrededor de 110 segundos, así que cada commit espera ese tiempo. Para desactivarlo: `git config --unset core.hooksPath`.
+
 ## Desarrollo y producción: dos bots, dos bases
 
 Nunca uses el mismo bot ni la misma base en la laptop y en la Raspberry Pi. Si lo haces, los dos

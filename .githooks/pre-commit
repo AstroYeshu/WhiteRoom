@@ -1,0 +1,31 @@
+#!/bin/sh
+# Hook de pre-commit del proyecto: corre pytest y ruff y BLOQUEA el commit si alguno falla.
+# Se activa con `python scripts/install_hooks.py` (git config core.hooksPath .githooks).
+# Funciona con el entorno virtual de Windows (venv/Scripts) o de Linux (venv/bin).
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+py=""
+for candidate in venv/Scripts/python.exe venv/Scripts/python venv/bin/python; do
+  if [ -f "$candidate" ]; then
+    py="$candidate"
+    break
+  fi
+done
+if [ -z "$py" ]; then
+  echo "pre-commit: no encuentro el entorno virtual (venv/Scripts o venv/bin); commit bloqueado." >&2
+  exit 1
+fi
+
+# El código de salida de cada uno se mide por separado: ninguno se pierde detrás del otro.
+status=0
+"$py" -m pytest -q || {
+  echo "pre-commit: pytest falló; commit bloqueado." >&2
+  status=1
+}
+"$py" -m ruff check . || {
+  echo "pre-commit: ruff falló; commit bloqueado." >&2
+  status=1
+}
+exit $status
