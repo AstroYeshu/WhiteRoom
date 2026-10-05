@@ -12,6 +12,9 @@
 ## Pruebas
 - Prueba antes del código: se escribe y se ve fallar. Si no se pudo, se dice y se hace una mutación después.
 - Mutaciones: reintroduce el error a propósito; cada mutación crítica debe hacer fallar al menos 2 pruebas.
+- Pruebas omitidas esperadas: 0. 29 pruebas de `tests/test_hooks.py` (`needs_sh`) necesitan `sh`: `tests/shell.py` lo busca en el PATH y, si no
+  está (PowerShell en Windows), junto a Git for Windows. Si una máquina no tiene `sh`, se omiten y `tests/test_omitidas.py` falla hasta que se
+  corrija el entorno o se actualice este número. Esa guarda solo actúa con la suite completa (sin `-k`, `-m` ni rutas) y prohíbe `pytest.skip()`.
 - Marca `@pytest.mark.slow` lo que pase de ~1 s por prueba y no sea de los módulos críticos; la completa corre antes de un push.
 - Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin cortar su salida con un pipe. Si pytest se cuelga, usa
   `faulthandler_timeout` y busca la causa. Nunca termines procesos por nombre (`taskkill /IM`, `pkill`): solo el PID que lanzaste.

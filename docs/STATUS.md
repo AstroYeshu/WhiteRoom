@@ -104,6 +104,11 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
   `/pendientes` y en la sección Tareas de `/hoy`; límite 15 (antes 10); encabezado «Sin área» al final; archivadas con tareas visibles; sin
   «[área]» en cada línea. Pruebas: `tests/test_listas_agrupadas.py` (65). Mutaciones (19), todas con 2 o más fallos; `pytest -q` 1857 passed, 29 skipped, 2 xfailed; ruff limpio.
 
+- Pruebas omitidas: las 29 se omitían solo porque `sh` no estaba en el PATH de PowerShell (todas de `tests/test_hooks.py`). `tests/shell.py::find_sh`
+  lo busca junto a Git for Windows; ahora corren en PowerShell y Git Bash (0 omitidas). `tests/test_omitidas.py` falla si el número de omitidas por marca
+  deja de coincidir con `docs/FLUJO.md` (valor 0) y prohíbe `pytest.skip()`. Los hooks de pre-commit y pre-push están ACTIVOS (desde la sesión
+  anterior); antes decía «sin activar».
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda

@@ -12,13 +12,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.shell import find_sh
+
 # Lanzan `sh` y git decenas de veces (~11 s): van en la suite completa (pre-push), no en la rapida.
 pytestmark = pytest.mark.slow
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOKS_DIR = ROOT / ".githooks"
 INSTALLER = ROOT / "scripts" / "install_hooks.py"
-SH = shutil.which("sh")
+SH = find_sh()
 needs_sh = pytest.mark.skipif(SH is None, reason="hace falta sh (Git Bash en Windows)")
 
 FAKE_PYTHON = """#!/bin/sh

@@ -2,6 +2,7 @@
 
 import ssl
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -40,3 +41,27 @@ def _contexto_ssl_en_cache():
     ssl.create_default_context = con_cache
     yield
     ssl.create_default_context = original
+
+
+def _se_omite_por_marca(item) -> bool:
+    """¿Lleva una marca `skip` o `skipif` que hoy se cumple? (el conteo de `test_omitidas.py`)"""
+    for marker in item.iter_markers():
+        if marker.name == "skip":
+            return True
+        if marker.name == "skipif":
+            condition = marker.args[0] if marker.args else marker.kwargs.get("condition")
+            if bool(condition):
+                return True
+    return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Anota qué pruebas se omitirán por marca y si se coleccionó la suite completa."""
+    config.omitidas_por_marca = [item.nodeid for item in items if _se_omite_por_marca(item)]
+    root = Path(__file__).resolve().parent.parent
+    paths = [Path(arg.split("::")[0]).resolve() for arg in config.args]
+    config.coleccion_completa = (
+        not config.option.markexpr
+        and not config.option.keyword
+        and all(path in (root, root / "tests") for path in paths)
+    )
