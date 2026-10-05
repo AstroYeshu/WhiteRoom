@@ -31,22 +31,29 @@ Escribe mensajes y mira las respuestas; `/salir` termina.
 Pruebas y estilo:
 
 ```
-pytest -q
+pytest -q                 # suite completa (~35 s)
+pytest -q -m "not slow"   # suite rápida (~20 s): sin barridos largos ni pruebas de hooks
 ruff check .
 ruff format .
 ```
 
-## Hook de pre-commit (opcional)
+Las pruebas lentas llevan el marcador `slow` (registrado en `pyproject.toml`).
 
-El repositorio trae un hook que corre `pytest -q` y `ruff check .` antes de cada commit y bloquea el commit si alguno falla
-(`.githooks/pre-commit`; usa `venv/Scripts/python` en Windows o `venv/bin/python` en Linux). Para activarlo, una vez por clon:
+## Hooks de git en dos niveles (opcionales)
+
+El repositorio trae dos hooks (`.githooks/`; usan `venv/Scripts/python` en Windows o `venv/bin/python` en Linux):
+
+- **pre-commit** (rápido): `ruff check .` y `pytest -q -m "not slow"`. Bloquea el commit si alguno falla.
+- **pre-push** (completo): `pytest -q`, la suite entera. Bloquea el push si falla.
+
+Para activarlos, una vez por clon:
 
 ```
 python scripts/install_hooks.py
 ```
 
-Solo cambia la configuración local de este repositorio (`git config core.hooksPath .githooks`). La suite completa tarda
-alrededor de 110 segundos, así que cada commit espera ese tiempo. Para desactivarlo: `git config --unset core.hooksPath`.
+Solo cambia la configuración local de este repositorio (`git config core.hooksPath .githooks`). Para desactivarlos:
+`git config --unset core.hooksPath`.
 
 ## Desarrollo y producción: dos bots, dos bases
 

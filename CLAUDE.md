@@ -6,7 +6,7 @@ Comandos, pruebas y ritmo de trabajo en detalle: `docs/FLUJO.md`.
 
 ## Comandos
 - Probar sin Telegram ni APIs: `python -m asistente.main --dry-run` (úsalo siempre; las claves reales las usa solo el dueño).
-- Tests: `pytest -q`. Lint y formato: `ruff check .` y `ruff format .`.
+- Tests: `pytest -q` (completa) y `pytest -q -m "not slow"` (rápida). Lint y formato: `ruff check .` y `ruff format .`.
 
 ## Reglas duras (no negociables)
 - Dinero: SIEMPRE enteros en centavos (`amount_cents`). Nunca `float`.
@@ -38,7 +38,7 @@ Comandos, pruebas y ritmo de trabajo en detalle: `docs/FLUJO.md`.
 ## Flujo de trabajo (resumen)
 - Al empezar: lee `docs/STATUS.md` y `git log -n 10`. Plan primero: propón el plan y espera aprobación.
 - La prueba se escribe y se ve fallar antes del código. Cada mutación crítica falla con al menos 2 pruebas.
-- Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin pipes (hook opcional: `scripts/install_hooks.py`).
+- Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin pipes (hooks opcionales: `scripts/install_hooks.py`; pre-commit = ruff + suite rápida, pre-push = completa).
   Commits pequeños; sin push.
 - Alcance: solo lo pedido; lo demás a `docs/BACKLOG.md`. Al terminar un bloque, actualiza
   `docs/STATUS.md` y `docs/DECISIONS.md`.

@@ -7,11 +7,12 @@
 - Ejecutar sin Telegram ni APIs (consola, sin secretos): `python -m asistente.main --dry-run`. Úsalo siempre para probar; las claves
   reales las usa solo el dueño, en su propia terminal.
 - Ejecutar con Telegram: `python -m asistente.main`. Verificar el entorno: `python scripts/check_env.py`.
-- Tests: `pytest -q`. Lint y formato: `ruff check .` y `ruff format .`.
+- Tests: `pytest -q` (completa) y `pytest -q -m "not slow"` (rápida, ~20 s). Lint y formato: `ruff check .` y `ruff format .`.
 
 ## Pruebas
 - Prueba antes del código: se escribe y se ve fallar. Si no se pudo, se dice y se hace una mutación después.
 - Mutaciones: reintroduce el error a propósito; cada mutación crítica debe hacer fallar al menos 2 pruebas.
+- Marca `@pytest.mark.slow` lo que pase de ~1 s por prueba y no sea de los módulos críticos; la completa corre antes de un push.
 - Antes de cada commit, `pytest -q` y `ruff check .` con código 0, sin cortar su salida con un pipe. Si pytest se cuelga, usa
   `faulthandler_timeout` y busca la causa. Nunca termines procesos por nombre (`taskkill /IM`, `pkill`): solo el PID que lanzaste.
 - Canales y callbacks: además de los falsos, objetos reales de la librería (`Update.de_json`), ver `tests/test_telegram_real.py`.

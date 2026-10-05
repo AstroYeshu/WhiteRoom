@@ -1,5 +1,6 @@
 #!/bin/sh
-# Hook de pre-commit del proyecto: corre pytest y ruff y BLOQUEA el commit si alguno falla.
+# Hook de pre-commit del proyecto (rapido): ruff y la suite sin las pruebas lentas (-m "not slow").
+# BLOQUEA el commit si alguno falla. La suite completa corre en el pre-push.
 # Se activa con `python scripts/install_hooks.py` (git config core.hooksPath .githooks).
 # Funciona con el entorno virtual de Windows (venv/Scripts) o de Linux (venv/bin).
 
@@ -20,12 +21,12 @@ fi
 
 # El código de salida de cada uno se mide por separado: ninguno se pierde detrás del otro.
 status=0
-"$py" -m pytest -q || {
-  echo "pre-commit: pytest falló; commit bloqueado." >&2
-  status=1
-}
 "$py" -m ruff check . || {
   echo "pre-commit: ruff falló; commit bloqueado." >&2
+  status=1
+}
+"$py" -m pytest -q -m "not slow" || {
+  echo "pre-commit: pytest falló (suite rápida); commit bloqueado." >&2
   status=1
 }
 exit $status
