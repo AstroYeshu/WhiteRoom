@@ -320,7 +320,7 @@ CREATE TABLE classification_log (
 -- no choca con OTRA área (sin distinguir mayúsculas ni acentos); las que chocan se dejan como están. Actualiza
 -- `classification_log.pred_area` y `final_area` de las áreas renombradas. Un área nueva se normaliza igual al crearse
 -- (recortar, colapsar espacios, `cap_first`; "iOS" y "UNAM" se respetan). La migración del bloque 7c
--- (`stop_notified_at`) pasa a ser la **007**.
+-- (`stop_notified_at`) pasa a ser la **007**. Es AUTOCONTENIDA (solo `sqlite3` y `unicodedata`; regla en `docs/DECISIONS.md`, «Regla para migraciones en Python»).
 
 CREATE TABLE learned_rules (
   id         INTEGER PRIMARY KEY,

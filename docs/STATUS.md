@@ -111,6 +111,8 @@ Detalle del plan: `docs/PLAN_FASE1.md`. Decisiones: `docs/DECISIONS.md`. Ideas a
 
 - Listas: `/pendientes` marca lo vencido («venció vie 2 oct»), el pie sugiere filtrar solo sin filtro y `/hoy` usa viñetas «-». Mutaciones (9): 2 o más fallos cada una.
 
+- Migración 006 AUTOCONTENIDA (solo biblioteca estándar; copia congelada de `cap_first` y `fold`), probada sobre una base con datos, atómica ante una falla a mitad e idempotente. Regla para futuras migraciones en Python en DECISIONS.
+
 ## Siguiente (3 pasos)
 1. Cortes 2 y 3 del rediseño de mensajes (ver arriba). El bloque 7b ya está HECHO (comandos `/hoy`, `/pendientes`,
    `/recordatorios`, `/recordar`, `/tarea` con fecha límite, `/nota`, `/areas`, `/nuevaarea`, `/ayuda`; `/papelera` queda

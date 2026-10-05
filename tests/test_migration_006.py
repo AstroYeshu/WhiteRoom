@@ -5,8 +5,12 @@ Es la primera migración en Python (`006_capitalizar_areas.py`): el ejecutor de 
 En SQL no se puede: `upper()` de SQLite solo conoce ASCII y no hay forma de comparar sin acentos.
 """
 
+import ast
+import importlib.util
 import shutil
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -313,3 +317,229 @@ def test_las_migraciones_sql_y_python_se_ordenan_por_numero(tmp_path):
     connection = db.connect(":memory:")
     assert db.migrate(connection, tmp_path) == [1, 2, 3]
     assert [r["n"] for r in connection.execute("SELECT n FROM t ORDER BY rowid")] == [2, 3]
+
+
+# --- Autocontenida: solo la biblioteca estándar, nada del paquete `asistente` ---------------
+
+MIGRATION = db.MIGRATIONS_DIR / "006_capitalizar_areas.py"
+
+
+def imported_modules(path: Path) -> set[str]:
+    found = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.add(node.module.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            found.add("." * node.level + (node.module or ""))  # importación relativa
+    return found
+
+
+PYTHON_MIGRATIONS = sorted(db.MIGRATIONS_DIR.glob("[0-9]*_*.py"))
+
+
+@pytest.mark.parametrize("path", PYTHON_MIGRATIONS, ids=lambda path: path.name)
+def test_ninguna_migracion_en_python_importa_nada_del_paquete_asistente(path):
+    modules = imported_modules(path)
+    assert not any(name == "asistente" or name.startswith(".") for name in modules), modules
+
+
+@pytest.mark.parametrize("path", PYTHON_MIGRATIONS, ids=lambda path: path.name)
+def test_ninguna_migracion_en_python_usa_mas_que_la_biblioteca_estandar(path):
+    allowed = set(sys.stdlib_module_names) | {"__future__"}
+    assert imported_modules(path) <= allowed, imported_modules(path) - allowed
+
+
+def test_hay_al_menos_una_migracion_en_python_vigilada():
+    assert MIGRATION in PYTHON_MIGRATIONS
+
+
+def test_el_detector_de_importaciones_ve_los_del_paquete(tmp_path):
+    sample = tmp_path / "m.py"
+    sample.write_text("import sqlite3\nfrom asistente.formato import cap_first\n", encoding="utf-8")
+    assert imported_modules(sample) == {"sqlite3", "asistente"}
+    sample.write_text("from . import algo\nfrom .. import otra\n", encoding="utf-8")
+    assert imported_modules(sample) == {".", ".."}
+
+
+def test_la_migracion_corre_en_un_interprete_aislado_sin_el_paquete(tmp_path):
+    """Intérprete aparte (`-I`, otra carpeta): si importara `asistente`, fallaría."""
+    connection = old_database(tmp_path)
+    path = tmp_path / "datos.db"
+    disk = sqlite3.connect(path)
+    connection.backup(disk)
+    disk.close()
+    script = (
+        "import importlib.util, sqlite3\n"
+        f"spec = importlib.util.spec_from_file_location('m6', {str(MIGRATION)!r})\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        f"conn = sqlite3.connect({str(path)!r})\n"
+        "conn.row_factory = sqlite3.Row\n"
+        "module.upgrade(conn)\n"
+        "conn.commit()\n"
+        "print(','.join(r['name'] for r in conn.execute('SELECT name FROM areas ORDER BY id')))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", script],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Universidad,Proyectos,Iglesia,Personal"
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("comprar", "Comprar"),
+        ("álgebra", "Álgebra"),
+        ("ñandú", "Ñandú"),
+        ("ébano y marfil", "Ébano y marfil"),
+        ("¿qué?", "¿Qué?"),
+        ("¡hola!", "¡Hola!"),
+        ("¿¡qué!?", "¿¡Qué!?"),
+        ("iOS", "iOS"),
+        ("eBay", "eBay"),
+        ("iPhone", "iPhone"),
+        ("UNAM", "UNAM"),
+        ("Ya", "Ya"),
+        ("123 a", "123 a"),
+        ("ß", "ß"),
+    ],
+)
+def test_la_regla_de_mayuscula_va_dentro_de_la_migracion(tmp_path, old, new):
+    connection = old_database(tmp_path)
+    added = add_area(connection, old)
+    db.migrate(connection)
+    assert names(connection)[added] == new
+
+
+# --- Sobre una base con datos: atómica e idempotente --------------------------------------
+
+
+def load_migration():
+    spec = importlib.util.spec_from_file_location("migracion_006", MIGRATION)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def populated(tmp_path: Path) -> sqlite3.Connection:
+    """Áreas con y sin colisión, registro de clasificación con nombres, tareas, notas y avisos."""
+    connection = old_database(tmp_path)
+    ids = {
+        name: add_area(connection, name)
+        for name in ("viajes", "Musica", "música", "Salud", "álgebra", "iOS")
+    }
+    with connection:
+        connection.executemany(
+            "INSERT INTO classification_log (ts_utc, text_norm, source, pred_area, final_area)"
+            " VALUES ('x', ?, 'user', ?, ?)",
+            [
+                ("uno", "personal", "personal"),
+                ("dos", "universidad", None),
+                ("tres", None, "viajes"),
+                ("cuatro", "música", "música"),  # choca con "Musica": no se renombra
+                ("cinco", "álgebra", "iOS"),
+            ],
+        )
+        for number, area in enumerate((1, ids["viajes"], ids["Musica"], None), start=1):
+            connection.execute(
+                "INSERT INTO tasks (title, area_id, source_text, created_at, updated_at)"
+                " VALUES (?, ?, ?, 'x', 'x')",
+                (f"tarea {number}", area, f"tarea {number}"),
+            )
+        connection.execute(
+            "INSERT INTO notes (text, area_id, created_at) VALUES ('nota', ?, 'x')",
+            (ids["viajes"],),
+        )
+        connection.execute(
+            "INSERT INTO reminders (text, fire_at_utc, area_id, created_at)"
+            " VALUES ('aviso', '2026-10-05T00:00:00+00:00', ?, 'x')",
+            (ids["álgebra"],),
+        )
+    return connection
+
+
+def snapshot(connection) -> dict[str, list[tuple]]:
+    tables = ("areas", "classification_log", "tasks", "notes", "reminders", "schema_migrations")
+    return {
+        table: [tuple(row) for row in connection.execute(f"SELECT * FROM {table} ORDER BY 1")]
+        for table in tables
+    }
+
+
+def test_sobre_una_base_con_datos_cambia_solo_lo_esperado(tmp_path):
+    connection = populated(tmp_path)
+    before = snapshot(connection)
+    assert db.migrate(connection) == [6]
+    after = snapshot(connection)
+    assert [row[1] for row in after["areas"]] == [
+        "Universidad",
+        "Proyectos",
+        "Iglesia",
+        "Personal",
+        "Viajes",
+        "Musica",
+        "música",
+        "Salud",
+        "Álgebra",
+        "iOS",
+    ]
+    for table in ("tasks", "notes", "reminders"):  # siguen ligados por id: nada cambió
+        assert after[table] == before[table]
+    rows = connection.execute("SELECT text_norm, pred_area, final_area FROM classification_log")
+    assert {row["text_norm"]: (row["pred_area"], row["final_area"]) for row in rows} == {
+        "uno": ("Personal", "Personal"),
+        "dos": ("Universidad", None),
+        "tres": (None, "Viajes"),
+        "cuatro": ("música", "música"),
+        "cinco": ("Álgebra", "iOS"),
+    }
+    assert after["schema_migrations"][-1][0] == 6
+
+
+def test_una_falla_a_mitad_no_deja_nada_a_medias(tmp_path):
+    connection = populated(tmp_path)
+    before = snapshot(connection)
+    connection.executescript(
+        """
+        CREATE TRIGGER falla_a_mitad BEFORE UPDATE OF final_area ON classification_log
+        WHEN NEW.final_area = 'Personal'
+        BEGIN SELECT RAISE(ABORT, 'falla a mitad'); END;
+        """
+    )
+    connection.commit()
+    with pytest.raises(sqlite3.Error, match="falla a mitad"):
+        db.migrate(connection)
+    assert not connection.in_transaction
+    assert snapshot(connection) == before  # ni las áreas ya renombradas, ni el registro, ni schema
+    versions = [r["version"] for r in connection.execute("SELECT version FROM schema_migrations")]
+    assert versions == [1, 2, 3, 4, 5]
+    connection.execute("DROP TRIGGER falla_a_mitad")
+    connection.commit()
+    assert db.migrate(connection) == [6]  # sin el obstáculo se aplica completa
+    assert names(connection)[4] == "Personal"
+
+
+def test_ejecutarla_dos_veces_no_cambia_nada(tmp_path):
+    connection = populated(tmp_path)
+    db.migrate(connection)
+    once = snapshot(connection)
+    assert db.migrate(connection) == []  # el ejecutor no la repite
+    load_migration().upgrade(connection)  # y aunque se llame a mano, no queda nada que cambiar
+    connection.commit()
+    assert snapshot(connection) == once
+
+
+def test_ejecutarla_a_mano_dos_veces_sobre_la_base_vieja_es_idempotente(tmp_path):
+    connection = populated(tmp_path)
+    module = load_migration()
+    module.upgrade(connection)
+    first = snapshot(connection)
+    module.upgrade(connection)
+    assert snapshot(connection) == first
